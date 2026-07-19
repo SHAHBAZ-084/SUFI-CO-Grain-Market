@@ -1,0 +1,26 @@
+{
+  "name": "grain-market-pos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline desktop POS for grain market — Electron + React + Express + SQLite",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev -w backend\" \"npm run dev -w frontend\" \"npm run electron:dev\"",
+    "electron:dev": "npm run build:electron && wait-on http://localhost:5173 http://localhost:3847/api/health && cross-env NODE_ENV=development electron .",
+    "electron:build": "npm run build -w backend && npm run build -w frontend && npm run build:electron",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "start": "cross-env NODE_ENV=production electron .",
+    "postinstall": "npm run db:generate -w backend"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^34.0.0",
+    "typescript": "^5.7.3",
+    "wait-on": "^8.0.1"
+  }
+}

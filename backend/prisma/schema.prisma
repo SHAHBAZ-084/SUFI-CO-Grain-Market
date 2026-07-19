@@ -1,0 +1,340 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum VoucherType {
+  PAYMENT
+  RECEIPT
+  JOURNAL
+}
+
+enum VoucherStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+}
+
+enum CustomerLedgerType {
+  DEBIT
+  CREDIT
+}
+
+enum SupplierLedgerType {
+  DEBIT
+  CREDIT
+}
+
+enum FinancialYearStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum InvoiceType {
+  SALE_COMMISSION
+  SALE_PAUNCH
+  PURCHASE_MAAL
+  KACHI_MAAL
+}
+
+enum InvoiceStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  vouchersCreated  Voucher[]              @relation("VoucherCreatedBy")
+  vouchersModified Voucher[]              @relation("VoucherModifiedBy")
+  vouchersDeleted  Voucher[]              @relation("VoucherDeletedBy")
+  financialYearsClosed FinancialYear[]    @relation("FinancialYearClosedBy")
+  trialBalanceApprovals TrialBalanceApproval[]
+  invoicesCreated       Invoice[]
+}
+
+model Supplier {
+  id            Int      @id @default(autoincrement())
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  balance       Decimal  @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ledger SupplierLedger[]
+  invoices Invoice[]
+}
+
+model SupplierLedger {
+  id         Int                @id @default(autoincrement())
+  supplierId Int
+  type       SupplierLedgerType
+  amount     Decimal
+  balance    Decimal
+  notes      String?
+  createdAt  DateTime           @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([createdAt])
+}
+
+model Customer {
+  id         Int      @id @default(autoincrement())
+  name       String
+  fatherName String?
+  cnic       String?  @unique
+  phone      String?
+  email      String?
+  address    String?
+  balance    Decimal  @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ledger CustomerLedger[]
+  invoices Invoice[]
+}
+
+model CustomerLedger {
+  id         Int                @id @default(autoincrement())
+  customerId Int
+  type       CustomerLedgerType
+  amount     Decimal
+  balance    Decimal
+  notes      String?
+  createdAt  DateTime           @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+model AccountCategory {
+  id        Int      @id @default(autoincrement())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  accounts Account[]
+}
+
+model Account {
+  id         Int         @id @default(autoincrement())
+  categoryId Int
+  name       String
+  code       String      @unique
+  type       AccountType
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+
+  category        AccountCategory               @relation(fields: [categoryId], references: [id])
+  ledger          Ledger?
+  debitVouchers   Voucher[]                     @relation("DebitAccount")
+  creditVouchers  Voucher[]                     @relation("CreditAccount")
+  closingBalances FinancialYearClosingBalance[]
+  product         Product?
+}
+
+model Ledger {
+  id        Int      @id @default(autoincrement())
+  accountId Int      @unique
+  balance   Decimal  @default(0)
+  updatedAt DateTime @updatedAt
+
+  account Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  entries LedgerEntry[]
+}
+
+model LedgerEntry {
+  id               Int             @id @default(autoincrement())
+  ledgerId         Int
+  voucherId        Int?
+  type             LedgerEntryType
+  amount           Decimal
+  balance          Decimal
+  notes            String?
+  isReversal       Boolean         @default(false)
+  isOpeningBalance Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+
+  ledger  Ledger   @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  voucher Voucher? @relation(fields: [voucherId], references: [id])
+
+  @@index([ledgerId])
+  @@index([createdAt])
+}
+
+model Voucher {
+  id              Int           @id @default(autoincrement())
+  type            VoucherType
+  number          Int
+  debitAccountId  Int
+  creditAccountId Int
+  amount          Decimal
+  description     String?
+  reference       String?
+  status          VoucherStatus @default(ACTIVE)
+  createdById     Int
+  modifiedById    Int?
+  deletedById     Int?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  financialYearId Int?
+
+  financialYear FinancialYear? @relation(fields: [financialYearId], references: [id])
+  debitAccount  Account        @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  creditAccount Account        @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  createdBy     User           @relation("VoucherCreatedBy", fields: [createdById], references: [id])
+  modifiedBy    User?          @relation("VoucherModifiedBy", fields: [modifiedById], references: [id])
+  deletedBy     User?          @relation("VoucherDeletedBy", fields: [deletedById], references: [id])
+  ledgerEntries LedgerEntry[]
+  invoiceLink   InvoiceVoucher?
+
+  @@unique([financialYearId, type, number])
+  @@index([financialYearId, type])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model FinancialYear {
+  id         Int                 @id @default(autoincrement())
+  label      String              @unique
+  startDate  DateTime
+  endDate    DateTime?
+  status     FinancialYearStatus @default(ACTIVE)
+  closedAt   DateTime?
+  closedById Int?
+
+  closedBy        User?                         @relation("FinancialYearClosedBy", fields: [closedById], references: [id])
+  closingBalances FinancialYearClosingBalance[]
+  vouchers        Voucher[]
+  invoices        Invoice[]
+
+  @@index([status])
+}
+
+model FinancialYearClosingBalance {
+  id              Int     @id @default(autoincrement())
+  financialYearId Int
+  accountId       Int
+  balance         Decimal
+
+  financialYear FinancialYear @relation(fields: [financialYearId], references: [id], onDelete: Cascade)
+  account       Account       @relation(fields: [accountId], references: [id])
+
+  @@unique([financialYearId, accountId])
+}
+
+model TrialBalanceApproval {
+  id           Int      @id @default(autoincrement())
+  period       String   @unique
+  approvedById Int
+  notes        String?
+  snapshot     Json
+  createdAt    DateTime @default(now())
+
+  approvedBy User @relation(fields: [approvedById], references: [id])
+}
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String   @unique
+  unit      String?
+  accountId Int      @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account      Account       @relation(fields: [accountId], references: [id])
+  invoiceItems InvoiceItem[]
+}
+
+model Invoice {
+  id              Int           @id @default(autoincrement())
+  type            InvoiceType
+  status          InvoiceStatus @default(DRAFT)
+  reference       String        @unique
+  customerId      Int?
+  supplierId      Int?
+  total           Decimal       @default(0)
+  notes           String?
+  financialYearId Int?
+  createdById     Int
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  supplier      Supplier?     @relation(fields: [supplierId], references: [id])
+  financialYear FinancialYear? @relation(fields: [financialYearId], references: [id])
+  createdBy     User          @relation(fields: [createdById], references: [id])
+  items         InvoiceItem[]
+  vouchers      InvoiceVoucher[]
+}
+
+model InvoiceItem {
+  id        Int     @id @default(autoincrement())
+  invoiceId Int
+  productId Int?
+  label     String
+  quantity  Decimal @default(0)
+  unitPrice Decimal @default(0)
+  total     Decimal @default(0)
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model InvoiceVoucher {
+  id        Int @id @default(autoincrement())
+  invoiceId Int
+  voucherId Int @unique
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  voucher Voucher @relation(fields: [voucherId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model BardanaStock {
+  id        Int      @id @default(autoincrement())
+  name      String
+  quantity  Decimal  @default(0)
+  unit      String   @default("bag")
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
