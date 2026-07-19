@@ -3,7 +3,9 @@ import { TOP_NAV } from '../config/navigation';
 import { PageShell, Panel } from '../components/ui/PageShell';
 
 export function PosHomePage() {
-  const invoiceLinks = TOP_NAV.find((g) => g.label === 'Sale/Purchase Invoice')?.children ?? [];
+  const invoiceLinks = (TOP_NAV.find((g) => g.label === 'Sale/Purchase Invoice')?.children ?? []).filter(
+    (item) => item.kind === 'link',
+  );
 
   return (
     <PageShell

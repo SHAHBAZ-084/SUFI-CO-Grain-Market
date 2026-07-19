@@ -10,6 +10,18 @@ export type AccountCategory = {
   isActive: boolean;
 };
 
+export type Ledger = { id: number; accountId: number; balance: number };
+export type Account = {
+  id: number;
+  categoryId: number;
+  name: string;
+  code: string;
+  type: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+  isActive: boolean;
+  category?: AccountCategory | null;
+  ledger?: Ledger | null;
+};
+
 export type Product = {
   id: number;
   name: string;
@@ -38,6 +50,9 @@ export type Invoice = {
   supplier?: Party | null;
 };
 
+export type VoucherAccount = { id: number; name: string; code: string };
+export type VoucherUser = { id: number; displayName: string; username: string };
+
 export type Voucher = {
   id: number;
   type: string;
@@ -47,6 +62,13 @@ export type Voucher = {
   reference?: string | null;
   status: string;
   createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+  debitAccount?: VoucherAccount | null;
+  creditAccount?: VoucherAccount | null;
+  createdBy?: VoucherUser | null;
+  modifiedBy?: VoucherUser | null;
+  deletedBy?: VoucherUser | null;
 };
 
 type ApiError = { error: string };
@@ -137,9 +159,49 @@ export const api = {
   }) {
     return request<Voucher>('/api/accounting/vouchers', { method: 'POST', body: JSON.stringify(data) });
   },
+  updateVoucherAmount(voucherId: number, amount: number) {
+    return request<Voucher>(`/api/accounting/vouchers/${voucherId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ amount }),
+    });
+  },
+  cancelVoucher(voucherId: number) {
+    return request<Voucher>(`/api/accounting/vouchers/${voucherId}`, { method: 'DELETE' });
+  },
 
   listAccounts() {
-    return request<{ id: number; name: string; code: string }[]>('/api/accounting/accounts');
+    return request<Account[]>('/api/accounting/accounts');
+  },
+  createAccount(data: { categoryId: number; name: string; code?: string; type?: Account['type'] }) {
+    return request<Account>('/api/accounting/accounts', { method: 'POST', body: JSON.stringify(data) });
+  },
+  updateAccount(id: number, data: { name?: string; code?: string; isActive?: boolean }) {
+    return request<Account>(`/api/accounting/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  },
+  removeAccount(id: number) {
+    return request<Account>(`/api/accounting/accounts/${id}`, { method: 'DELETE' });
+  },
+
+  getLedger(accountId: number, params?: { fromDate?: string; toDate?: string }) {
+    const query = params?.fromDate || params?.toDate
+      ? `?${new URLSearchParams({ ...(params.fromDate ? { fromDate: params.fromDate } : {}), ...(params.toDate ? { toDate: params.toDate } : {}) })}`
+      : '';
+    return request<{
+      account: { id: number; name: string; code: string; type: string };
+      balance: number;
+      rows: {
+        date: string;
+        voucherNo: string;
+        ref: string | null;
+        type: string;
+        description: string;
+        debit: number;
+        credit: number;
+        balance: number;
+        isOpeningRow?: boolean;
+      }[];
+      summary: { periodOpening: number; totalDebit: number; totalCredit: number; closingBalance: number };
+    }>(`/api/accounting/ledger/${accountId}${query}`);
   },
 
   getTrialBalance() {

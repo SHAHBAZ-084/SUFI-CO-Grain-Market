@@ -115,17 +115,6 @@ accountingRouter.delete(
   }),
 );
 
-accountingRouter.post(
-  '/vouchers/:voucherId/restore',
-  asyncHandler(async (req, res) => {
-    const voucher = await accountingService.restoreVoucher(
-      parseInt(param(req.params.voucherId), 10),
-      req.session.userId!,
-    );
-    res.json(voucher);
-  }),
-);
-
 accountingRouter.get(
   '/trial-balance',
   asyncHandler(async (_req, res) => {

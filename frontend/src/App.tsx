@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
+import { AccountManagePage } from './pages/accounts/AccountManagePage';
 import { CategoryManagePage } from './pages/accounts/CategoryManagePage';
 import { PurchasePartiesPage, SalePartiesPage } from './pages/accounts/PartiesPage';
 import { ProductAddPage, ProductRemovePage } from './pages/accounts/ProductManagePage';
@@ -28,6 +29,9 @@ export default function App() {
               <Route path="/accounts/categories/add" element={<CategoryManagePage mode="add" />} />
               <Route path="/accounts/categories/edit" element={<CategoryManagePage mode="edit" />} />
               <Route path="/accounts/categories/remove" element={<CategoryManagePage mode="remove" />} />
+              <Route path="/accounts/manage/add" element={<AccountManagePage mode="add" />} />
+              <Route path="/accounts/manage/edit" element={<AccountManagePage mode="edit" />} />
+              <Route path="/accounts/manage/remove" element={<AccountManagePage mode="remove" />} />
               <Route path="/accounts/products/add" element={<ProductAddPage />} />
               <Route path="/accounts/products/remove" element={<ProductRemovePage />} />
               <Route path="/accounts/sale-parties" element={<SalePartiesPage />} />

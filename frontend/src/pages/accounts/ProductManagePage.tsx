@@ -14,7 +14,7 @@ export function ProductAddPage() {
     setMessage('');
     try {
       const product = await api.createProduct({ name, unit: unit || undefined });
-      setMessage(`Product "${product.name}" created with ledger account ${product.code}.`);
+      setMessage(`Product "${product.name}" created with its ledger account.`);
       setName('');
       setUnit('');
     } catch (err) {
@@ -79,7 +79,7 @@ export function ProductRemovePage() {
           >
             <option value="">Select product</option>
             {products.map((p) => (
-              <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
         </div>

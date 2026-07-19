@@ -1418,40 +1418,6 @@ export async function cancelActiveVouchersByReferenceInTx(
   }
 }
 
-export async function restoreVoucher(voucherId: number, userId: number) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const voucher = await tx.voucher.findFirst({
-      where: { id: voucherId },
-    });
-    if (!voucher) throw new AppError(404, 'Voucher not found');
-    if (voucher.status !== VoucherStatus.CANCELLED) {
-      throw new AppError(400, 'Only cancelled vouchers can be restored');
-    }
-    await assertActiveFinancialYear(tx, voucher.financialYearId);
-
-    await postVoucherLedgerEntries(
-      tx,
-      voucher.id,
-      voucher.debitAccountId,
-      voucher.creditAccountId,
-      Number(voucher.amount),
-      undefined,
-      false,
-    );
-
-    return tx.voucher.update({
-      where: { id: voucher.id },
-      data: {
-        status: VoucherStatus.ACTIVE,
-        deletedById: null,
-        deletedAt: null,
-        modifiedById: userId,
-      },
-      include: voucherInclude,
-    });
-  });
-}
-
 /** @deprecated Use cancelVoucher — kept for route compatibility */
 export async function deleteVoucher(voucherId: number, userId: number) {
   return cancelVoucher( voucherId, userId);

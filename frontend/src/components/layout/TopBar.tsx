@@ -1,8 +1,44 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { TOP_NAV } from '../../config/navigation';
+import { TOP_NAV, NavItem } from '../../config/navigation';
 
-function NavDropdown({ label, children }: { label: string; children: { label: string; to: string }[] }) {
+function NavSubmenu({ label, children }: { label: string; children: { label: string; to: string; description?: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-stone-700 transition hover:bg-grain-50 hover:text-grain-800"
+      >
+        {label}
+        <span className="ml-2 text-stone-400">›</span>
+      </button>
+      {open ? (
+        <div className="absolute left-full top-0 z-50 min-w-[220px] rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
+          {children.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className="block px-4 py-2 text-sm text-stone-700 transition hover:bg-grain-50 hover:text-grain-800"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function NavDropdown({ label, children }: { label: string; children: NavItem[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const location = useLocation();
@@ -32,15 +68,19 @@ function NavDropdown({ label, children }: { label: string; children: { label: st
       </button>
       {open ? (
         <div className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
-          {children.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="block px-4 py-2 text-sm text-stone-700 transition hover:bg-grain-50 hover:text-grain-800"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {children.map((item) =>
+            item.kind === 'submenu' ? (
+              <NavSubmenu key={item.label} label={item.label} children={item.children} />
+            ) : (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="block px-4 py-2 text-sm text-stone-700 transition hover:bg-grain-50 hover:text-grain-800"
+              >
+                {item.label}
+              </Link>
+            ),
+          )}
         </div>
       ) : null}
     </div>
