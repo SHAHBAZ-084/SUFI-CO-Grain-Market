@@ -41,12 +41,12 @@ export function BardanaPage() {
             <PrimaryButton type="submit">Add</PrimaryButton>
           </div>
         </form>
-        {message ? <p className="mt-2 text-sm text-green-700">{message}</p> : null}
+        {message ? <p className="mt-2 text-sm text-success">{message}</p> : null}
       </Panel>
       <Panel>
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-stone-200 text-stone-500">
+            <tr className="border-b border-border text-textSecondary">
               <th className="py-2">Name</th>
               <th className="py-2">Quantity</th>
               <th className="py-2">Unit</th>
@@ -54,7 +54,7 @@ export function BardanaPage() {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="border-b border-stone-100">
+              <tr key={row.id} className="border-b border-border">
                 <td className="py-2">{row.name}</td>
                 <td className="py-2">{Number(row.quantity).toFixed(2)}</td>
                 <td className="py-2">{row.unit}</td>

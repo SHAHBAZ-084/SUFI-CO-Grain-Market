@@ -31,16 +31,6 @@ enum LedgerEntryType {
   CREDIT
 }
 
-enum CustomerLedgerType {
-  DEBIT
-  CREDIT
-}
-
-enum SupplierLedgerType {
-  DEBIT
-  CREDIT
-}
-
 enum FinancialYearStatus {
   ACTIVE
   CLOSED
@@ -82,28 +72,11 @@ model Supplier {
   phone         String?
   email         String?
   address       String?
-  balance       Decimal  @default(0)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  ledger SupplierLedger[]
   invoices Invoice[]
-}
-
-model SupplierLedger {
-  id         Int                @id @default(autoincrement())
-  supplierId Int
-  type       SupplierLedgerType
-  amount     Decimal
-  balance    Decimal
-  notes      String?
-  createdAt  DateTime           @default(now())
-
-  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-
-  @@index([supplierId])
-  @@index([createdAt])
 }
 
 model Customer {
@@ -114,28 +87,11 @@ model Customer {
   phone      String?
   email      String?
   address    String?
-  balance    Decimal  @default(0)
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  ledger CustomerLedger[]
   invoices Invoice[]
-}
-
-model CustomerLedger {
-  id         Int                @id @default(autoincrement())
-  customerId Int
-  type       CustomerLedgerType
-  amount     Decimal
-  balance    Decimal
-  notes      String?
-  createdAt  DateTime           @default(now())
-
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  @@index([customerId])
-  @@index([createdAt])
 }
 
 model AccountCategory {
@@ -197,6 +153,7 @@ model Voucher {
   id              Int           @id @default(autoincrement())
   type            VoucherType
   number          Int
+  date            DateTime
   debitAccountId  Int
   creditAccountId Int
   amount          Decimal
@@ -220,8 +177,9 @@ model Voucher {
   ledgerEntries LedgerEntry[]
   invoiceLink   InvoiceVoucher?
 
-  @@unique([financialYearId, type, number])
+  @@unique([financialYearId, number])
   @@index([financialYearId, type])
+  @@index([date])
   @@index([createdAt])
   @@index([status])
 }

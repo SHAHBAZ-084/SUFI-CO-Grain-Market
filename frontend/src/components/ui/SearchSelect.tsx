@@ -1,4 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react';
+import { filterOptions, resolveSelection } from './searchSelectUtils';
 
 export type SearchSelectOption = { value: string; label: string };
 
@@ -8,17 +17,35 @@ export function SearchSelect({
   options,
   placeholder = 'Search…',
   disabled,
+  tabIndex,
+  id: idProp,
+  inputRef: inputRefProp,
+  nextFocusRef,
+  onSelected,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: SearchSelectOption[];
   placeholder?: string;
   disabled?: boolean;
+  tabIndex?: number;
+  id?: string;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  nextFocusRef?: RefObject<HTMLElement | null>;
+  onSelected?: (value: string) => void;
 }) {
+  const generatedId = useId();
+  const inputId = idProp ?? `search-select-${generatedId}`;
+  const listboxId = `${inputId}-listbox`;
+
+  const internalInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [highlightMovedByKeyboard, setHighlightMovedByKeyboard] = useState(false);
 
   const selected = options.find((o) => o.value === value);
 
@@ -27,9 +54,28 @@ export function SearchSelect({
     return () => clearTimeout(t);
   }, [query]);
 
+  const filtered = useMemo(
+    () => filterOptions(options, debouncedQuery),
+    [options, debouncedQuery],
+  );
+
+  const filteredKey = filtered.map((o) => o.value).join('\0');
+
+  useEffect(() => {
+    setHighlightIndex(0);
+    setHighlightMovedByKeyboard(false);
+  }, [filteredKey, open]);
+
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    const active = listRef.current.querySelector('[data-active="true"]');
+    active?.scrollIntoView({ block: 'nearest' });
+  }, [highlightIndex, open, filteredKey]);
+
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const root = internalInputRef.current?.closest('[data-search-select-root]');
+      if (root && !root.contains(e.target as Node)) {
         setOpen(false);
         setQuery('');
       }
@@ -38,45 +84,158 @@ export function SearchSelect({
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  const filtered = debouncedQuery.trim()
-    ? options.filter((o) => o.label.toLowerCase().includes(debouncedQuery.trim().toLowerCase()))
-    : options;
+  function assignInputRef(el: HTMLInputElement | null) {
+    internalInputRef.current = el;
+    if (inputRefProp) {
+      (inputRefProp as { current: HTMLInputElement | null }).current = el;
+    }
+  }
+
+  function commitSelection(option: SearchSelectOption, advanceFocus: boolean) {
+    onChange(option.value);
+    onSelected?.(option.value);
+    setOpen(false);
+    setQuery('');
+    if (advanceFocus) {
+      requestAnimationFrame(() => {
+        nextFocusRef?.current?.focus();
+      });
+    }
+  }
+
+  function closeWithoutChange() {
+    setOpen(false);
+    setQuery('');
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (disabled) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) setOpen(true);
+      if (filtered.length === 0) return;
+      setHighlightMovedByKeyboard(true);
+      setHighlightIndex((i) => Math.min(i + 1, filtered.length - 1));
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) setOpen(true);
+      if (filtered.length === 0) return;
+      setHighlightMovedByKeyboard(true);
+      setHighlightIndex((i) => Math.max(i - 1, 0));
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeWithoutChange();
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      if (!open) return;
+      e.preventDefault();
+      const option = resolveSelection(filtered, highlightIndex, highlightMovedByKeyboard, 'enter');
+      if (option) commitSelection(option, true);
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      if (!open) return;
+      const option = resolveSelection(filtered, highlightIndex, highlightMovedByKeyboard, 'tab');
+      if (option) {
+        e.preventDefault();
+        onChange(option.value);
+        onSelected?.(option.value);
+        setOpen(false);
+        setQuery('');
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (nextFocusRef?.current) {
+              nextFocusRef.current.focus();
+            } else {
+              internalInputRef.current?.form?.querySelector<HTMLElement>(
+                `[tabindex="${(tabIndex ?? 0) + 1}"]`,
+              )?.focus();
+            }
+          });
+        });
+      } else {
+        closeWithoutChange();
+      }
+    }
+  }
+
+  const activeOptionId =
+    open && filtered.length > 0 ? `${listboxId}-option-${highlightIndex}` : undefined;
 
   return (
-    <div ref={ref} className="relative">
+    <div data-search-select-root className="relative">
       <input
+        ref={assignInputRef}
+        id={inputId}
         type="text"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-activedescendant={activeOptionId}
+        aria-autocomplete="list"
+        autoComplete="off"
         disabled={disabled}
+        tabIndex={tabIndex}
         value={open ? query : selected?.label ?? ''}
         onFocus={() => {
           setOpen(true);
           setQuery('');
         }}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          if (!open) setOpen(true);
+        }}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none ring-grain-500 focus:ring-2 disabled:cursor-not-allowed disabled:bg-stone-100"
+        className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none ring-accent focus:ring-2 disabled:cursor-not-allowed disabled:bg-surface1"
       />
       {open ? (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
+        <div
+          ref={listRef}
+          id={listboxId}
+          role="listbox"
+          className="absolute left-0 top-full z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-surface2 py-1 shadow-lg"
+        >
           {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-stone-400">No matches</p>
+            <p className="px-3 py-2 text-sm text-textMuted" role="status">
+              No matches
+            </p>
           ) : (
-            filtered.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => {
-                  onChange(o.value);
-                  setOpen(false);
-                  setQuery('');
-                }}
-                className={`block w-full px-3 py-2 text-left text-sm hover:bg-grain-50 ${
-                  o.value === value ? 'bg-grain-50 font-medium text-grain-800' : 'text-stone-700'
-                }`}
-              >
-                {o.label}
-              </button>
-            ))
+            filtered.map((o, index) => {
+              const isHighlighted = index === highlightIndex;
+              const isSelected = o.value === value;
+              return (
+                <div
+                  key={o.value}
+                  id={`${listboxId}-option-${index}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  data-active={isHighlighted ? 'true' : 'false'}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setHighlightIndex(index)}
+                  onClick={() => commitSelection(o, Boolean(nextFocusRef))}
+                  className={`cursor-pointer px-3 py-2 text-sm ${
+                    isHighlighted
+                      ? 'bg-bgAccent font-medium text-textAccent'
+                      : isSelected
+                        ? 'bg-bgAccent text-textAccent'
+                        : 'text-textSecondary hover:bg-bgAccent'
+                  }`}
+                >
+                  {o.label}
+                </div>
+              );
+            })
           )}
         </div>
       ) : null}

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, type Party } from '../../lib/api';
+import { formatLedgerBalance } from '../../lib/format';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 
 function PartyPage({
@@ -82,13 +83,13 @@ function PartyPage({
         </Panel>
       ) : null}
 
-      {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
-      {message ? <p className="mb-3 text-sm text-green-700">{message}</p> : null}
+      {error ? <p className="mb-3 text-sm text-danger">{error}</p> : null}
+      {message ? <p className="mb-3 text-sm text-success">{message}</p> : null}
 
       <Panel>
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-stone-200 text-stone-500">
+            <tr className="border-b border-border text-textSecondary">
               <th className="py-2">Name</th>
               <th className="py-2">Phone</th>
               <th className="py-2">Balance</th>
@@ -97,10 +98,10 @@ function PartyPage({
           </thead>
           <tbody>
             {parties.map((party) => (
-              <tr key={party.id} className="border-b border-stone-100">
+              <tr key={party.id} className="border-b border-border">
                 <td className="py-2 font-medium">{party.name}</td>
                 <td className="py-2">{party.phone ?? '—'}</td>
-                <td className="py-2">{Number(party.balance ?? 0).toFixed(2)}</td>
+                <td className="py-2">{formatLedgerBalance(party.balance ?? 0)}</td>
                 <td className="py-2 text-right">
                   <SecondaryButton className="text-xs" onClick={() => onRemove(party.id)}>Remove</SecondaryButton>
                 </td>
@@ -108,7 +109,7 @@ function PartyPage({
             ))}
           </tbody>
         </table>
-        {parties.length === 0 ? <p className="py-4 text-sm text-stone-500">No parties yet.</p> : null}
+        {parties.length === 0 ? <p className="py-4 text-sm text-textMuted">No parties yet.</p> : null}
       </Panel>
     </PageShell>
   );

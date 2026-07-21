@@ -36,7 +36,9 @@ export type Party = {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
-  balance?: number | string;
+  accountId?: number | null;
+  /** Signed ledger balance from linked Account → Ledger (positive = Dr, negative = Cr). */
+  balance: number;
 };
 
 export type Invoice = {
@@ -57,6 +59,7 @@ export type Voucher = {
   id: number;
   type: string;
   number: number;
+  date: string;
   amount: number | string;
   description?: string | null;
   reference?: string | null;
@@ -149,11 +152,32 @@ export const api = {
   listVouchers() {
     return request<Voucher[]>('/api/accounting/vouchers');
   },
+  getDashboardSummary() {
+    return request<{
+      cashBalance: number;
+      receivables: number;
+      payables: number;
+      vouchersToday: number;
+      recentVouchers: {
+        id: number;
+        number: number;
+        type: string;
+        amount: number;
+        date: string;
+        status: string;
+        accountLabel: string;
+      }[];
+    }>('/api/accounting/dashboard-summary');
+  },
+  getNextVoucherNumber() {
+    return request<{ number: number; financialYearId: number }>('/api/accounting/vouchers/next-number');
+  },
   createVoucher(data: {
     type: string;
     debitAccountId: number;
     creditAccountId: number;
     amount: number;
+    date: string;
     description?: string;
     reference?: string;
   }) {
@@ -172,7 +196,14 @@ export const api = {
   listAccounts() {
     return request<Account[]>('/api/accounting/accounts');
   },
-  createAccount(data: { categoryId: number; name: string; code?: string; type?: Account['type'] }) {
+  createAccount(data: {
+    categoryId: number;
+    name: string;
+    code?: string;
+    type?: Account['type'];
+    openingBalance?: number;
+    openingBalanceSide?: 'DR' | 'CR';
+  }) {
     return request<Account>('/api/accounting/accounts', { method: 'POST', body: JSON.stringify(data) });
   },
   updateAccount(id: number, data: { name?: string; code?: string; isActive?: boolean }) {

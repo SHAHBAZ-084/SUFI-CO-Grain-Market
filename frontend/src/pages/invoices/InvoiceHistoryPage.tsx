@@ -15,7 +15,7 @@ export function InvoiceHistoryPage() {
       <Panel>
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-stone-200 text-stone-500">
+            <tr className="border-b border-border text-textSecondary">
               <th className="py-2">Reference</th>
               <th className="py-2">Type</th>
               <th className="py-2">Party</th>
@@ -26,7 +26,7 @@ export function InvoiceHistoryPage() {
           </thead>
           <tbody>
             {invoices.map((inv) => (
-              <tr key={inv.id} className="border-b border-stone-100">
+              <tr key={inv.id} className="border-b border-border">
                 <td className="py-2 font-medium">{inv.reference}</td>
                 <td className="py-2">{INVOICE_TYPE_LABELS[inv.type] ?? inv.type}</td>
                 <td className="py-2">{inv.customer?.name ?? inv.supplier?.name ?? '—'}</td>
@@ -38,7 +38,7 @@ export function InvoiceHistoryPage() {
           </tbody>
         </table>
         {invoices.length === 0 ? (
-          <p className="py-6 text-center text-sm text-stone-500">No invoices yet.</p>
+          <p className="py-6 text-center text-sm text-textMuted">No invoices yet.</p>
         ) : null}
       </Panel>
     </PageShell>

@@ -1,6 +1,16 @@
 import { AccountType, FinancialYearStatus, LedgerEntryType, Prisma, VoucherStatus, VoucherType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import {
+  compareLedgerEntries,
+  computeLedgerBalance,
+  endOfDay,
+  entryEffectiveDate,
+  isTrialBalanceBalanced,
+  parseVoucherDateInput,
+  startOfDay,
+  trialBalanceFromSignedBalance,
+} from './ledger-utils';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -40,6 +50,48 @@ export async function assertActiveFinancialYear(
       403,
       'This record belongs to a closed financial year and can no longer be edited or deleted.',
     );
+  }
+}
+
+/** Voucher accounting date must fall inside the active financial year (not just "a year exists"). */
+export async function assertVoucherDateInActiveFinancialYear(
+  db: DbClient,
+  voucherDate: Date,
+): Promise<number> {
+  const activeYear = await db.financialYear.findFirst({
+    where: { status: FinancialYearStatus.ACTIVE },
+  });
+  if (!activeYear) throw new AppError(400, 'No active financial year');
+
+  const day = startOfDay(voucherDate);
+  const yearStart = startOfDay(activeYear.startDate);
+  if (day < yearStart) {
+    throw new AppError(400, 'Voucher date is before the active financial year');
+  }
+  if (activeYear.endDate) {
+    const yearEnd = endOfDay(activeYear.endDate);
+    if (day > yearEnd) {
+      throw new AppError(400, 'Voucher date is after the active financial year');
+    }
+  }
+  return activeYear.id;
+}
+
+async function assertTrialBalanceInDev(db: DbClient) {
+  if (process.env.NODE_ENV === 'production') return;
+  const ledgers = await db.ledger.findMany({ select: { balance: true } });
+  let totalDebit = 0;
+  let totalCredit = 0;
+  for (const l of ledgers) {
+    const { debit, credit } = trialBalanceFromSignedBalance(Number(l.balance));
+    totalDebit += debit;
+    totalCredit += credit;
+  }
+  if (!isTrialBalanceBalanced(totalDebit, totalCredit)) {
+    console.error('[accounting] Trial balance mismatch after voucher change', {
+      totalDebit,
+      totalCredit,
+    });
   }
 }
 
@@ -177,6 +229,72 @@ function assertVoucherAccountRules(
   if (type === 'PAYMENT' && !isBankOrCashCategory(creditAccount.category.name)) {
     throw new AppError(400, 'Payment must credit a Bank or Cash account (From side)');
   }
+}
+
+type VoucherCreateInput = {
+  type: VoucherType;
+  debitAccountId: number;
+  creditAccountId: number;
+  amount: number;
+  date: Date;
+  description?: string;
+  reference?: string;
+};
+
+/** Shared server-side validation for all voucher types (payment, receipt, journal). */
+async function validateVoucherCreate(
+  tx: Prisma.TransactionClient,
+  data: VoucherCreateInput,
+) {
+  if (!(data.amount > 0)) {
+    throw new AppError(400, 'Amount must be greater than zero');
+  }
+
+  const { debitAccount, creditAccount } = await loadAccounts(
+    tx,
+    data.debitAccountId,
+    data.creditAccountId,
+  );
+  assertVoucherAccountRules(data.type, debitAccount, creditAccount);
+
+  const financialYearId = await assertVoucherDateInActiveFinancialYear(tx, data.date);
+
+  return { debitAccount, creditAccount, financialYearId };
+}
+
+async function recomputeLedgerRunningBalancesInTx(
+  tx: Prisma.TransactionClient,
+  ledgerId: number,
+  financialYearId: number,
+) {
+  const ledger = await tx.ledger.findUniqueOrThrow({
+    where: { id: ledgerId },
+    include: { account: true },
+  });
+
+  const { balance: opening } = await getOpeningBalanceSnapshot(tx, ledger.accountId, financialYearId);
+  const { yearStart, yearEnd } = await loadFinancialYearBounds(tx, financialYearId);
+
+  const entries = await tx.ledgerEntry.findMany({
+    where: ledgerEntriesForYearWhere(ledgerId, financialYearId, yearStart, yearEnd),
+    include: { voucher: { select: { date: true, number: true } } },
+    orderBy: { id: 'asc' },
+  });
+
+  entries.sort(compareLedgerEntries);
+
+  let running = opening;
+  for (const entry of entries) {
+    const debit = entry.type === LedgerEntryType.DEBIT ? Number(entry.amount) : 0;
+    const credit = entry.type === LedgerEntryType.CREDIT ? Number(entry.amount) : 0;
+    running = computeLedgerBalance(running, debit, credit);
+    const stored = Number(entry.balance);
+    if (Math.abs(stored - running) >= 0.005) {
+      await tx.ledgerEntry.update({ where: { id: entry.id }, data: { balance: running } });
+    }
+  }
+
+  await tx.ledger.update({ where: { id: ledgerId }, data: { balance: running } });
 }
 
 export const CUSTOMERS_CATEGORY_NAME = 'Customers';
@@ -495,7 +613,46 @@ export async function createAccount(data: {
 }
 
 function defaultOpeningSide(type: AccountType): 'DR' | 'CR' {
-  return type === 'ASSET' || type === 'EXPENSE' ? 'DR' : 'CR';
+  return type === AccountType.ASSET || type === AccountType.EXPENSE ? 'DR' : 'CR';
+}
+
+function ledgerEntriesForYearWhere(
+  ledgerId: number,
+  financialYearId: number,
+  yearStart: Date,
+  yearEnd: Date | null,
+): Prisma.LedgerEntryWhereInput {
+  return {
+    ledgerId,
+    isReversal: false,
+    OR: [
+      {
+        voucher: {
+          financialYearId,
+          status: VoucherStatus.ACTIVE,
+        },
+      },
+      {
+        isOpeningBalance: true,
+        createdAt: {
+          gte: yearStart,
+          ...(yearEnd ? { lte: yearEnd } : {}),
+        },
+      },
+    ],
+  };
+}
+
+async function loadFinancialYearBounds(db: DbClient, financialYearId: number) {
+  const year = await db.financialYear.findFirst({
+    where: { id: financialYearId },
+    select: { startDate: true, endDate: true },
+  });
+  if (!year) throw new AppError(404, 'Financial year not found');
+  return {
+    yearStart: startOfDay(year.startDate),
+    yearEnd: year.endDate ? endOfDay(year.endDate) : null,
+  };
 }
 
 function normalizeLabel(value: string) {
@@ -594,9 +751,18 @@ function voucherTypeLabel(
   return isReversal ? `${base} (Reversal)` : base;
 }
 
-function voucherDisplayNo(_type: VoucherType | null | undefined, number: number | null | undefined) {
+function voucherDisplayNo(type: VoucherType | null | undefined, number: number | null | undefined) {
+  return formatVoucherLabel(type, number);
+}
+
+/** Shared voucher label: number + type tag (single sequence across Payment/Receipt/Journal). */
+export function formatVoucherLabel(
+  type: VoucherType | null | undefined,
+  number: number | null | undefined,
+): string {
   if (!number) return '0';
-  return String(number);
+  const typeLabel = voucherTypeLabel({ type }, false);
+  return `${number} · ${typeLabel}`;
 }
 
 export function formatPurchaseItemsDescription(
@@ -652,14 +818,23 @@ function buildLedgerEntryDescription(
 
 async function nextVoucherNumber(
   tx: Prisma.TransactionClient,
-  type: VoucherType,
   financialYearId: number,
 ): Promise<number> {
   const { _max } = await tx.voucher.aggregate({
-    where: { type, financialYearId },
+    where: { financialYearId },
     _max: { number: true },
   });
   return (_max.number ?? 0) + 1;
+}
+
+/** Read-only preview of the next voucher number for the active financial year. */
+export async function previewNextVoucherNumber(): Promise<{
+  number: number;
+  financialYearId: number;
+}> {
+  const financialYearId = await getActiveFinancialYearId(prisma);
+  const number = await nextVoucherNumber(prisma, financialYearId);
+  return { number, financialYearId };
 }
 
 function parseDateStart(value: string) {
@@ -1113,27 +1288,44 @@ export async function createVoucherInTx(
     debitAccountId: number;
     creditAccountId: number;
     amount: number;
+    date: Date | string;
     description?: string;
     reference?: string;
     createdById: number;
   },
 ) {
-  if (data.amount <= 0) {
-    throw new AppError(400, 'Amount must be greater than zero');
+  let voucherDate: Date;
+  try {
+    voucherDate = parseVoucherDateInput(data.date);
+  } catch {
+    throw new AppError(400, 'Invalid voucher date');
   }
+  const { financialYearId } = await validateVoucherCreate(tx, {
+    type: data.type,
+    debitAccountId: data.debitAccountId,
+    creditAccountId: data.creditAccountId,
+    amount: data.amount,
+    date: voucherDate,
+    description: data.description,
+    reference: data.reference,
+  });
 
-  const { debitAccount, creditAccount } = await loadAccounts(
-    tx,
-    data.debitAccountId,
-    data.creditAccountId,
-  );
-  assertVoucherAccountRules(data.type, debitAccount, creditAccount);
-
-  const financialYearId = await getActiveFinancialYearId(tx);
-  const number = await nextVoucherNumber(tx, data.type, financialYearId);
+  const number = await nextVoucherNumber(tx, financialYearId);
 
   const voucher = await tx.voucher.create({
-    data: { ...data, number, financialYearId, status: VoucherStatus.ACTIVE },
+    data: {
+      type: data.type,
+      number,
+      date: voucherDate,
+      debitAccountId: data.debitAccountId,
+      creditAccountId: data.creditAccountId,
+      amount: data.amount,
+      description: data.description,
+      reference: data.reference,
+      createdById: data.createdById,
+      financialYearId,
+      status: VoucherStatus.ACTIVE,
+    },
   });
 
   await postVoucherLedgerEntries(
@@ -1143,8 +1335,10 @@ export async function createVoucherInTx(
     data.creditAccountId,
     data.amount,
     data.description,
-    false,
+    financialYearId,
   );
+
+  await assertTrialBalanceInDev(tx);
 
   return voucher;
 }
@@ -1154,6 +1348,7 @@ export async function createVoucher(data: {
   debitAccountId: number;
   creditAccountId: number;
   amount: number;
+  date: Date | string;
   description?: string;
   reference?: string;
   createdById: number;
@@ -1171,13 +1366,10 @@ async function postVoucherLedgerEntries(
   creditAccountId: number,
   amount: number,
   notes: string | null | undefined,
-  isReversal: boolean,
+  financialYearId: number,
 ) {
   const debitLedger = await tx.ledger.findUniqueOrThrow({ where: { accountId: debitAccountId } });
   const creditLedger = await tx.ledger.findUniqueOrThrow({ where: { accountId: creditAccountId } });
-
-  const debitBalance = Number(debitLedger.balance) + amount;
-  const creditBalance = Number(creditLedger.balance) - amount;
 
   await tx.ledgerEntry.createMany({
     data: [
@@ -1186,24 +1378,24 @@ async function postVoucherLedgerEntries(
         voucherId,
         type: LedgerEntryType.DEBIT,
         amount,
-        balance: debitBalance,
+        balance: 0,
         notes: notes ?? undefined,
-        isReversal,
+        isReversal: false,
       },
       {
         ledgerId: creditLedger.id,
         voucherId,
         type: LedgerEntryType.CREDIT,
         amount,
-        balance: creditBalance,
+        balance: 0,
         notes: notes ?? undefined,
-        isReversal,
+        isReversal: false,
       },
     ],
   });
 
-  await tx.ledger.update({ where: { id: debitLedger.id }, data: { balance: debitBalance } });
-  await tx.ledger.update({ where: { id: creditLedger.id }, data: { balance: creditBalance } });
+  await recomputeLedgerRunningBalancesInTx(tx, debitLedger.id, financialYearId);
+  await recomputeLedgerRunningBalancesInTx(tx, creditLedger.id, financialYearId);
 }
 
 async function reverseVoucherLedgerEntries(
@@ -1220,33 +1412,29 @@ async function reverseVoucherLedgerEntries(
     where: { accountId: voucher.creditAccountId },
   });
 
-  const debitBalanceAfter = Number(debitLedger.balance) - amount;
   await tx.ledgerEntry.create({
     data: {
       ledgerId: debitLedger.id,
       voucherId: voucher.id,
       type: LedgerEntryType.CREDIT,
       amount,
-      balance: debitBalanceAfter,
+      balance: 0,
       notes,
       isReversal: true,
     },
   });
-  await tx.ledger.update({ where: { id: debitLedger.id }, data: { balance: debitBalanceAfter } });
 
-  const creditBalanceAfter = Number(creditLedger.balance) + amount;
   await tx.ledgerEntry.create({
     data: {
       ledgerId: creditLedger.id,
       voucherId: voucher.id,
       type: LedgerEntryType.DEBIT,
       amount,
-      balance: creditBalanceAfter,
+      balance: 0,
       notes,
       isReversal: true,
     },
   });
-  await tx.ledger.update({ where: { id: creditLedger.id }, data: { balance: creditBalanceAfter } });
 }
 
 const voucherInclude = {
@@ -1256,6 +1444,117 @@ const voucherInclude = {
   modifiedBy: { select: { id: true, displayName: true, username: true } },
   deletedBy: { select: { id: true, displayName: true, username: true } },
 } as const;
+
+function customerAccountCode(id: number) {
+  return `C${String(id).padStart(4, '0')}`;
+}
+
+function supplierAccountCode(id: number) {
+  return `S${String(id).padStart(4, '0')}`;
+}
+
+function voucherDashboardAccountLabel(voucher: {
+  type: VoucherType;
+  debitAccount?: { name: string } | null;
+  creditAccount?: { name: string } | null;
+}) {
+  if (voucher.type === 'RECEIPT') return voucher.creditAccount?.name ?? '—';
+  if (voucher.type === 'PAYMENT') return voucher.debitAccount?.name ?? '—';
+  const debit = voucher.debitAccount?.name ?? '—';
+  const credit = voucher.creditAccount?.name ?? '—';
+  return `${debit} → ${credit}`;
+}
+
+export async function getDashboardSummary() {
+  let financialYearId: number | undefined;
+  try {
+    financialYearId = await getActiveFinancialYearId(prisma);
+  } catch {
+    financialYearId = undefined;
+  }
+
+  const accounts = await prisma.account.findMany({
+    where: { isActive: true },
+    include: { category: true, ledger: true },
+  });
+
+  let cashBalance = 0;
+  for (const account of accounts) {
+    if (account.category && isBankOrCashCategory(account.category.name) && account.ledger) {
+      cashBalance += Number(account.ledger.balance);
+    }
+  }
+
+  const [customers, suppliers] = await Promise.all([
+    prisma.customer.findMany({ where: { isActive: true }, select: { id: true } }),
+    prisma.supplier.findMany({ where: { isActive: true }, select: { id: true } }),
+  ]);
+
+  const partyCodes = [
+    ...customers.map((c) => customerAccountCode(c.id)),
+    ...suppliers.map((s) => supplierAccountCode(s.id)),
+  ];
+
+  const partyAccounts =
+    partyCodes.length > 0
+      ? await prisma.account.findMany({
+          where: { code: { in: partyCodes }, isActive: true },
+          include: { ledger: true },
+        })
+      : [];
+
+  const partyAccountByCode = new Map(partyAccounts.map((a) => [a.code, a]));
+
+  let receivables = 0;
+  for (const customer of customers) {
+    const account = partyAccountByCode.get(customerAccountCode(customer.id));
+    const balance = account?.ledger ? Number(account.ledger.balance) : 0;
+    if (balance > 0) receivables += balance;
+  }
+
+  let payables = 0;
+  for (const supplier of suppliers) {
+    const account = partyAccountByCode.get(supplierAccountCode(supplier.id));
+    const balance = account?.ledger ? Number(account.ledger.balance) : 0;
+    if (balance < 0) payables += Math.abs(balance);
+  }
+
+  const todayStart = startOfDay(new Date());
+  const todayEnd = endOfDay(new Date());
+
+  const [vouchersToday, recentRows] = financialYearId
+    ? await Promise.all([
+        prisma.voucher.count({
+          where: {
+            financialYearId,
+            date: { gte: todayStart, lte: todayEnd },
+          },
+        }),
+        prisma.voucher.findMany({
+          where: { financialYearId },
+          include: voucherInclude,
+          orderBy: [{ date: 'desc' }, { number: 'desc' }],
+          take: 10,
+        }),
+      ])
+    : [0, []];
+
+  return {
+    cashBalance,
+    receivables,
+    payables,
+    vouchersToday,
+    recentVouchers: recentRows.map((v) => ({
+      id: v.id,
+      number: v.number,
+      type: v.type,
+      amount: Number(v.amount),
+      date: v.date,
+      status: v.status,
+      accountLabel: voucherDashboardAccountLabel(v),
+    })),
+  };
+}
 
 export async function listVouchers() {
   let financialYearId: number | undefined;
@@ -1269,20 +1568,7 @@ export async function listVouchers() {
     where: { ...(financialYearId != null && { financialYearId }),
     },
     include: voucherInclude,
-    orderBy: { createdAt: 'desc' },
-  });
-}
-
-async function shiftSubsequentEntryBalances(
-  tx: Prisma.TransactionClient,
-  ledgerId: number,
-  afterEntryId: number,
-  shift: number,
-) {
-  if (shift === 0) return;
-  await tx.ledgerEntry.updateMany({
-    where: { ledgerId, id: { gt: afterEntryId } },
-    data: { balance: { increment: shift } },
+    orderBy: [{ date: 'desc' }, { number: 'desc' }],
   });
 }
 
@@ -1328,30 +1614,17 @@ export async function updateVoucherAmount(
 
     await tx.ledgerEntry.update({
       where: { id: debitEntry.id },
-      data: {
-        amount: newAmount,
-        balance: Number(debitEntry.balance) + delta,
-      },
+      data: { amount: newAmount },
     });
     await tx.ledgerEntry.update({
       where: { id: creditEntry.id },
-      data: {
-        amount: newAmount,
-        balance: Number(creditEntry.balance) - delta,
-      },
+      data: { amount: newAmount },
     });
 
-    await shiftSubsequentEntryBalances(tx, debitEntry.ledgerId, debitEntry.id, delta);
-    await shiftSubsequentEntryBalances(tx, creditEntry.ledgerId, creditEntry.id, -delta);
+    await recomputeLedgerRunningBalancesInTx(tx, debitEntry.ledgerId, voucher.financialYearId!);
+    await recomputeLedgerRunningBalancesInTx(tx, creditEntry.ledgerId, voucher.financialYearId!);
 
-    await tx.ledger.update({
-      where: { id: debitEntry.ledgerId },
-      data: { balance: { increment: delta } },
-    });
-    await tx.ledger.update({
-      where: { id: creditEntry.ledgerId },
-      data: { balance: { increment: -delta } },
-    });
+    await assertTrialBalanceInDev(tx);
 
     return tx.voucher.update({
       where: { id: voucher.id },
@@ -1388,7 +1661,7 @@ export async function cancelVoucherInTx(
   );
 
   const now = new Date();
-  return tx.voucher.update({
+  const updated = await tx.voucher.update({
     where: { id: voucher.id },
     data: {
       status: VoucherStatus.CANCELLED,
@@ -1398,6 +1671,17 @@ export async function cancelVoucherInTx(
     },
     include: voucherInclude,
   });
+
+  const [debitLedger, creditLedger] = await Promise.all([
+    tx.ledger.findUniqueOrThrow({ where: { accountId: voucher.debitAccountId } }),
+    tx.ledger.findUniqueOrThrow({ where: { accountId: voucher.creditAccountId } }),
+  ]);
+  await recomputeLedgerRunningBalancesInTx(tx, debitLedger.id, voucher.financialYearId!);
+  await recomputeLedgerRunningBalancesInTx(tx, creditLedger.id, voucher.financialYearId!);
+
+  await assertTrialBalanceInDev(tx);
+
+  return updated;
 }
 
 export async function cancelActiveVouchersByReferenceInTx(
@@ -1432,14 +1716,15 @@ export async function getTrialBalance() {
 
   const accounts = ledgers.map((l: (typeof ledgers)[number]) => {
     const balance = Number(l.balance);
+    const { debit, credit } = trialBalanceFromSignedBalance(balance);
     return {
       accountId: l.accountId,
       accountCode: l.account.code,
       accountName: l.account.name,
       accountType: l.account.type,
       balance,
-      debit: balance > 0 ? balance : 0,
-      credit: balance < 0 ? Math.abs(balance) : 0,
+      debit,
+      credit,
     };
   });
 
@@ -1450,7 +1735,7 @@ export async function getTrialBalance() {
     accounts,
     totalDebit,
     totalCredit,
-    isBalanced: Math.abs(totalDebit - totalCredit) < 0.01,
+    isBalanced: isTrialBalanceBalanced(totalDebit, totalCredit),
   };
 }
 
@@ -1509,23 +1794,21 @@ async function buildLedgerEntriesReport(
 
   const currentYear = await prisma.financialYear.findFirst({
     where: { id: financialYearId },
-    select: { startDate: true },
+    select: { startDate: true, endDate: true },
   });
 
+  const yearStart = currentYear ? startOfDay(currentYear.startDate) : startOfDay(new Date());
+  const yearEnd = currentYear?.endDate ? endOfDay(currentYear.endDate) : null;
+
   const yearEntries = await prisma.ledgerEntry.findMany({
-    where: {
-      ledgerId: ledger.id,
-      isReversal: false,
-      voucher: {
-        financialYearId,
-        status: VoucherStatus.ACTIVE,
-      },
-    },
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    where: ledgerEntriesForYearWhere(ledger.id, financialYearId, yearStart, yearEnd),
+    orderBy: [{ id: 'asc' }],
     include: {
       voucher: { include: { debitAccount: true, creditAccount: true } },
     },
   });
+
+  yearEntries.sort(compareLedgerEntries);
 
   const from = fromDate ? parseDateStart(fromDate) : null;
   const to = toDate ? parseDateEnd(toDate) : null;
@@ -1535,7 +1818,7 @@ async function buildLedgerEntriesReport(
 
   for (const e of yearEntries) {
     const { debit, credit } = entryDebitCredit(e.type, Number(e.amount));
-    const at = new Date(e.createdAt);
+    const at = startOfDay(entryEffectiveDate(e));
 
     if (from && at < from) {
       periodOpening += debit - credit;
@@ -1610,7 +1893,7 @@ async function buildLedgerEntriesReport(
       ? saleDescriptions.get(voucher.reference.trim())
       : undefined;
     rows.push({
-      date: e.createdAt.toISOString(),
+      date: entryEffectiveDate(e).toISOString(),
       voucherNo: e.isOpeningBalance
         ? '0'
         : voucherDisplayNo(voucher?.type ?? null, voucher?.number),

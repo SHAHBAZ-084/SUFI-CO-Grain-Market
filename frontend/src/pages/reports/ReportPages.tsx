@@ -80,12 +80,12 @@ export function AccountReportsPage() {
   return (
     <PageShell title="Account Reports" subtitle="View ledger entries for any account">
       <Panel>
-        <h2 className="mb-4 text-lg font-semibold text-stone-900">Account Ledger</h2>
+        <h2 className="mb-4 text-lg font-semibold text-textPrimary">Account Ledger</h2>
         <div className="mb-4 grid gap-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
           <div>
             <FieldLabel>Account</FieldLabel>
             <select
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
               value={accountId}
               onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : '')}
             >
@@ -108,12 +108,12 @@ export function AccountReportsPage() {
           </PrimaryButton>
         </div>
 
-        {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
 
         {!loaded ? (
-          <p className="text-sm text-stone-500">Select an account and click Load Ledger</p>
+          <p className="text-sm text-textSecondary">Select an account and click Load Ledger</p>
         ) : ledger && ledger.rows.length === 0 ? (
-          <p className="text-sm text-stone-500">No entries in this period</p>
+          <p className="text-sm text-textSecondary">No entries in this period</p>
         ) : ledger ? (
           <>
             <div className="mb-4 flex flex-wrap gap-2">
@@ -123,7 +123,7 @@ export function AccountReportsPage() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead>
-                  <tr className="border-b border-stone-200 text-stone-500">
+                  <tr className="border-b border-border text-textSecondary">
                     <th className="py-2">Date</th>
                     <th className="py-2">Voucher#</th>
                     <th className="py-2">Ref#</th>
@@ -136,24 +136,24 @@ export function AccountReportsPage() {
                 </thead>
                 <tbody>
                   {ledger.rows.map((r, i) => (
-                    <tr key={i} className={`border-b border-stone-100 ${r.isOpeningRow ? 'bg-stone-50 font-medium' : ''}`}>
+                    <tr key={i} className={`border-b border-border ${r.isOpeningRow ? 'bg-surface1 font-medium' : ''}`}>
                       <td className="py-2 whitespace-nowrap">{formatDate(r.date)}</td>
                       <td className="py-2 font-mono text-xs">{r.voucherNo}</td>
-                      <td className="py-2 text-stone-500">{r.ref ?? ''}</td>
+                      <td className="py-2 text-textSecondary">{r.ref ?? ''}</td>
                       <td className="py-2">{r.type}</td>
-                      <td className="py-2 text-stone-500">{r.description}</td>
+                      <td className="py-2 text-textSecondary">{r.description}</td>
                       <td className="py-2 text-right">{r.debit > 0 ? formatLedgerAmount(r.debit) : ''}</td>
                       <td className="py-2 text-right">{r.credit > 0 ? formatLedgerAmount(r.credit) : ''}</td>
-                      <td className="py-2 text-right font-medium text-grain-700">{formatLedgerBalance(r.balance)}</td>
+                      <td className="py-2 text-right font-medium text-accent">{formatLedgerBalance(r.balance)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-stone-200 font-semibold">
+                  <tr className="border-t-2 border-border font-semibold">
                     <td className="py-2" colSpan={5}>Total / Closing</td>
                     <td className="py-2 text-right">{formatLedgerAmount(ledger.summary.totalDebit)}</td>
                     <td className="py-2 text-right">{formatLedgerAmount(ledger.summary.totalCredit)}</td>
-                    <td className="py-2 text-right text-grain-700">{formatLedgerBalance(ledger.summary.closingBalance)}</td>
+                    <td className="py-2 text-right text-accent">{formatLedgerBalance(ledger.summary.closingBalance)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -200,7 +200,7 @@ export function TrialBalancePage() {
             </div>
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-stone-200 text-stone-500">
+                <tr className="border-b border-border text-textSecondary">
                   <th className="py-2">Account</th>
                   <th className="py-2 text-right">Debit</th>
                   <th className="py-2 text-right">Credit</th>
@@ -208,7 +208,7 @@ export function TrialBalancePage() {
               </thead>
               <tbody>
                 {data.accounts.map((row, i) => (
-                  <tr key={i} className="border-b border-stone-100">
+                  <tr key={i} className="border-b border-border">
                     <td className="py-2">{row.accountName}</td>
                     <td className="py-2 text-right">{row.debit.toFixed(2)}</td>
                     <td className="py-2 text-right">{row.credit.toFixed(2)}</td>
@@ -216,13 +216,13 @@ export function TrialBalancePage() {
                 ))}
               </tbody>
             </table>
-            <p className="mt-4 text-sm text-stone-600">
+            <p className="mt-4 text-sm text-textSecondary">
               Total debit {data.totalDebit.toFixed(2)} · Total credit {data.totalCredit.toFixed(2)} ·{' '}
               {data.isBalanced ? 'Balanced' : 'Out of balance'}
             </p>
           </>
         ) : (
-          <p className="text-sm text-stone-500">Loading…</p>
+          <p className="text-sm text-textSecondary">Loading…</p>
         )}
       </Panel>
     </PageShell>
@@ -233,7 +233,7 @@ export function SalePurchaseReportsPage() {
   return (
     <PageShell title="Sale/Purchase Reports" subtitle="Combined invoice reporting">
       <Panel>
-        <p className="text-sm text-stone-600">
+        <p className="text-sm text-textSecondary">
           Use <strong>View Previous Bill</strong> under Sale/Purchase Invoice for the unified history.
           Detailed sale/purchase analytics will be added with invoice posting rules.
         </p>

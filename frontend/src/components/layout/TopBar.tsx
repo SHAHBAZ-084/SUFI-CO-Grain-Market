@@ -16,19 +16,15 @@ function NavSubmenu({ label, children }: { label: string; children: { label: str
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-stone-700 transition hover:bg-grain-50 hover:text-grain-800"
+        className="app-dropdown-item flex w-full items-center justify-between text-left"
       >
         {label}
-        <span className="ml-2 text-stone-400">›</span>
+        <span className="ml-2 text-textMuted">›</span>
       </button>
       {open ? (
-        <div className="absolute left-full top-0 z-50 min-w-[220px] rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
+        <div className="app-dropdown left-full top-0">
           {children.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="block px-4 py-2 text-sm text-stone-700 transition hover:bg-grain-50 hover:text-grain-800"
-            >
+            <Link key={item.to} to={item.to} className="app-dropdown-item">
               {item.label}
             </Link>
           ))}
@@ -62,21 +58,17 @@ function NavDropdown({ label, children }: { label: string; children: NavItem[] }
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="rounded-md px-3 py-2 text-sm font-medium text-stone-100 transition hover:bg-grain-700"
+        className={`app-topnav-link ${open ? 'is-open' : ''}`}
       >
         {label}
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
+        <div className="app-dropdown left-0 top-full mt-1">
           {children.map((item) =>
             item.kind === 'submenu' ? (
               <NavSubmenu key={item.label} label={item.label} children={item.children} />
             ) : (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="block px-4 py-2 text-sm text-stone-700 transition hover:bg-grain-50 hover:text-grain-800"
-              >
+              <Link key={item.to} to={item.to} className="app-dropdown-item">
                 {item.label}
               </Link>
             ),
@@ -88,10 +80,12 @@ function NavDropdown({ label, children }: { label: string; children: NavItem[] }
 }
 
 export function TopBar() {
+  const location = useLocation();
+
   return (
-    <header className="sticky top-0 z-40 border-b border-grain-800 bg-grain-900 shadow-md">
+    <header className="app-topnav sticky top-0 isolate shadow-md">
       <div className="flex items-center gap-1 px-3">
-        <Link to="/" className="mr-3 shrink-0 py-3 pr-3 text-sm font-semibold text-white">
+        <Link to="/" className="app-topnav-brand mr-3 shrink-0 py-3 pr-3 text-sm">
           Grain Market POS
         </Link>
         <nav className="flex flex-1 flex-wrap items-center gap-0.5">
@@ -102,7 +96,7 @@ export function TopBar() {
               <Link
                 key={group.label}
                 to={group.to!}
-                className="rounded-md px-3 py-2 text-sm font-medium text-stone-100 transition hover:bg-grain-700"
+                className={`app-topnav-link ${location.pathname === group.to ? 'is-active' : ''}`}
               >
                 {group.label}
               </Link>

@@ -63,6 +63,22 @@ accountingRouter.post(
 );
 
 accountingRouter.get(
+  '/dashboard-summary',
+  asyncHandler(async (_req, res) => {
+    const summary = await accountingService.getDashboardSummary();
+    res.json(summary);
+  }),
+);
+
+accountingRouter.get(
+  '/vouchers/next-number',
+  asyncHandler(async (_req, res) => {
+    const preview = await accountingService.previewNextVoucherNumber();
+    res.json(preview);
+  }),
+);
+
+accountingRouter.get(
   '/vouchers',
   asyncHandler(async (_req, res) => {
     const vouchers = await accountingService.listVouchers();
@@ -78,6 +94,7 @@ accountingRouter.post(
       debitAccountId: z.number().int(),
       creditAccountId: z.number().int(),
       amount: z.number().positive(),
+      date: z.union([z.string().min(1), z.coerce.date()]),
       description: z.string().optional(),
       reference: z.string().optional(),
     }),

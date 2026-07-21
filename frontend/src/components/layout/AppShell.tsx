@@ -3,9 +3,9 @@ import { TopBar } from './TopBar';
 
 export function AppShell() {
   return (
-    <div className="min-h-screen bg-stone-100">
+    <div className="min-h-screen bg-surface3">
       <TopBar />
-      <main>
+      <main className="relative z-0">
         <Outlet />
       </main>
     </div>

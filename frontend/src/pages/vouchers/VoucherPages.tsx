@@ -1,9 +1,10 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatLedgerBalance } from '../../lib/format';
+import { formatDate, formatLedgerBalance, formatVoucherLabel } from '../../lib/format';
 import { api, Account, AccountCategory, Voucher, VoucherAccount, VoucherUser } from '../../lib/api';
-import { DangerButton, FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
+import { DangerButton, FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput, Tile } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 const VOUCHER_TYPES: Record<string, string> = {
   payment: 'PAYMENT',
@@ -17,6 +18,14 @@ const TITLES: Record<string, string> = {
   receipt: 'Receipt Voucher',
 };
 
+function todayInputValue() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function AccountSideFields({
   label,
   categoryId,
@@ -25,6 +34,13 @@ function AccountSideFields({
   accounts,
   onCategoryChange,
   onAccountChange,
+  categoryTabIndex,
+  accountTabIndex,
+  categoryInputRef,
+  accountInputRef,
+  accountNextFocusRef,
+  panelClassName = 'rounded-lg border border-border bg-surface1 p-4',
+  labelClassName = 'text-accent',
 }: {
   label: string;
   categoryId: string;
@@ -33,39 +49,77 @@ function AccountSideFields({
   accounts: Account[];
   onCategoryChange: (id: string) => void;
   onAccountChange: (id: string) => void;
+  categoryTabIndex: number;
+  accountTabIndex: number;
+  categoryInputRef: RefObject<HTMLInputElement | null>;
+  accountInputRef: RefObject<HTMLInputElement | null>;
+  accountNextFocusRef?: RefObject<HTMLElement | null>;
+  panelClassName?: string;
+  labelClassName?: string;
 }) {
   const filteredAccounts = accounts.filter((a) => categoryId && String(a.categoryId) === categoryId);
   const selected = accounts.find((a) => String(a.id) === accountId);
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-grain-700">{label}</p>
-      <div>
-        <FieldLabel>Category</FieldLabel>
-        <SearchSelect
-          value={categoryId}
-          onChange={onCategoryChange}
-          options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
-          placeholder="Search category…"
-        />
+    <div className={panelClassName}>
+      <p className={`mb-3 text-xs font-semibold uppercase tracking-wider ${labelClassName}`}>{label}</p>
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Category</FieldLabel>
+          <SearchSelect
+            inputRef={categoryInputRef}
+            tabIndex={categoryTabIndex}
+            value={categoryId}
+            onChange={onCategoryChange}
+            options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+            placeholder="Search category…"
+            nextFocusRef={accountInputRef}
+            onSelected={() => {
+              requestAnimationFrame(() => accountInputRef.current?.focus());
+            }}
+          />
+        </div>
+        <div>
+          <FieldLabel>Account</FieldLabel>
+          <SearchSelect
+            inputRef={accountInputRef}
+            tabIndex={accountTabIndex}
+            value={accountId}
+            onChange={onAccountChange}
+            options={filteredAccounts.map((a) => ({ value: String(a.id), label: a.name }))}
+            placeholder={categoryId ? 'Search account…' : 'Select a category first'}
+            disabled={!categoryId}
+            nextFocusRef={accountNextFocusRef}
+          />
+        </div>
+        {selected?.ledger ? (
+          <p className="text-xs text-textSecondary">
+            Current balance: {formatLedgerBalance(selected.ledger.balance)}
+          </p>
+        ) : null}
       </div>
-      <div>
-        <FieldLabel>Account</FieldLabel>
-        <SearchSelect
-          value={accountId}
-          onChange={onAccountChange}
-          options={filteredAccounts.map((a) => ({ value: String(a.id), label: a.name }))}
-          placeholder={categoryId ? 'Search account…' : 'Select a category first'}
-          disabled={!categoryId}
-        />
-      </div>
-      {selected?.ledger ? (
-        <p className="mt-1 text-xs text-stone-500">
-          Current balance: {formatLedgerBalance(selected.ledger.balance)}
-        </p>
-      ) : null}
     </div>
   );
+}
+
+function sidePanelStyle(
+  variant: 'payment' | 'receipt' | 'journal',
+  side: 'left' | 'right',
+): { panel: string; label: string } {
+  const base = 'rounded-lg border border-border p-4';
+  if (variant === 'payment' && side === 'left') {
+    return { panel: `${base} bg-bgDanger`, label: 'text-danger' };
+  }
+  if (variant === 'receipt' && side === 'right') {
+    return { panel: `${base} bg-bgSuccess`, label: 'text-success' };
+  }
+  if (variant === 'journal' && side === 'left') {
+    return { panel: `${base} bg-bgSuccess`, label: 'text-success' };
+  }
+  if (variant === 'journal' && side === 'right') {
+    return { panel: `${base} bg-bgDanger`, label: 'text-danger' };
+  }
+  return { panel: `${base} bg-surface1`, label: 'text-textSecondary' };
 }
 
 function isBankOrCashCategory(name: string) {
@@ -89,6 +143,24 @@ function categoriesForSide(
 
 export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) {
   const navigate = useNavigate();
+  const formRef = useRef<HTMLFormElement>(null);
+  const trapRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+  const leftCategoryRef = useRef<HTMLInputElement>(null);
+  const leftAccountRef = useRef<HTMLInputElement>(null);
+  const rightCategoryRef = useRef<HTMLInputElement>(null);
+  const rightAccountRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+  const referenceRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLInputElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+
+  useFocusTrap(trapRef, {
+    initialFocusRef: dateRef,
+    escapeFocusRef: titleRef,
+  });
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<AccountCategory[]>([]);
 
@@ -97,6 +169,10 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
   const [debitAccountId, setDebitAccountId] = useState('');
   const [creditAccountId, setCreditAccountId] = useState('');
   const [amount, setAmount] = useState('');
+  const [voucherDate, setVoucherDate] = useState(todayInputValue);
+  const [predictedNumber, setPredictedNumber] = useState<number | null>(null);
+  const [confirmedNumber, setConfirmedNumber] = useState<number | null>(null);
+  const [numberMismatch, setNumberMismatch] = useState(false);
   const [reference, setReference] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
@@ -108,7 +184,21 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
     api.listCategories().then(setCategories).catch(() => setCategories([]));
   }, []);
 
+  const refreshPredictedNumber = useCallback(() => {
+    api
+      .getNextVoucherNumber()
+      .then(({ number }) => {
+        setPredictedNumber(number);
+        setNumberMismatch(false);
+      })
+      .catch(() => setPredictedNumber(null));
+  }, []);
+
   useEffect(() => { reload(); }, [reload]);
+
+  useEffect(() => {
+    refreshPredictedNumber();
+  }, [refreshPredictedNumber]);
 
   const debitCategories = categoriesForSide(categories, kind, 'debit');
   const creditCategories = categoriesForSide(categories, kind, 'credit');
@@ -148,10 +238,13 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
     if (variant === 'journal') setCreditAccountId(id); else setDebitAccountId(id);
   }
 
-  function resetForm() {
-    setDebitCategoryId(''); setCreditCategoryId('');
-    setDebitAccountId(''); setCreditAccountId('');
-    setAmount(''); setReference(''); setDescription('');
+  function canSubmit() {
+    return Boolean(
+      debitAccountId
+      && creditAccountId
+      && debitAccountId !== creditAccountId
+      && Number(amount) > 0,
+    );
   }
 
   async function onSubmit(event: FormEvent) {
@@ -178,11 +271,26 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
         debitAccountId: Number(debitAccountId),
         creditAccountId: Number(creditAccountId),
         amount: parsedAmount,
+        date: voucherDate,
         description: description || undefined,
         reference: reference || undefined,
       });
-      setMessage(`Voucher #${voucher.number} posted (debit + credit pair).`);
-      resetForm();
+      const expected = predictedNumber;
+      setConfirmedNumber(voucher.number);
+      if (expected != null && voucher.number !== expected) {
+        setNumberMismatch(true);
+        setMessage(
+          `Voucher ${formatVoucherLabel(VOUCHER_TYPES[kind], voucher.number)} posted (expected #${expected} — sequence changed).`,
+        );
+      } else {
+        setNumberMismatch(false);
+        setMessage(`Voucher ${formatVoucherLabel(VOUCHER_TYPES[kind], voucher.number)} posted (debit + credit pair).`);
+      }
+      setDebitCategoryId(''); setCreditCategoryId('');
+      setDebitAccountId(''); setCreditAccountId('');
+      setAmount(''); setReference(''); setDescription('');
+      setConfirmedNumber(null);
+      refreshPredictedNumber();
       reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
@@ -191,10 +299,42 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
     }
   }
 
+  const voucherNumberDisplay =
+    confirmedNumber != null
+      ? formatVoucherLabel(VOUCHER_TYPES[kind], confirmedNumber)
+      : predictedNumber != null
+        ? formatVoucherLabel(VOUCHER_TYPES[kind], predictedNumber)
+        : '';
+
   return (
-    <PageShell title={TITLES[kind]} subtitle="Posts a balanced debit + credit voucher pair">
+    <PageShell centerTitle titleRef={titleRef} title={TITLES[kind]}>
       <Panel className="mx-auto max-w-4xl">
-        <form className="space-y-6" onSubmit={onSubmit}>
+        <div ref={trapRef}>
+          <form ref={formRef} className="space-y-6" onSubmit={onSubmit}>
+          <Tile className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <FieldLabel>Date</FieldLabel>
+              <TextInput
+                ref={dateRef}
+                tabIndex={1}
+                type="date"
+                required
+                value={voucherDate}
+                onChange={(e) => setVoucherDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Voucher #</FieldLabel>
+              <div
+                className={`rounded-lg bg-bgAccent px-3 py-2 ${numberMismatch ? 'ring-2 ring-accent' : ''}`}
+              >
+                <span className="text-lg font-semibold text-textAccent">
+                  {voucherNumberDisplay || '…'}
+                </span>
+              </div>
+            </div>
+          </Tile>
+
           <div className="grid gap-6 sm:grid-cols-2">
             <AccountSideFields
               label={leftLabel}
@@ -204,6 +344,13 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
               accounts={accounts}
               onCategoryChange={setLeftCategory}
               onAccountChange={setLeftAccount}
+              categoryTabIndex={2}
+              accountTabIndex={3}
+              categoryInputRef={leftCategoryRef}
+              accountInputRef={leftAccountRef}
+              accountNextFocusRef={rightCategoryRef}
+              panelClassName={sidePanelStyle(variant as 'payment' | 'receipt' | 'journal', 'left').panel}
+              labelClassName={sidePanelStyle(variant as 'payment' | 'receipt' | 'journal', 'left').label}
             />
             <AccountSideFields
               label={rightLabel}
@@ -213,6 +360,13 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
               accounts={accounts}
               onCategoryChange={setRightCategory}
               onAccountChange={setRightAccount}
+              categoryTabIndex={4}
+              accountTabIndex={5}
+              categoryInputRef={rightCategoryRef}
+              accountInputRef={rightAccountRef}
+              accountNextFocusRef={amountRef}
+              panelClassName={sidePanelStyle(variant as 'payment' | 'receipt' | 'journal', 'right').panel}
+              labelClassName={sidePanelStyle(variant as 'payment' | 'receipt' | 'journal', 'right').label}
             />
           </div>
 
@@ -220,18 +374,23 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
             <div>
               <FieldLabel>Amount</FieldLabel>
               <TextInput
+                ref={amountRef}
+                tabIndex={6}
                 type="number"
                 min="0.01"
                 step="0.01"
                 required
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                onFocus={(e) => e.currentTarget.select()}
                 placeholder="0.00"
               />
             </div>
             <div>
               <FieldLabel>Reference</FieldLabel>
               <TextInput
+                ref={referenceRef}
+                tabIndex={7}
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
                 placeholder="Optional"
@@ -241,21 +400,34 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
 
           <div>
             <FieldLabel>Description</FieldLabel>
-            <TextInput value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional notes" />
+            <TextInput
+              ref={descriptionRef}
+              tabIndex={8}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional notes — press Enter to save when ready"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && canSubmit() && !saving) {
+                  e.preventDefault();
+                  formRef.current?.requestSubmit();
+                }
+              }}
+            />
           </div>
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          {message ? <p className="text-sm text-green-700">{message}</p> : null}
+          {error ? <p className="text-sm text-danger">{error}</p> : null}
+          {message ? <p className="text-sm text-success">{message}</p> : null}
 
           <div className="flex gap-3">
-            <PrimaryButton type="submit" disabled={saving}>
+            <PrimaryButton ref={saveRef} type="submit" tabIndex={9} disabled={saving}>
               {saving ? 'Saving…' : 'Save'}
             </PrimaryButton>
-            <SecondaryButton type="button" onClick={() => navigate('/')}>
+            <SecondaryButton type="button" tabIndex={10} onClick={() => navigate('/')}>
               Close
             </SecondaryButton>
           </div>
         </form>
+        </div>
       </Panel>
     </PageShell>
   );
@@ -332,21 +504,21 @@ function VoucherDetailCard({
 
   return (
     <Panel className="mt-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-stone-900">
-              {VOUCHER_TYPE_LABELS[voucher.type] ?? voucher.type} #{voucher.number}
+            <h2 className="text-lg font-semibold text-textPrimary">
+              {formatVoucherLabel(voucher.type, voucher.number)}
             </h2>
             <span
               className={`rounded-md px-2 py-0.5 text-xs font-medium ${
-                isCancelled ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                isCancelled ? 'bg-bgAccent text-textAccent' : 'bg-bgAccent text-success'
               }`}
             >
               {isCancelled ? 'Cancelled' : 'Active'}
             </span>
           </div>
-          <p className="mt-1 text-sm text-stone-500">{new Date(voucher.createdAt).toLocaleDateString()}</p>
+          <p className="mt-1 text-sm text-textSecondary">{formatDate(voucher.date)}</p>
         </div>
         {!isCancelled && (
           <div className="flex gap-2">
@@ -363,16 +535,20 @@ function VoucherDetailCard({
         )}
       </div>
 
-      <dl className="divide-y divide-stone-100">
+      <dl className="divide-y divide-border">
         {rows.map((row) => (
           <div key={row.label} className="grid grid-cols-[120px_1fr] gap-4 py-3">
-            <dt className="text-sm text-stone-500">{row.label}</dt>
-            <dd className="text-sm font-medium text-stone-900">{row.value}</dd>
+            <dt className="text-sm text-textSecondary">{row.label}</dt>
+            <dd className="text-sm font-medium text-textPrimary">{row.value}</dd>
           </div>
         ))}
         <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
-          <dt className="text-sm text-stone-500">Amount</dt>
-          <dd className="text-sm font-semibold text-stone-900">
+          <dt className="text-sm text-textSecondary">Date</dt>
+          <dd className="text-sm text-textPrimary">{formatDate(voucher.date)}</dd>
+        </div>
+        <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
+          <dt className="text-sm text-textSecondary">Amount</dt>
+          <dd className="text-sm font-semibold text-textPrimary">
             {editingAmount ? (
               <form onSubmit={submitAmount} className="flex flex-wrap items-center gap-2">
                 <TextInput
@@ -404,20 +580,20 @@ function VoucherDetailCard({
         </div>
         {voucher.reference ? (
           <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
-            <dt className="text-sm text-stone-500">Reference</dt>
-            <dd className="text-sm text-stone-900">{voucher.reference}</dd>
+            <dt className="text-sm text-textSecondary">Reference</dt>
+            <dd className="text-sm text-textPrimary">{voucher.reference}</dd>
           </div>
         ) : null}
         {voucher.description ? (
           <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
-            <dt className="text-sm text-stone-500">Description</dt>
-            <dd className="text-sm text-stone-900">{voucher.description}</dd>
+            <dt className="text-sm text-textSecondary">Description</dt>
+            <dd className="text-sm text-textPrimary">{voucher.description}</dd>
           </div>
         ) : null}
       </dl>
 
       {auditParts.length > 0 && (
-        <p className="mt-4 border-t border-stone-100 pt-3 text-xs text-stone-500">
+        <p className="mt-4 border-t border-border pt-3 text-xs text-textSecondary">
           {auditParts.join(' · ')}
         </p>
       )}
@@ -465,8 +641,8 @@ export function VoucherListPage() {
 
   async function handleCancel() {
     if (!result || result === 'notfound') return;
-    const label = VOUCHER_TYPE_LABELS[result.type] ?? 'Voucher';
-    if (!window.confirm(`Cancel ${label} #${result.number}? Reversal entries will be posted.`)) return;
+    const label = formatVoucherLabel(result.type, result.number);
+    if (!window.confirm(`Cancel ${label}? Reversal entries will be posted.`)) return;
     setCancelling(true);
     try {
       const updated = await api.cancelVoucher(result.id);
@@ -499,7 +675,7 @@ export function VoucherListPage() {
     <PageShell title="View Voucher" subtitle="Search a voucher by type and number">
       <Panel>
         {loadError ? (
-          <p className="text-sm text-red-600">{loadError}</p>
+          <p className="text-sm text-danger">{loadError}</p>
         ) : (
           <form onSubmit={handleSearch} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <div>
@@ -507,7 +683,7 @@ export function VoucherListPage() {
               <select
                 value={searchType}
                 onChange={(e) => setSearchType(e.target.value)}
-                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
               >
                 <option value="">All types</option>
                 <option value="RECEIPT">Receipt</option>
@@ -534,7 +710,7 @@ export function VoucherListPage() {
       </Panel>
 
       {searched && result === 'notfound' && (
-        <p className="mt-4 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-500">
+        <p className="mt-4 rounded-lg border border-border bg-surface1 px-4 py-3 text-sm text-textMuted">
           No voucher found for that number{searchType ? ` in ${VOUCHER_TYPE_LABELS[searchType]}` : ''}.
         </p>
       )}

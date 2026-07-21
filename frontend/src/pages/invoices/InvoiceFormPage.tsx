@@ -18,13 +18,18 @@ export function InvoiceFormPage({ slug }: { slug: string }) {
       subtitle="Form shell ready — posting will use createVoucherInTx() with balanced debit + credit in one transaction"
     >
       <Panel>
-        <p className="text-sm leading-6 text-stone-600">
+        <p className="text-sm leading-6 text-textSecondary">
           This is the dedicated form for <strong>{title}</strong>. Field layout and grain-specific
           calculations will be added when you provide the business rules for this invoice type.
         </p>
-        <p className="mt-3 rounded-lg bg-grain-50 px-3 py-2 text-sm text-grain-800">
+        <p className="mt-3 rounded-lg bg-bgAccent px-3 py-2 text-sm text-textAccent">
           Golden rule: every money movement posts as a matched debit + credit pair via{' '}
           <code className="text-xs">createVoucherInTx()</code> — never a one-sided entry.
+        </p>
+        <p className="mt-3 text-sm text-textMuted">
+          Party, product, and category pickers must use the shared{' '}
+          <code className="text-xs">SearchSelect</code> combobox (keyboard Tab/Enter/arrow support)
+          — same component as vouchers, not a separate dropdown implementation.
         </p>
       </Panel>
     </PageShell>
