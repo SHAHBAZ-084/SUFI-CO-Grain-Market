@@ -6,14 +6,14 @@
 
 @layer base {
   html {
-    background-color: var(--surface-3, #708090);
+    background-color: var(--surface-3, #f4f5f7);
     color: var(--text-primary, #1c2838);
   }
 
   body {
     margin: 0;
     min-height: 100vh;
-    background-color: var(--surface-3, #708090);
+    background-color: var(--surface-3, #f4f5f7);
     color: var(--text-primary, #1c2838);
     font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
@@ -37,10 +37,10 @@
     z-index: 200;
     min-width: 220px;
     border-radius: 0.5rem;
-    border: 1px solid var(--dropdown-border, #5a6570);
+    border: 1px solid var(--dropdown-border, #5b6b7c);
     background-color: var(--dropdown-bg, #ffffff);
     padding: 0.25rem 0;
-    box-shadow: var(--dropdown-shadow, 0 16px 40px rgba(12, 35, 64, 0.35));
+    box-shadow: var(--dropdown-shadow, 0 12px 32px rgba(12, 35, 64, 0.18));
   }
 
   .app-dropdown-item {
@@ -85,6 +85,7 @@
     color: var(--nav-text-hover, #ffffff);
   }
 
+  /* Informational / general actions — not voucher-invoice post */
   .btn-primary {
     border-radius: 0.5rem;
     background-color: var(--fill-accent, #378add);
@@ -104,11 +105,32 @@
     opacity: 0.6;
   }
 
+  /* Voucher / invoice Save & Post — navy, structural weight */
+  .btn-financial {
+    border-radius: 0.5rem;
+    background-color: var(--fill-financial, #0c2340);
+    color: var(--on-financial, #ffffff);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: opacity 0.15s;
+  }
+
+  .btn-financial:hover:not(:disabled) {
+    opacity: 0.92;
+  }
+
+  .btn-financial:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  /* Recedes next to financial primary — white, slate border */
   .btn-secondary {
     border-radius: 0.5rem;
-    border: 1px solid var(--border, #d4d2cc);
-    background-color: var(--surface-1, #f4f3ef);
-    color: var(--text-primary, #1c2838);
+    border: 1px solid var(--border-strong, #5b6b7c);
+    background-color: var(--surface-2, #ffffff);
+    color: var(--text-secondary, #5b6b7c);
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
     font-weight: 500;
@@ -116,11 +138,22 @@
   }
 
   .btn-secondary:hover:not(:disabled) {
-    background-color: var(--surface-1, #e2e6eb);
+    background-color: var(--surface-1, #f4f5f7);
   }
 
   .btn-secondary:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+  }
+
+  /* Combobox / SearchSelect — opaque white, always above form fields below */
+  .app-combobox-dropdown {
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-strong, #5b6b7c);
+    background-color: #ffffff;
+    padding: 0.25rem 0;
+    box-shadow:
+      0 12px 32px rgba(12, 35, 64, 0.16),
+      0 2px 8px rgba(12, 35, 64, 0.08);
   }
 }

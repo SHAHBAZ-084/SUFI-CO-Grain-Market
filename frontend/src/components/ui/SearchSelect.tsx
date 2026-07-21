@@ -173,7 +173,7 @@ export function SearchSelect({
     open && filtered.length > 0 ? `${listboxId}-option-${highlightIndex}` : undefined;
 
   return (
-    <div data-search-select-root className="relative">
+    <div data-search-select-root className={`relative ${open ? 'z-[200]' : 'z-0'}`}>
       <input
         ref={assignInputRef}
         id={inputId}
@@ -204,10 +204,10 @@ export function SearchSelect({
           ref={listRef}
           id={listboxId}
           role="listbox"
-          className="absolute left-0 top-full z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-surface2 py-1 shadow-lg"
+          className="app-combobox-dropdown absolute left-0 top-full z-[201] mt-1 max-h-60 w-full overflow-y-auto"
         >
           {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-textMuted" role="status">
+            <p className="bg-white px-3 py-2 text-sm text-textMuted" role="status">
               No matches
             </p>
           ) : (
@@ -225,11 +225,9 @@ export function SearchSelect({
                   onMouseEnter={() => setHighlightIndex(index)}
                   onClick={() => commitSelection(o, Boolean(nextFocusRef))}
                   className={`cursor-pointer px-3 py-2 text-sm ${
-                    isHighlighted
+                    isHighlighted || isSelected
                       ? 'bg-bgAccent font-medium text-textAccent'
-                      : isSelected
-                        ? 'bg-bgAccent text-textAccent'
-                        : 'text-textSecondary hover:bg-bgAccent'
+                      : 'bg-white text-textPrimary hover:bg-bgAccent'
                   }`}
                 >
                   {o.label}

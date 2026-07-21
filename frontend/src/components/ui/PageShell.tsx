@@ -24,7 +24,7 @@ export function PageShell({
           <h1
             ref={titleRef}
             tabIndex={-1}
-            className="rounded-sm text-center text-2xl font-semibold text-onCanvas outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface3"
+            className="rounded-sm text-center text-2xl font-semibold text-textPrimary outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface3"
           >
             {title}
           </h1>
@@ -39,8 +39,8 @@ export function PageShell({
     <div className="mx-auto max-w-6xl px-4 py-6">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-onCanvas">{title}</h1>
-          {subtitle ? <p className="mt-1 text-sm text-onCanvasMuted">{subtitle}</p> : null}
+          <h1 className="text-2xl font-semibold text-textPrimary">{title}</h1>
+          {subtitle ? <p className="mt-1 text-sm text-textSecondary">{subtitle}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>
@@ -52,7 +52,7 @@ export function PageShell({
 /** Metric / grouped summary tile (dashboard style). */
 export function Tile({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg border border-borderStrong bg-surface2 p-3 shadow-md ${className}`}>
+    <div className={`rounded-lg border border-border bg-surface2 p-3 shadow-sm ${className}`}>
       {children}
     </div>
   );
@@ -61,7 +61,7 @@ export function Tile({ children, className = '' }: { children: ReactNode; classN
 /** Raised form card. */
 export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-borderStrong bg-surface2 p-5 shadow-md ${className}`}>
+    <div className={`rounded-xl border border-border bg-surface2 p-5 shadow-sm ${className}`}>
       {children}
     </div>
   );
@@ -78,6 +78,19 @@ export const TextInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<
         ref={ref}
         {...props}
         className={`w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm text-textPrimary outline-none ring-accent focus:ring-2 ${props.className ?? ''}`}
+      />
+    );
+  },
+);
+
+export const FinancialButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
+  function FinancialButton(props, ref) {
+    const { className = '', ...rest } = props;
+    return (
+      <button
+        ref={ref}
+        {...rest}
+        className={`btn-financial disabled:cursor-not-allowed ${className}`}
       />
     );
   },

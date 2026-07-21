@@ -1,37 +1,38 @@
 :root,
 [data-theme='light'] {
-  /* Slate grey canvas + white cards */
-  --surface-1: #E2E6EB;
+  /* Two surfaces only: canvas + card */
+  --surface-1: #F4F5F7;
   --surface-2: #FFFFFF;
-  --surface-3: #708090;
+  --surface-3: #F4F5F7;
 
-  /* Text on white cards / forms */
+  /* Typography — slate grey for secondary/borders, never as fills */
   --text-primary: #1C2838;
-  --text-secondary: #4A5568;
-  --text-muted: #7A8494;
-  --border: #C5CDD6;
-  --border-strong: #8A96A3;
+  --text-secondary: #5B6B7C;
+  --text-muted: #7A8794;
+  --border: #D8DCE1;
+  --border-strong: #5B6B7C;
 
-  /* Text on slate canvas (page background) */
-  --text-on-canvas: #FFFFFF;
-  --text-on-canvas-muted: #E8EDF2;
-
-  /* Brand blue */
+  /* Informational accent only (links, filters, focus — not money actions) */
   --fill-accent: #378ADD;
   --on-accent: #FFFFFF;
   --bg-accent: #E6F1FB;
   --text-accent: #0C447C;
 
-  /* Dr / Cr */
+  /* Financial / structural navy — nav bar + voucher/invoice Save & Post */
+  --fill-financial: #0C2340;
+  --on-financial: #FFFFFF;
+  --text-financial: #0C2340;
+
+  /* Dr / Cr — unchanged */
   --text-success: #1E5C4A;
   --text-danger: #A32D2D;
   --bg-success: #E8F4EF;
   --bg-danger: #FBEAEA;
 
-  /* Dropdown — always solid white, never blends with canvas */
+  /* Dropdowns — solid white card on canvas */
   --dropdown-bg: #FFFFFF;
-  --dropdown-border: #5A6570;
-  --dropdown-shadow: 0 16px 40px rgba(12, 35, 64, 0.35);
+  --dropdown-border: #5B6B7C;
+  --dropdown-shadow: 0 12px 32px rgba(12, 35, 64, 0.18);
 
   /* Top navigation */
   --nav-bg: #0C2340;
@@ -43,32 +44,33 @@
 }
 
 [data-theme='dark'] {
-  --surface-1: #3A4249;
-  --surface-2: #2E3439;
-  --surface-3: #556068;
+  --surface-1: #1E2128;
+  --surface-2: #282C34;
+  --surface-3: #1E2128;
 
   --text-primary: #F0F2F5;
-  --text-secondary: #B8BEC8;
-  --text-muted: #8A919C;
-  --border: #4A5560;
-  --border-strong: #6A7580;
-
-  --text-on-canvas: #FFFFFF;
-  --text-on-canvas-muted: #D0D8E0;
+  --text-secondary: #9AA5B4;
+  --text-muted: #7A8794;
+  --border: #3D4450;
+  --border-strong: #9AA5B4;
 
   --fill-accent: #5BA3E8;
   --on-accent: #FFFFFF;
   --bg-accent: #1A3050;
   --text-accent: #9ECBF5;
 
+  --fill-financial: #0C2340;
+  --on-financial: #FFFFFF;
+  --text-financial: #C8D4E4;
+
   --text-success: #6BC4A8;
   --text-danger: #E88888;
   --bg-success: #1A2E28;
   --bg-danger: #3A2020;
 
-  --dropdown-bg: #2E3439;
-  --dropdown-border: #8A96A3;
-  --dropdown-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  --dropdown-bg: #282C34;
+  --dropdown-border: #9AA5B4;
+  --dropdown-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 
   --nav-bg: #071828;
   --nav-border: #051220;

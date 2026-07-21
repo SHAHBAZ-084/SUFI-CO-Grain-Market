@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
-import { api } from '../../lib/api';
+import { useEffect, useMemo, useState } from 'react';
+import { api, type Account, type AccountCategory } from '../../lib/api';
 import { formatDate, formatLedgerAmount, formatLedgerBalance } from '../../lib/format';
 import { downloadExcel, downloadPdf } from '../../lib/reportExport';
+import { SearchSelect } from '../../components/ui/SearchSelect';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 
 type LedgerResult = Awaited<ReturnType<typeof api.getLedger>>;
 
 export function AccountReportsPage() {
-  const [accounts, setAccounts] = useState<{ id: number; name: string }[]>([]);
-  const [accountId, setAccountId] = useState<number | ''>('');
+  const [categories, setCategories] = useState<AccountCategory[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categoryId, setCategoryId] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [ledger, setLedger] = useState<LedgerResult | null>(null);
@@ -16,11 +19,43 @@ export function AccountReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const filteredAccounts = useMemo(
+    () => accounts.filter((a) => categoryId && String(a.categoryId) === categoryId),
+    [accounts, categoryId],
+  );
+
   useEffect(() => {
-    api.listAccounts().then((rows) => setAccounts(rows.map(({ id, name }) => ({ id, name })))).catch(() => setAccounts([]));
+    Promise.all([api.listCategories(), api.listAccounts()])
+      .then(([categoryRows, accountRows]) => {
+        setCategories(categoryRows.filter((c) => c.isActive));
+        setAccounts(accountRows.filter((a) => a.isActive));
+      })
+      .catch(() => {
+        setCategories([]);
+        setAccounts([]);
+      });
   }, []);
 
+  function onCategoryChange(nextCategoryId: string) {
+    setCategoryId(nextCategoryId);
+    setAccountId('');
+    setLoaded(false);
+    setLedger(null);
+    setError('');
+  }
+
+  function onAccountChange(nextAccountId: string) {
+    setAccountId(nextAccountId);
+    setLoaded(false);
+    setLedger(null);
+    setError('');
+  }
+
   async function loadLedger() {
+    if (!categoryId) {
+      setError('Select a category');
+      return;
+    }
     if (!accountId) {
       setError('Select an account');
       return;
@@ -79,21 +114,27 @@ export function AccountReportsPage() {
 
   return (
     <PageShell title="Account Reports" subtitle="View ledger entries for any account">
-      <Panel>
+      <Panel className="overflow-visible">
         <h2 className="mb-4 text-lg font-semibold text-textPrimary">Account Ledger</h2>
-        <div className="mb-4 grid gap-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+        <div className="mb-4 grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
+          <div>
+            <FieldLabel>Category</FieldLabel>
+            <SearchSelect
+              value={categoryId}
+              onChange={onCategoryChange}
+              options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+              placeholder="Search category…"
+            />
+          </div>
           <div>
             <FieldLabel>Account</FieldLabel>
-            <select
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+            <SearchSelect
               value={accountId}
-              onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : '')}
-            >
-              <option value="">Select account</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+              onChange={onAccountChange}
+              options={filteredAccounts.map((a) => ({ value: String(a.id), label: a.name }))}
+              placeholder={categoryId ? 'Search account…' : 'Select a category first'}
+              disabled={!categoryId}
+            />
           </div>
           <div>
             <FieldLabel>From date</FieldLabel>
@@ -111,7 +152,7 @@ export function AccountReportsPage() {
         {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
 
         {!loaded ? (
-          <p className="text-sm text-textSecondary">Select an account and click Load Ledger</p>
+          <p className="text-sm text-textSecondary">Select a category and account, then click Load Ledger</p>
         ) : ledger && ledger.rows.length === 0 ? (
           <p className="text-sm text-textSecondary">No entries in this period</p>
         ) : ledger ? (

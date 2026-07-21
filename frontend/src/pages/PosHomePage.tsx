@@ -116,13 +116,13 @@ export function PosHomePage() {
       </Tile>
 
       <div className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-onCanvasMuted">Invoices</h2>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">Invoices</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {invoiceLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className="rounded-lg border border-borderStrong bg-surface2 p-3 shadow-md transition hover:border-accent"
+              className="rounded-lg border border-border bg-surface2 p-3 shadow-sm transition hover:border-accent"
             >
               <h3 className="text-sm font-medium text-textPrimary">{link.label}</h3>
               <p className="mt-1 text-xs text-textMuted">Open invoice form</p>
@@ -130,7 +130,7 @@ export function PosHomePage() {
           ))}
           <Link
             to="/invoices/history"
-            className="rounded-lg border border-borderStrong bg-surface2 p-3 shadow-md transition hover:border-accent"
+            className="rounded-lg border border-border bg-surface2 p-3 shadow-sm transition hover:border-accent"
           >
             <h3 className="text-sm font-medium text-textPrimary">View Previous Bill</h3>
             <p className="mt-1 text-xs text-textMuted">All invoice types in one list</p>
