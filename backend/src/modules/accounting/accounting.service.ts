@@ -1033,6 +1033,55 @@ export async function ensureSupplierAccount(
   return tx.account.findUniqueOrThrow({ where: { id: account.id }, include: { ledger: true } });
 }
 
+export const KACHI_MAAL_CATEGORY_NAMES = {
+  INT_PURCHASE: 'Int. Purchase Party',
+  EXT_PURCHASE: 'Ext. Purchase Party',
+  SALE_PARTY: 'Sale Party',
+  REVENUE: 'Revenue',
+  SALE_FEE: 'Sale Fee',
+  BARDANA: 'Bardana',
+} as const;
+
+export type KachiMaalSystemAccounts = {
+  bori: { id: number; name: string };
+  thela: { id: number; name: string };
+  commission: { id: number; name: string };
+  mazduri: { id: number; name: string };
+  broker: { id: number; name: string };
+  marketFee: { id: number; name: string };
+  misc: { id: number; name: string };
+};
+
+/** One-time auto-creation of Kachi Maal fee/bardana categories and accounts. */
+export async function ensureKachiMaalAccounts(
+  tx: Prisma.TransactionClient,
+): Promise<KachiMaalSystemAccounts> {
+  await ensureCategoryInTx(tx, KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE);
+  await ensureCategoryInTx(tx, KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE);
+  await ensureCategoryInTx(tx, KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY);
+  const revenue = await ensureCategoryInTx(tx, KACHI_MAAL_CATEGORY_NAMES.REVENUE);
+  const saleFee = await ensureCategoryInTx(tx, KACHI_MAAL_CATEGORY_NAMES.SALE_FEE);
+  const bardana = await ensureCategoryInTx(tx, KACHI_MAAL_CATEGORY_NAMES.BARDANA);
+
+  const bori = await ensureDefaultAccountInTx(tx, bardana.id, 'Bori', AccountType.ASSET, 'BD-BORI');
+  const thela = await ensureDefaultAccountInTx(tx, bardana.id, 'Thela', AccountType.ASSET, 'BD-THELA');
+  const commission = await ensureDefaultAccountInTx(tx, revenue.id, 'Commission', AccountType.REVENUE, 'REV-COMM');
+  const mazduri = await ensureDefaultAccountInTx(tx, saleFee.id, 'Mazduri', AccountType.EXPENSE, 'SF-MAZ');
+  const broker = await ensureDefaultAccountInTx(tx, saleFee.id, 'Broker', AccountType.EXPENSE, 'SF-BRK');
+  const marketFee = await ensureDefaultAccountInTx(tx, saleFee.id, 'Market Fee', AccountType.EXPENSE, 'SF-MKT');
+  const misc = await ensureDefaultAccountInTx(tx, saleFee.id, 'Misc', AccountType.EXPENSE, 'SF-MISC');
+
+  return {
+    bori: { id: bori.id, name: bori.name },
+    thela: { id: thela.id, name: thela.name },
+    commission: { id: commission.id, name: commission.name },
+    mazduri: { id: mazduri.id, name: mazduri.name },
+    broker: { id: broker.id, name: broker.name },
+    marketFee: { id: marketFee.id, name: marketFee.name },
+    misc: { id: misc.id, name: misc.name },
+  };
+}
+
 async function syncCustomerSupplierAccountsInTx(tx: Prisma.TransactionClient) {
   const [customers, suppliers] = await Promise.all([
     tx.customer.findMany({
@@ -1818,7 +1867,7 @@ export async function getAccountBalancesAsOf(params: {
           ],
         },
         include: {
-          voucher: { select: { date: true, status: true } },
+          voucher: { select: { date: true, status: true, number: true } },
         },
       })
     : [];

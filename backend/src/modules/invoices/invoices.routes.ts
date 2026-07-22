@@ -4,9 +4,12 @@ import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
 import { asyncHandler, param, validateBody } from '../../utils/helpers';
 import * as invoicesService from './invoices.service';
+import { registerKachiMaalRoutes } from './kachi-maal.routes';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
+
+registerKachiMaalRoutes(invoicesRouter);
 
 const itemSchema = z.object({
   productId: z.number().int().optional(),
@@ -51,4 +54,3 @@ function draftRoute(type: InvoiceType) {
 invoicesRouter.post('/sale-commission', validateBody(draftSchema), draftRoute(InvoiceType.SALE_COMMISSION));
 invoicesRouter.post('/sale-paunch', validateBody(draftSchema), draftRoute(InvoiceType.SALE_PAUNCH));
 invoicesRouter.post('/purchase-maal', validateBody(draftSchema), draftRoute(InvoiceType.PURCHASE_MAAL));
-invoicesRouter.post('/kachi-maal', validateBody(draftSchema), draftRoute(InvoiceType.KACHI_MAAL));

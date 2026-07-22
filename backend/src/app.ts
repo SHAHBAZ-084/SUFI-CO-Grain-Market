@@ -11,6 +11,7 @@ import { partiesRouter } from './modules/parties/parties.routes';
 import { productsRouter } from './modules/products/products.routes';
 import { invoicesRouter } from './modules/invoices/invoices.routes';
 import { inventoryRouter } from './modules/inventory/inventory.routes';
+import { preferencesRouter } from './modules/preferences/preferences.routes';
 
 declare module 'express-session' {
   interface SessionData {
@@ -56,6 +57,7 @@ export function createApp() {
   app.use('/api/products', productsRouter);
   app.use('/api/invoices', invoicesRouter);
   app.use('/api/inventory', inventoryRouter);
+  app.use('/api/preferences', preferencesRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, '../../frontend/dist');

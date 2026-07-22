@@ -18,6 +18,7 @@ const VOUCHER_TYPE_LABELS: Record<string, string> = {
   PAYMENT: 'Payment',
   RECEIPT: 'Receipt',
   JOURNAL: 'Journal',
+  KACHI_MAAL: 'Kachi Maal',
 };
 
 export function formatVoucherTypeLabel(type: string) {
@@ -40,6 +41,7 @@ export function voucherTypeColorClass(type: string) {
   const key = type.toUpperCase();
   if (key === 'PAYMENT') return 'text-voucherPayment';
   if (key === 'RECEIPT') return 'text-voucherReceipt';
+  if (key === 'KACHI_MAAL') return 'text-voucherJournal';
   if (key.includes('JOURNAL')) return 'text-voucherJournal';
   return 'text-textSecondary';
 }

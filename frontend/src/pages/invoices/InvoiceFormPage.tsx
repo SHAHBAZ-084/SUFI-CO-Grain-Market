@@ -1,5 +1,6 @@
 import { INVOICE_TYPE_LABELS } from '../../config/navigation';
 import { PageShell, Panel } from '../../components/ui/PageShell';
+import { KachiMaalInvoicePage } from './KachiMaalInvoicePage';
 
 const ROUTE_TO_TYPE: Record<string, string> = {
   'sale-commission': 'SALE_COMMISSION',
@@ -9,6 +10,10 @@ const ROUTE_TO_TYPE: Record<string, string> = {
 };
 
 export function InvoiceFormPage({ slug }: { slug: string }) {
+  if (slug === 'kachi-maal') {
+    return <KachiMaalInvoicePage />;
+  }
+
   const typeKey = ROUTE_TO_TYPE[slug];
   const title = INVOICE_TYPE_LABELS[typeKey] ?? 'Invoice';
 

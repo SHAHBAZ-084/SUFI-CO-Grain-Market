@@ -39,7 +39,9 @@ export async function getInvoice(id: number) {
       customer: true,
       supplier: true,
       items: { include: { product: true } },
+      kachiMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
       vouchers: { include: { voucher: true } },
+      debitAccount: true,
       createdBy: { select: { id: true, displayName: true, username: true } },
     },
   });

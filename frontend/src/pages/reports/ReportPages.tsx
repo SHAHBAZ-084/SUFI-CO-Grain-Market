@@ -326,7 +326,7 @@ export function SalePurchaseReportsPage() {
 }
 
 type BalanceSideFilter = 'both' | 'debit' | 'credit';
-type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL';
+type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI_MAAL';
 
 function BalanceTable({
   rows,
@@ -665,6 +665,7 @@ export function VouchersReportPage() {
                 { value: 'PAYMENT', label: 'Payment' },
                 { value: 'RECEIPT', label: 'Receipt' },
                 { value: 'JOURNAL', label: 'Journal' },
+                { value: 'KACHI_MAAL', label: 'Kachi Maal' },
               ]}
             />
           </div>

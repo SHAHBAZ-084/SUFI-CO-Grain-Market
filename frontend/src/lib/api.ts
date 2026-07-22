@@ -52,6 +52,28 @@ export type Invoice = {
   supplier?: Party | null;
 };
 
+export type SystemPreferences = {
+  daamiPercent: number;
+  paleDariPercent: number;
+  brokeryPercent: number;
+  marketFeeRate: number;
+  bardanaRate: number;
+  taxPercent: number;
+  kaatPercent: number;
+  mazduriPercent: number;
+  commissionPercent: number;
+  dalaliPercent: number;
+  sutliRate: number;
+  markeetFeeRate: number;
+  kantaRate: number;
+  closingDate: string | null;
+  updatedAt: string;
+};
+
+export type KachiMaalInvoiceResult = Invoice & {
+  vouchers?: { voucher: Voucher }[];
+};
+
 export type VoucherAccount = { id: number; name: string; code: string };
 export type VoucherUser = { id: number; displayName: string; username: string };
 
@@ -147,6 +169,53 @@ export const api = {
   listInvoices(type?: string) {
     const query = type ? `?type=${type}` : '';
     return request<Invoice[]>(`/api/invoices${query}`);
+  },
+
+  getNextKachiMaalReference() {
+    return request<{ reference: string }>('/api/invoices/kachi-maal/next-reference');
+  },
+
+  createKachiMaalInvoice(data: {
+    invoiceDate: string;
+    billNo?: string;
+    gariNo?: string;
+    jins?: string;
+    qism?: string;
+    tafseel?: string;
+    debitAccountId: number;
+    miscAmount?: number;
+    lowerBardanaMode?: 'BORI' | 'THELA' | null;
+    lowerBardanaQty?: number | null;
+    lowerBardanaRate?: number | null;
+    lines: {
+      partyAccountId: number;
+      jins?: string;
+      qism?: string;
+      boriOrThelaMode: 'BORI' | 'THELA';
+      bagCount: number;
+      bhartii: number;
+      dharanCount: number;
+      looseKg: number;
+      ratePerMaund: number;
+      bardanaQty?: number | null;
+      bardanaRate?: number | null;
+    }[];
+  }) {
+    return request<KachiMaalInvoiceResult>('/api/invoices/kachi-maal', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getSystemPreferences() {
+    return request<SystemPreferences>('/api/preferences');
+  },
+
+  updateSystemPreferences(data: Partial<Omit<SystemPreferences, 'updatedAt'>>) {
+    return request<SystemPreferences>('/api/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   },
 
   listVouchers(params?: { fromDate?: string; toDate?: string; type?: string }) {
