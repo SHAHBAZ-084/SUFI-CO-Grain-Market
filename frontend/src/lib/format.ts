@@ -20,8 +20,26 @@ const VOUCHER_TYPE_LABELS: Record<string, string> = {
   JOURNAL: 'Journal',
 };
 
-/** Voucher register label: shared number + type tag (e.g. "47 · Receipt"). */
-export function formatVoucherLabel(type: string, number: number | string) {
-  const typeLabel = VOUCHER_TYPE_LABELS[type] ?? type;
-  return `${number} · ${typeLabel}`;
+export function formatVoucherTypeLabel(type: string) {
+  const key = type.toUpperCase();
+  if (key.startsWith('JOURNAL')) return type.includes('(') ? type : VOUCHER_TYPE_LABELS.JOURNAL;
+  return VOUCHER_TYPE_LABELS[key] ?? type;
+}
+
+export function formatVoucherNumber(number: number | string | null | undefined) {
+  if (number == null || number === '') return '';
+  return String(number);
+}
+
+/** Voucher register number only — type is shown in its own column/label. */
+export function formatVoucherLabel(_type: string, number: number | string) {
+  return formatVoucherNumber(number);
+}
+
+export function voucherTypeColorClass(type: string) {
+  const key = type.toUpperCase();
+  if (key === 'PAYMENT') return 'text-voucherPayment';
+  if (key === 'RECEIPT') return 'text-voucherReceipt';
+  if (key.includes('JOURNAL')) return 'text-voucherJournal';
+  return 'text-textSecondary';
 }

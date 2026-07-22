@@ -238,7 +238,7 @@ type VoucherCreateInput = {
   amount: number;
   date: Date;
   description?: string;
-  reference?: string;
+  reference: string;
 };
 
 /** Shared server-side validation for all voucher types (payment, receipt, journal). */
@@ -248,6 +248,11 @@ async function validateVoucherCreate(
 ) {
   if (!(data.amount > 0)) {
     throw new AppError(400, 'Amount must be greater than zero');
+  }
+
+  const reference = data.reference?.trim();
+  if (!reference) {
+    throw new AppError(400, 'Reference is required');
   }
 
   const { debitAccount, creditAccount } = await loadAccounts(
@@ -755,14 +760,13 @@ function voucherDisplayNo(type: VoucherType | null | undefined, number: number |
   return formatVoucherLabel(type, number);
 }
 
-/** Shared voucher label: number + type tag (single sequence across Payment/Receipt/Journal). */
+/** Shared voucher label: number only (type shown separately). */
 export function formatVoucherLabel(
-  type: VoucherType | null | undefined,
+  _type: VoucherType | null | undefined,
   number: number | null | undefined,
 ): string {
   if (!number) return '0';
-  const typeLabel = voucherTypeLabel({ type }, false);
-  return `${number} · ${typeLabel}`;
+  return String(number);
 }
 
 export function formatPurchaseItemsDescription(
@@ -1290,10 +1294,11 @@ export async function createVoucherInTx(
     amount: number;
     date: Date | string;
     description?: string;
-    reference?: string;
+    reference: string;
     createdById: number;
   },
 ) {
+  const trimmedReference = data.reference.trim();
   let voucherDate: Date;
   try {
     voucherDate = parseVoucherDateInput(data.date);
@@ -1307,7 +1312,7 @@ export async function createVoucherInTx(
     amount: data.amount,
     date: voucherDate,
     description: data.description,
-    reference: data.reference,
+    reference: trimmedReference,
   });
 
   const number = await nextVoucherNumber(tx, financialYearId);
@@ -1321,7 +1326,7 @@ export async function createVoucherInTx(
       creditAccountId: data.creditAccountId,
       amount: data.amount,
       description: data.description,
-      reference: data.reference,
+      reference: trimmedReference,
       createdById: data.createdById,
       financialYearId,
       status: VoucherStatus.ACTIVE,
@@ -1350,7 +1355,7 @@ export async function createVoucher(data: {
   amount: number;
   date: Date | string;
   description?: string;
-  reference?: string;
+  reference: string;
   createdById: number;
 }) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -1556,7 +1561,48 @@ export async function getDashboardSummary() {
   };
 }
 
-export async function listVouchers() {
+async function batchOpeningBalanceSnapshots(
+  db: DbClient,
+  accountIds: number[],
+  financialYearId: number,
+): Promise<Map<number, number>> {
+  const balances = new Map<number, number>();
+  for (const accountId of accountIds) {
+    balances.set(accountId, 0);
+  }
+  if (accountIds.length === 0) return balances;
+
+  const currentYear = await db.financialYear.findFirst({
+    where: { id: financialYearId },
+  });
+  if (!currentYear) return balances;
+
+  const priorYear = await db.financialYear.findFirst({
+    where: { startDate: { lt: currentYear.startDate } },
+    orderBy: { startDate: 'desc' },
+    select: { id: true },
+  });
+  if (!priorYear) return balances;
+
+  const snapshots = await db.financialYearClosingBalance.findMany({
+    where: {
+      financialYearId: priorYear.id,
+      accountId: { in: accountIds },
+    },
+  });
+
+  for (const snapshot of snapshots) {
+    balances.set(snapshot.accountId, Number(snapshot.balance));
+  }
+
+  return balances;
+}
+
+export async function listVouchers(filters?: {
+  fromDate?: string;
+  toDate?: string;
+  type?: VoucherType;
+}) {
   let financialYearId: number | undefined;
   try {
     financialYearId = await getActiveFinancialYearId(prisma);
@@ -1564,9 +1610,26 @@ export async function listVouchers() {
     financialYearId = undefined;
   }
 
+  const where: Prisma.VoucherWhereInput = {
+    ...(financialYearId != null && { financialYearId }),
+  };
+
+  if (filters?.fromDate || filters?.toDate) {
+    where.date = {};
+    if (filters.fromDate) {
+      where.date.gte = parseDateStart(filters.fromDate);
+    }
+    if (filters.toDate) {
+      where.date.lte = parseDateEnd(filters.toDate);
+    }
+  }
+
+  if (filters?.type) {
+    where.type = filters.type;
+  }
+
   return prisma.voucher.findMany({
-    where: { ...(financialYearId != null && { financialYearId }),
-    },
+    where,
     include: voucherInclude,
     orderBy: [{ date: 'desc' }, { number: 'desc' }],
   });
@@ -1705,6 +1768,139 @@ export async function cancelActiveVouchersByReferenceInTx(
 /** @deprecated Use cancelVoucher — kept for route compatibility */
 export async function deleteVoucher(voucherId: number, userId: number) {
   return cancelVoucher( voucherId, userId);
+}
+
+export async function getAccountBalancesAsOf(params: {
+  date: string;
+  categoryId?: number;
+  side?: 'debit' | 'credit' | 'both';
+}) {
+  const side = params.side ?? 'both';
+  const asOf = parseDateEnd(params.date);
+  const financialYearId = await getActiveFinancialYearId(prisma);
+  const { yearStart, yearEnd } = await loadFinancialYearBounds(prisma, financialYearId);
+
+  const accounts = await prisma.account.findMany({
+    where: {
+      isActive: true,
+      ...(params.categoryId != null ? { categoryId: params.categoryId } : {}),
+    },
+    include: { category: true, ledger: true },
+    orderBy: [{ category: { name: 'asc' } }, { code: 'asc' }],
+  });
+
+  const accountIds = accounts.map((a) => a.id);
+  const openingByAccount = await batchOpeningBalanceSnapshots(prisma, accountIds, financialYearId);
+
+  const ledgerIds = accounts
+    .map((a) => a.ledger?.id)
+    .filter((id): id is number => id != null);
+
+  const allEntries = ledgerIds.length
+    ? await prisma.ledgerEntry.findMany({
+        where: {
+          ledgerId: { in: ledgerIds },
+          isReversal: false,
+          OR: [
+            {
+              voucher: {
+                financialYearId,
+                status: VoucherStatus.ACTIVE,
+              },
+            },
+            {
+              isOpeningBalance: true,
+              createdAt: {
+                gte: yearStart,
+                ...(yearEnd ? { lte: yearEnd } : {}),
+              },
+            },
+          ],
+        },
+        include: {
+          voucher: { select: { date: true, status: true } },
+        },
+      })
+    : [];
+
+  const entriesByLedger = new Map<number, typeof allEntries>();
+  for (const entry of allEntries) {
+    const list = entriesByLedger.get(entry.ledgerId) ?? [];
+    list.push(entry);
+    entriesByLedger.set(entry.ledgerId, list);
+  }
+
+  type BalanceRow = {
+    accountId: number;
+    accountCode: string;
+    accountName: string;
+    categoryId: number;
+    categoryName: string;
+    balance: number;
+    debit: number;
+    credit: number;
+  };
+
+  const rows: BalanceRow[] = [];
+
+  for (const account of accounts) {
+    if (!account.ledger) continue;
+
+    const baseOpening = openingByAccount.get(account.id) ?? 0;
+    const entries = entriesByLedger.get(account.ledger.id) ?? [];
+    entries.sort(compareLedgerEntries);
+
+    let running = baseOpening;
+    for (const entry of entries) {
+      const at = startOfDay(entryEffectiveDate(entry));
+      if (at > asOf) continue;
+      const { debit, credit } = entryDebitCredit(entry.type, Number(entry.amount));
+      running += debit - credit;
+    }
+
+    const { debit, credit } = trialBalanceFromSignedBalance(running);
+    if (side === 'debit' && debit <= 0) continue;
+    if (side === 'credit' && credit <= 0) continue;
+
+    rows.push({
+      accountId: account.id,
+      accountCode: account.code,
+      accountName: account.name,
+      categoryId: account.categoryId,
+      categoryName: account.category?.name ?? '',
+      balance: running,
+      debit,
+      credit,
+    });
+  }
+
+  const groupsMap = new Map<number, { categoryId: number; categoryName: string; accounts: BalanceRow[] }>();
+  for (const row of rows) {
+    const existing = groupsMap.get(row.categoryId);
+    if (existing) {
+      existing.accounts.push(row);
+    } else {
+      groupsMap.set(row.categoryId, {
+        categoryId: row.categoryId,
+        categoryName: row.categoryName,
+        accounts: [row],
+      });
+    }
+  }
+
+  const groups = Array.from(groupsMap.values());
+  const totalDebit = rows.reduce((sum, row) => sum + row.debit, 0);
+  const totalCredit = rows.reduce((sum, row) => sum + row.credit, 0);
+
+  return {
+    date: params.date,
+    side,
+    categoryId: params.categoryId ?? null,
+    accounts: rows,
+    groups,
+    totalDebit,
+    totalCredit,
+  };
 }
 
 export async function getTrialBalance() {

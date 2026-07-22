@@ -1,33 +1,102 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { TOP_NAV } from '../config/navigation';
-import { PageShell, PrimaryButton, Tile } from '../components/ui/PageShell';
+import { PageShell, Tile } from '../components/ui/PageShell';
 import { api } from '../lib/api';
-import { formatLedgerAmount, formatVoucherLabel } from '../lib/format';
+import { formatLedgerAmount, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../lib/format';
 
 type DashboardSummary = Awaited<ReturnType<typeof api.getDashboardSummary>>;
+
+type MetricTone = 'cash' | 'receivables' | 'payables' | 'vouchers';
+
+const METRIC_STYLES: Record<MetricTone, { card: string; value: string }> = {
+  cash: {
+    card: 'border-l-4 border-metricCashAccent bg-metricCashBg',
+    value: 'text-metricCashAccent',
+  },
+  receivables: {
+    card: 'border-l-4 border-metricReceivablesAccent bg-metricReceivablesBg',
+    value: 'text-metricReceivablesAccent',
+  },
+  payables: {
+    card: 'border-l-4 border-metricPayablesAccent bg-metricPayablesBg',
+    value: 'text-metricPayablesAccent',
+  },
+  vouchers: {
+    card: 'border-l-4 border-metricVouchersAccent bg-metricVouchersBg',
+    value: 'text-metricVouchersAccent',
+  },
+};
+
+const INVOICE_CARD_STYLES: Record<string, { card: string; title: string }> = {
+  '/invoices/sale-commission': {
+    card: 'border-l-4 border-cardSaleCommissionAccent bg-cardSaleCommissionBg hover:border-cardSaleCommissionAccent',
+    title: 'text-cardSaleCommissionAccent',
+  },
+  '/invoices/sale-paunch': {
+    card: 'border-l-4 border-cardSalePaunchAccent bg-cardSalePaunchBg hover:border-cardSalePaunchAccent',
+    title: 'text-cardSalePaunchAccent',
+  },
+  '/invoices/purchase-maal': {
+    card: 'border-l-4 border-cardPurchaseMaalAccent bg-cardPurchaseMaalBg hover:border-cardPurchaseMaalAccent',
+    title: 'text-cardPurchaseMaalAccent',
+  },
+  '/invoices/kachi-maal': {
+    card: 'border-l-4 border-cardKachiMaalAccent bg-cardKachiMaalBg hover:border-cardKachiMaalAccent',
+    title: 'text-cardKachiMaalAccent',
+  },
+  '/invoices/history': {
+    card: 'border-l-4 border-cardInvoiceHistoryAccent bg-cardInvoiceHistoryBg hover:border-cardInvoiceHistoryAccent',
+    title: 'text-cardInvoiceHistoryAccent',
+  },
+};
+
+const VOUCHER_ACTIONS = [
+  { label: 'Payment Voucher', to: '/vouchers/payment', card: 'border-l-4 border-voucherPayment bg-bgDanger hover:border-voucherPayment', title: 'text-voucherPayment' },
+  { label: 'Receipt Voucher', to: '/vouchers/receipt', card: 'border-l-4 border-voucherReceipt bg-bgSuccess hover:border-voucherReceipt', title: 'text-voucherReceipt' },
+  { label: 'Journal Voucher', to: '/vouchers/journal', card: 'border-l-4 border-voucherJournal bg-bgAccent hover:border-voucherJournal', title: 'text-voucherJournal' },
+] as const;
 
 function MetricCard({
   label,
   value,
-  valueClassName = 'text-textPrimary',
+  tone,
 }: {
   label: string;
   value: string;
-  valueClassName?: string;
+  tone: MetricTone;
 }) {
+  const style = METRIC_STYLES[tone];
   return (
-    <Tile>
-      <p className="text-xs font-medium text-textMuted">{label}</p>
-      <p className={`mt-1 text-[22px] font-medium leading-tight ${valueClassName}`}>{value}</p>
+    <Tile className={style.card}>
+      <p className="text-xs font-medium text-textSecondary">{label}</p>
+      <p className={`mt-1 text-[22px] font-semibold leading-tight ${style.value}`}>{value}</p>
     </Tile>
   );
 }
 
-function voucherTypeClass(type: string) {
-  if (type === 'RECEIPT') return 'text-success';
-  if (type === 'PAYMENT') return 'text-danger';
-  return 'text-textMuted';
+function ActionCard({
+  to,
+  title,
+  description,
+  cardClassName,
+  titleClassName,
+}: {
+  to: string;
+  title: string;
+  description: string;
+  cardClassName: string;
+  titleClassName: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className={`rounded-lg border border-border p-3 shadow-sm transition ${cardClassName}`}
+    >
+      <h3 className={`text-sm font-semibold ${titleClassName}`}>{title}</h3>
+      <p className="mt-1 text-xs text-textSecondary">{description}</p>
+    </Link>
+  );
 }
 
 export function PosHomePage() {
@@ -36,7 +105,7 @@ export function PosHomePage() {
 
   const invoiceLinks = (
     TOP_NAV.find((g) => g.label === 'Sale/Purchase Invoice')?.children ?? []
-  ).filter((item): item is { kind: 'link'; label: string; to: string; description?: string } => item.kind === 'link' && item.to !== '/invoices/history');
+  ).filter((item): item is { kind: 'link'; label: string; to: string; description?: string } => item.kind === 'link');
 
   useEffect(() => {
     api
@@ -53,31 +122,27 @@ export function PosHomePage() {
         <MetricCard
           label="Cash Balance"
           value={summary ? formatLedgerAmount(summary.cashBalance) : '—'}
-          valueClassName="text-success"
+          tone="cash"
         />
         <MetricCard
           label="Receivables"
           value={summary ? formatLedgerAmount(summary.receivables) : '—'}
-          valueClassName="text-success"
+          tone="receivables"
         />
         <MetricCard
           label="Payables"
           value={summary ? formatLedgerAmount(summary.payables) : '—'}
-          valueClassName="text-danger"
+          tone="payables"
         />
         <MetricCard
           label="Vouchers Today"
           value={summary ? String(summary.vouchersToday) : '—'}
+          tone="vouchers"
         />
       </div>
 
       <Tile className="mt-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-textPrimary">Recent vouchers</h2>
-          <Link to="/vouchers/receipt">
-            <PrimaryButton type="button">New voucher</PrimaryButton>
-          </Link>
-        </div>
+        <h2 className="mb-3 text-base font-semibold text-textPrimary">Recent vouchers</h2>
 
         {!summary ? (
           <p className="text-sm text-textMuted">Loading…</p>
@@ -97,12 +162,12 @@ export function PosHomePage() {
               <tbody>
                 {summary.recentVouchers.map((v) => (
                   <tr key={v.id} className="border-b border-border last:border-0">
-                    <td className="py-2 pr-3 font-mono text-xs text-textPrimary">
-                      {formatVoucherLabel(v.type, v.number)}
+                    <td className="py-2 pr-3 font-mono text-xs font-semibold text-financial">
+                      {formatVoucherNumber(v.number)}
                     </td>
                     <td className="py-2 pr-3 text-textSecondary">{v.accountLabel}</td>
-                    <td className={`py-2 pr-3 font-medium ${voucherTypeClass(v.type)}`}>
-                      {v.type === 'RECEIPT' ? 'Receipt' : v.type === 'PAYMENT' ? 'Payment' : 'Journal'}
+                    <td className={`py-2 pr-3 font-medium ${voucherTypeColorClass(v.type)}`}>
+                      {formatVoucherTypeLabel(v.type)}
                     </td>
                     <td className="py-2 text-right font-medium text-textPrimary">
                       {formatLedgerAmount(v.amount)}
@@ -116,25 +181,37 @@ export function PosHomePage() {
       </Tile>
 
       <div className="mt-6">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">New voucher</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {VOUCHER_ACTIONS.map((action) => (
+            <ActionCard
+              key={action.to}
+              to={action.to}
+              title={action.label}
+              description="Open voucher form"
+              cardClassName={action.card}
+              titleClassName={action.title}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">Invoices</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {invoiceLinks.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className="rounded-lg border border-border bg-surface2 p-3 shadow-sm transition hover:border-accent"
-            >
-              <h3 className="text-sm font-medium text-textPrimary">{link.label}</h3>
-              <p className="mt-1 text-xs text-textMuted">Open invoice form</p>
-            </Link>
-          ))}
-          <Link
-            to="/invoices/history"
-            className="rounded-lg border border-border bg-surface2 p-3 shadow-sm transition hover:border-accent"
-          >
-            <h3 className="text-sm font-medium text-textPrimary">View Previous Bill</h3>
-            <p className="mt-1 text-xs text-textMuted">All invoice types in one list</p>
-          </Link>
+          {invoiceLinks.map((link) => {
+            const style = INVOICE_CARD_STYLES[link.to] ?? INVOICE_CARD_STYLES['/invoices/history'];
+            return (
+              <ActionCard
+                key={link.to}
+                to={link.to}
+                title={link.label}
+                description={link.to === '/invoices/history' ? 'All invoice types in one list' : 'Open invoice form'}
+                cardClassName={style.card}
+                titleClassName={style.title}
+              />
+            );
+          })}
         </div>
       </div>
     </PageShell>

@@ -1,7 +1,7 @@
 import { forwardRef, ReactNode, RefObject } from 'react';
 
 type PageShellProps = {
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   children?: ReactNode;
   actions?: ReactNode;

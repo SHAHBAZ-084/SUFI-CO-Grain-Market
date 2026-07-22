@@ -25,7 +25,7 @@ export function createApp() {
     cors({
       origin: env.isProduction
         ? [`http://127.0.0.1:${env.port}`, `http://localhost:${env.port}`]
-        : ['http://localhost:5173', `http://127.0.0.1:${env.port}`],
+        : ['http://localhost:5173', 'http://127.0.0.1:5173', `http://127.0.0.1:${env.port}`],
       credentials: true,
     }),
   );

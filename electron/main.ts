@@ -26,6 +26,8 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 700,
     title: 'Grain Market POS',
+    show: false,
+    backgroundColor: '#f4f5f7',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -33,11 +35,25 @@ function createWindow(): void {
     },
   });
 
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error('Window failed to load:', errorCode, errorDescription);
+  });
+
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.loadURL('http://127.0.0.1:5173');
+    mainWindow.once('ready-to-show', () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+    if (process.env.ELECTRON_DEVTOOLS === '1') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
   } else {
     mainWindow.loadURL(`http://127.0.0.1:${BACKEND_PORT}`);
+    mainWindow.once('ready-to-show', () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
   }
 
   mainWindow.on('closed', () => {

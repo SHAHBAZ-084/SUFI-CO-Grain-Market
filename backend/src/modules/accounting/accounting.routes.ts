@@ -80,9 +80,47 @@ accountingRouter.get(
 
 accountingRouter.get(
   '/vouchers',
-  asyncHandler(async (_req, res) => {
-    const vouchers = await accountingService.listVouchers();
+  asyncHandler(async (req, res) => {
+    const fromDate = req.query.fromDate as string | undefined;
+    const toDate = req.query.toDate as string | undefined;
+    const typeParam = req.query.type as string | undefined;
+    const type =
+      typeParam && Object.values(VoucherType).includes(typeParam as VoucherType)
+        ? (typeParam as VoucherType)
+        : undefined;
+
+    const vouchers = await accountingService.listVouchers({ fromDate, toDate, type });
     res.json(vouchers);
+  }),
+);
+
+accountingRouter.get(
+  '/reports/account-balance',
+  asyncHandler(async (req, res) => {
+    const date = req.query.date as string | undefined;
+    if (!date?.trim()) {
+      res.status(400).json({ error: 'date is required' });
+      return;
+    }
+
+    const categoryIdParam = req.query.categoryId as string | undefined;
+    const categoryId =
+      categoryIdParam && categoryIdParam.trim() !== ''
+        ? parseInt(categoryIdParam, 10)
+        : undefined;
+
+    const sideParam = req.query.side as string | undefined;
+    const side =
+      sideParam === 'debit' || sideParam === 'credit' || sideParam === 'both'
+        ? sideParam
+        : 'both';
+
+    const report = await accountingService.getAccountBalancesAsOf({
+      date,
+      categoryId: Number.isFinite(categoryId) ? categoryId : undefined,
+      side,
+    });
+    res.json(report);
   }),
 );
 
@@ -96,7 +134,7 @@ accountingRouter.post(
       amount: z.number().positive(),
       date: z.union([z.string().min(1), z.coerce.date()]),
       description: z.string().optional(),
-      reference: z.string().optional(),
+      reference: z.string().trim().min(1, 'Reference is required'),
     }),
   ),
   asyncHandler(async (req, res) => {

@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { TOP_NAV, NavItem } from '../../config/navigation';
+import { voucherTypeColorClass } from '../../lib/format';
+
+function voucherNavLabelClass(label: string) {
+  if (label.startsWith('Payment')) return voucherTypeColorClass('PAYMENT');
+  if (label.startsWith('Receipt')) return voucherTypeColorClass('RECEIPT');
+  if (label.startsWith('Journal')) return voucherTypeColorClass('JOURNAL');
+  return '';
+}
 
 function NavSubmenu({ label, children }: { label: string; children: { label: string; to: string; description?: string }[] }) {
   const [open, setOpen] = useState(false);
@@ -68,7 +76,7 @@ function NavDropdown({ label, children }: { label: string; children: NavItem[] }
             item.kind === 'submenu' ? (
               <NavSubmenu key={item.label} label={item.label} children={item.children} />
             ) : (
-              <Link key={item.to} to={item.to} className="app-dropdown-item">
+              <Link key={item.to} to={item.to} className={`app-dropdown-item ${voucherNavLabelClass(item.label)}`}>
                 {item.label}
               </Link>
             ),
@@ -84,11 +92,11 @@ export function TopBar() {
 
   return (
     <header className="app-topnav sticky top-0 isolate shadow-md">
-      <div className="flex items-center gap-1 px-3">
-        <Link to="/" className="app-topnav-brand mr-3 shrink-0 py-3 pr-3 text-sm">
+      <div className="flex min-h-12 items-center gap-1 px-4">
+        <Link to="/" className="app-topnav-brand mr-2 shrink-0 pr-2 text-sm">
           Grain Market POS
         </Link>
-        <nav className="flex flex-1 flex-wrap items-center gap-0.5">
+        <nav className="flex flex-1 flex-wrap items-center gap-1">
           {TOP_NAV.map((group) =>
             group.children ? (
               <NavDropdown key={group.label} label={group.label} children={group.children} />

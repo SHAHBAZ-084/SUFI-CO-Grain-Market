@@ -12,7 +12,7 @@ import { InvoiceFormPage } from './pages/invoices/InvoiceFormPage';
 import { InvoiceHistoryPage } from './pages/invoices/InvoiceHistoryPage';
 import { LoginPage } from './pages/LoginPage';
 import { PosHomePage } from './pages/PosHomePage';
-import { AccountReportsPage, SalePurchaseReportsPage, TrialBalancePage } from './pages/reports/ReportPages';
+import { AccountReportsPage, AccountBalancePage, SalePurchaseReportsPage, TrialBalancePage, VouchersReportPage } from './pages/reports/ReportPages';
 import { SystemPreferencesPage } from './pages/system/SystemPreferencesPage';
 import { UserInfoPage } from './pages/user/UserInfoPage';
 import { VoucherFormPage, VoucherListPage } from './pages/vouchers/VoucherPages';
@@ -53,6 +53,8 @@ export default function App() {
               <Route path="/vouchers/view" element={<VoucherListPage />} />
 
               <Route path="/reports/accounts" element={<AccountReportsPage />} />
+              <Route path="/reports/account-balance" element={<AccountBalancePage />} />
+              <Route path="/reports/vouchers" element={<VouchersReportPage />} />
               <Route path="/reports/trial-balance" element={<TrialBalancePage />} />
               <Route path="/reports/sale-purchase" element={<SalePurchaseReportsPage />} />
 

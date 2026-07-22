@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatDate, formatLedgerBalance, formatVoucherLabel } from '../../lib/format';
+import { formatDate, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../../lib/format';
 import { api, Account, AccountCategory, Voucher, VoucherAccount, VoucherUser } from '../../lib/api';
 import { DangerButton, FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput, Tile } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -12,11 +12,21 @@ const VOUCHER_TYPES: Record<string, string> = {
   receipt: 'RECEIPT',
 };
 
-const TITLES: Record<string, string> = {
-  payment: 'Payment Voucher',
-  journal: 'Journal Voucher',
-  receipt: 'Receipt Voucher',
+const VOUCHER_KIND_LABELS: Record<string, string> = {
+  payment: 'Payment',
+  journal: 'Journal',
+  receipt: 'Receipt',
 };
+
+function VoucherPageTitle({ kind }: { kind: keyof typeof VOUCHER_TYPES }) {
+  const label = VOUCHER_KIND_LABELS[kind];
+  return (
+    <>
+      <span className={voucherTypeColorClass(VOUCHER_TYPES[kind])}>{label}</span>
+      <span className="text-textPrimary"> Voucher</span>
+    </>
+  );
+}
 
 function todayInputValue() {
   const d = new Date();
@@ -39,8 +49,8 @@ function AccountSideFields({
   categoryInputRef,
   accountInputRef,
   accountNextFocusRef,
-  panelClassName = 'rounded-lg border border-border bg-surface1 p-4',
-  labelClassName = 'text-accent',
+  panelClassName = VOUCHER_SIDE_PANEL,
+  labelClassName = VOUCHER_SIDE_LABEL,
 }: {
   label: string;
   categoryId: string;
@@ -102,25 +112,8 @@ function AccountSideFields({
   );
 }
 
-function sidePanelStyle(
-  variant: 'payment' | 'receipt' | 'journal',
-  side: 'left' | 'right',
-): { panel: string; label: string } {
-  const base = 'rounded-lg border border-border p-4';
-  if (variant === 'payment' && side === 'left') {
-    return { panel: `${base} bg-bgDanger`, label: 'text-danger' };
-  }
-  if (variant === 'receipt' && side === 'right') {
-    return { panel: `${base} bg-bgSuccess`, label: 'text-success' };
-  }
-  if (variant === 'journal' && side === 'left') {
-    return { panel: `${base} bg-bgSuccess`, label: 'text-success' };
-  }
-  if (variant === 'journal' && side === 'right') {
-    return { panel: `${base} bg-bgDanger`, label: 'text-danger' };
-  }
-  return { panel: `${base} bg-surface1`, label: 'text-textSecondary' };
-}
+const VOUCHER_SIDE_PANEL = 'rounded-lg border border-border bg-surface2 p-4';
+const VOUCHER_SIDE_LABEL = 'text-textSecondary';
 
 function isBankOrCashCategory(name: string) {
   const n = name.trim().toLowerCase();
@@ -171,7 +164,6 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
   const [amount, setAmount] = useState('');
   const [voucherDate, setVoucherDate] = useState(todayInputValue);
   const [predictedNumber, setPredictedNumber] = useState<number | null>(null);
-  const [confirmedNumber, setConfirmedNumber] = useState<number | null>(null);
   const [numberMismatch, setNumberMismatch] = useState(false);
   const [reference, setReference] = useState('');
   const [description, setDescription] = useState('');
@@ -179,19 +171,28 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const reload = useCallback(() => {
-    api.listAccounts().then(setAccounts).catch(() => setAccounts([]));
-    api.listCategories().then(setCategories).catch(() => setCategories([]));
+  const reload = useCallback(async () => {
+    try {
+      const [accountRows, categoryRows] = await Promise.all([
+        api.listAccounts(),
+        api.listCategories(),
+      ]);
+      setAccounts(accountRows);
+      setCategories(categoryRows);
+    } catch {
+      setAccounts([]);
+      setCategories([]);
+    }
   }, []);
 
-  const refreshPredictedNumber = useCallback(() => {
-    api
-      .getNextVoucherNumber()
-      .then(({ number }) => {
-        setPredictedNumber(number);
-        setNumberMismatch(false);
-      })
-      .catch(() => setPredictedNumber(null));
+  const refreshPredictedNumber = useCallback(async () => {
+    try {
+      const { number } = await api.getNextVoucherNumber();
+      setPredictedNumber(number);
+      setNumberMismatch(false);
+    } catch {
+      setPredictedNumber(null);
+    }
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
@@ -243,7 +244,8 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
       debitAccountId
       && creditAccountId
       && debitAccountId !== creditAccountId
-      && Number(amount) > 0,
+      && Number(amount) > 0
+      && reference.trim(),
     );
   }
 
@@ -264,6 +266,11 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
       setError('Amount must be greater than zero');
       return;
     }
+    if (!reference.trim()) {
+      setError('Reference is required');
+      referenceRef.current?.focus();
+      return;
+    }
     setSaving(true);
     try {
       const voucher = await api.createVoucher({
@@ -273,25 +280,23 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
         amount: parsedAmount,
         date: voucherDate,
         description: description || undefined,
-        reference: reference || undefined,
+        reference: reference.trim(),
       });
       const expected = predictedNumber;
-      setConfirmedNumber(voucher.number);
       if (expected != null && voucher.number !== expected) {
         setNumberMismatch(true);
         setMessage(
-          `Voucher ${formatVoucherLabel(VOUCHER_TYPES[kind], voucher.number)} posted (expected #${expected} — sequence changed).`,
+          `Voucher #${voucher.number} posted (expected #${expected} — sequence changed).`,
         );
       } else {
         setNumberMismatch(false);
-        setMessage(`Voucher ${formatVoucherLabel(VOUCHER_TYPES[kind], voucher.number)} posted (debit + credit pair).`);
+        setMessage(`Voucher #${voucher.number} posted (debit + credit pair).`);
       }
-      setDebitCategoryId(''); setCreditCategoryId('');
-      setDebitAccountId(''); setCreditAccountId('');
-      setAmount(''); setReference(''); setDescription('');
-      setConfirmedNumber(null);
-      refreshPredictedNumber();
-      reload();
+      setAmount('');
+      setReference('');
+      setDescription('');
+      await Promise.all([reload(), refreshPredictedNumber()]);
+      amountRef.current?.focus();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
     } finally {
@@ -300,14 +305,10 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
   }
 
   const voucherNumberDisplay =
-    confirmedNumber != null
-      ? formatVoucherLabel(VOUCHER_TYPES[kind], confirmedNumber)
-      : predictedNumber != null
-        ? formatVoucherLabel(VOUCHER_TYPES[kind], predictedNumber)
-        : '';
+    predictedNumber != null ? formatVoucherNumber(predictedNumber) : '';
 
   return (
-    <PageShell centerTitle titleRef={titleRef} title={TITLES[kind]}>
+    <PageShell centerTitle titleRef={titleRef} title={<VoucherPageTitle kind={kind} />}>
       <Panel className="mx-auto max-w-4xl overflow-visible">
         <div ref={trapRef} className="overflow-visible">
           <form ref={formRef} className="space-y-6 overflow-visible" onSubmit={onSubmit}>
@@ -326,9 +327,9 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
             <div>
               <p className="mb-1 block text-sm font-medium text-textSecondary">Voucher #</p>
               <div
-                className={`rounded-lg bg-surface1 px-3 py-2 ${numberMismatch ? 'ring-2 ring-accent' : ''}`}
+                className={`rounded-lg border border-border bg-surface2 px-3 py-2 ${numberMismatch ? 'ring-2 ring-accent' : ''}`}
               >
-                <span className="text-lg font-semibold text-textFinancial">
+                <span className="text-2xl font-bold tabular-nums text-financial">
                   {voucherNumberDisplay || '…'}
                 </span>
               </div>
@@ -349,8 +350,8 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
               categoryInputRef={leftCategoryRef}
               accountInputRef={leftAccountRef}
               accountNextFocusRef={rightCategoryRef}
-              panelClassName={sidePanelStyle(variant as 'payment' | 'receipt' | 'journal', 'left').panel}
-              labelClassName={sidePanelStyle(variant as 'payment' | 'receipt' | 'journal', 'left').label}
+              panelClassName={VOUCHER_SIDE_PANEL}
+              labelClassName={VOUCHER_SIDE_LABEL}
             />
             <AccountSideFields
               label={rightLabel}
@@ -365,8 +366,8 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
               categoryInputRef={rightCategoryRef}
               accountInputRef={rightAccountRef}
               accountNextFocusRef={amountRef}
-              panelClassName={sidePanelStyle(variant as 'payment' | 'receipt' | 'journal', 'right').panel}
-              labelClassName={sidePanelStyle(variant as 'payment' | 'receipt' | 'journal', 'right').label}
+              panelClassName={VOUCHER_SIDE_PANEL}
+              labelClassName={VOUCHER_SIDE_LABEL}
             />
           </div>
 
@@ -391,9 +392,10 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
               <TextInput
                 ref={referenceRef}
                 tabIndex={7}
+                required
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                placeholder="Optional"
+                placeholder="Cheque, bill, or slip reference"
               />
             </div>
           </div>
@@ -449,7 +451,7 @@ function userLabel(user?: VoucherUser | null) {
   return user.displayName || user.username;
 }
 
-function VoucherDetailCard({
+export function VoucherDetailCard({
   voucher,
   onCancel,
   onUpdateAmount,
@@ -506,10 +508,13 @@ function VoucherDetailCard({
     <Panel className="mt-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-textPrimary">
-              {formatVoucherLabel(voucher.type, voucher.number)}
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold tabular-nums text-textPrimary">
+              #{formatVoucherNumber(voucher.number)}
             </h2>
+            <span className={`text-sm font-semibold ${voucherTypeColorClass(voucher.type)}`}>
+              {formatVoucherTypeLabel(voucher.type)}
+            </span>
             <span
               className={`rounded-md px-2 py-0.5 text-xs font-medium ${
                 isCancelled ? 'bg-bgAccent text-textAccent' : 'bg-bgAccent text-success'
@@ -641,8 +646,7 @@ export function VoucherListPage() {
 
   async function handleCancel() {
     if (!result || result === 'notfound') return;
-    const label = formatVoucherLabel(result.type, result.number);
-    if (!window.confirm(`Cancel ${label}? Reversal entries will be posted.`)) return;
+    if (!window.confirm(`Cancel voucher #${result.number}? Reversal entries will be posted.`)) return;
     setCancelling(true);
     try {
       const updated = await api.cancelVoucher(result.id);

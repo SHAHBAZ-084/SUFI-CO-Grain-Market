@@ -74,7 +74,15 @@ export const TOP_NAV: NavGroup[] = [
   {
     label: 'Reports',
     children: [
-      { kind: 'link', label: 'Account Reports', to: '/reports/accounts' },
+      {
+        kind: 'submenu',
+        label: 'Account Reports',
+        children: [
+          { label: 'Account Ledger', to: '/reports/accounts' },
+          { label: 'Account Balance', to: '/reports/account-balance' },
+          { label: 'Vouchers', to: '/reports/vouchers' },
+        ],
+      },
       { kind: 'link', label: 'Detail Trial Balance', to: '/reports/trial-balance' },
       { kind: 'link', label: 'Sale/Purchase Reports', to: '/reports/sale-purchase' },
     ],

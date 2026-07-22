@@ -99,6 +99,7 @@ describe('voucher posting (PART 7 scenarios)', () => {
       date: voucherDate,
       createdById: userId,
       description: 'Electricity bill',
+      reference: 'ELEC-BILL',
     });
 
     expect(await ledgerBalance(cashId)).toBe(cashBefore - 10000);
@@ -121,6 +122,7 @@ describe('voucher posting (PART 7 scenarios)', () => {
       amount: 50000,
       date: voucherDate,
       createdById: userId,
+      reference: 'RCPT-001',
     });
 
     expect(await ledgerBalance(cashId)).toBe(cashBefore + 50000);
@@ -143,6 +145,7 @@ describe('voucher posting (PART 7 scenarios)', () => {
       date: voucherDate,
       createdById: userId,
       description: 'Bank to Cash transfer',
+      reference: 'BNK-XFER',
     });
 
     expect(await ledgerBalance(bankId)).toBe(bankBefore - 20000);

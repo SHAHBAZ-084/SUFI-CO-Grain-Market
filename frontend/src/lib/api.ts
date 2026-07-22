@@ -149,9 +149,15 @@ export const api = {
     return request<Invoice[]>(`/api/invoices${query}`);
   },
 
-  listVouchers() {
-    return request<Voucher[]>('/api/accounting/vouchers');
+  listVouchers(params?: { fromDate?: string; toDate?: string; type?: string }) {
+    const query = new URLSearchParams();
+    if (params?.fromDate) query.set('fromDate', params.fromDate);
+    if (params?.toDate) query.set('toDate', params.toDate);
+    if (params?.type) query.set('type', params.type);
+    const suffix = query.toString() ? `?${query}` : '';
+    return request<Voucher[]>(`/api/accounting/vouchers${suffix}`);
   },
+
   getDashboardSummary() {
     return request<{
       cashBalance: number;
@@ -179,7 +185,7 @@ export const api = {
     amount: number;
     date: string;
     description?: string;
-    reference?: string;
+    reference: string;
   }) {
     return request<Voucher>('/api/accounting/vouchers', { method: 'POST', body: JSON.stringify(data) });
   },
@@ -242,6 +248,42 @@ export const api = {
       totalCredit: number;
       isBalanced: boolean;
     }>('/api/accounting/trial-balance');
+  },
+
+  getAccountBalanceReport(params: { date: string; categoryId?: number; side?: 'debit' | 'credit' | 'both' }) {
+    const query = new URLSearchParams({ date: params.date, side: params.side ?? 'both' });
+    if (params.categoryId != null) query.set('categoryId', String(params.categoryId));
+    return request<{
+      date: string;
+      side: 'debit' | 'credit' | 'both';
+      categoryId: number | null;
+      accounts: {
+        accountId: number;
+        accountCode: string;
+        accountName: string;
+        categoryId: number;
+        categoryName: string;
+        balance: number;
+        debit: number;
+        credit: number;
+      }[];
+      groups: {
+        categoryId: number;
+        categoryName: string;
+        accounts: {
+          accountId: number;
+          accountCode: string;
+          accountName: string;
+          categoryId: number;
+          categoryName: string;
+          balance: number;
+          debit: number;
+          credit: number;
+        }[];
+      }[];
+      totalDebit: number;
+      totalCredit: number;
+    }>(`/api/accounting/reports/account-balance?${query.toString()}`);
   },
 
   listBardana() {

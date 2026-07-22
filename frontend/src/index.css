@@ -57,8 +57,11 @@
   }
 
   .app-topnav-brand {
+    display: inline-flex;
+    align-items: center;
     color: var(--nav-text-hover, #ffffff);
     font-weight: 600;
+    line-height: 1.25;
   }
 
   .app-topnav-brand:hover {
@@ -66,11 +69,16 @@
   }
 
   .app-topnav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: var(--nav-text, #e8edf4);
     border-radius: 0.375rem;
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
     font-weight: 500;
+    line-height: 1.25;
+    white-space: nowrap;
     transition: background-color 0.15s, color 0.15s;
   }
 
