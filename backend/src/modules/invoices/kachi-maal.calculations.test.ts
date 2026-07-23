@@ -35,7 +35,7 @@ describe('Kachi Maal calculations', () => {
     expect(row.amount).toBe(420 * (4000 / MAUND_KG));
     expect(row.amount).toBe(42000);
     expect(row.bardanaAmount).toBe(500);
-    expect(row.netCreditToParty).toBe(42500);
+    expect(row.netCreditToParty).toBe(41_870);
     expect(row.totalMazduriPreview).toBe(42000 * 0.015);
   });
 
@@ -53,7 +53,9 @@ describe('Kachi Maal calculations', () => {
       prefs,
     );
     expect(row.bardanaAmount).toBeNull();
-    expect(row.netCreditToParty).toBe(row.amount);
+    const paleDari = row.amount * 0.01;
+    const brokery = row.amount * 0.005;
+    expect(row.netCreditToParty).toBe(Math.round((row.amount - paleDari - brokery) * 100) / 100);
   });
 
   it('invoice totals and debit/credit balance for multi-row example', () => {
@@ -90,7 +92,9 @@ describe('Kachi Maal calculations', () => {
 
     const debits =
       totals.totalDebitAmount
-      + totals.totalBardanaFromRows;
+      + totals.totalBardanaFromRows
+      + totals.totalPaleDari
+      + totals.totalBrokery;
     const credits =
       totals.totalGoodsAmount
       + totals.totalPaleDari

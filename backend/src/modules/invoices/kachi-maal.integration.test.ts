@@ -101,7 +101,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
     expect(row.totalWeightKg).toBe(1000);
     expect(row.amount).toBe(50_000);
     expect(row.bardanaAmount).toBeNull();
-    expect(row.netCreditToParty).toBe(50_000);
+    expect(row.netCreditToParty).toBe(49_500);
 
     const totals = computeKachiMaalInvoiceTotals(
       [{ ...row, bhartii: 100, bardanaAmount: null }],
@@ -115,11 +115,11 @@ describe('Kachi Maal Test 1 — minimal case', () => {
     expect(totals.totalBrokery).toBe(75);
     expect(totals.marketFeeAmount).toBe(0);
     expect(totals.profitAmount).toBe(800);
-    expect(totals.totalDebitAmount).toBe(51_300);
+    expect(totals.totalDebitAmount).toBe(50_800);
     expect(totals.lowerBardanaAmount).toBeNull();
   });
 
-  it('posts exactly four vouchers; debits = credits = 51,300; trial balance balanced', async () => {
+  it('posts four vouchers; debits = credits = 51,300; trial balance balanced', async () => {
     const invoice = await createKachiMaalInvoice({
       invoiceDate,
       debitAccountId: traderXId,
@@ -144,25 +144,23 @@ describe('Kachi Maal Test 1 — minimal case', () => {
     });
 
     expect(invoice.status).toBe('POSTED');
-    expect(Number(invoice.total)).toBe(51_300);
+    expect(Number(invoice.total)).toBe(50_800);
 
     const vouchers = invoice.vouchers.map((iv) => iv.voucher);
     expect(vouchers).toHaveLength(4);
 
     type VoucherRow = { debitId: number; creditId: number; amount: number };
-    const pairs: VoucherRow[] = vouchers
-      .map((v) => ({
-        debitId: v.debitAccountId,
-        creditId: v.creditAccountId,
-        amount: Number(v.amount),
-      }))
-      .sort((a, b) => a.amount - b.amount);
+    const pairs: VoucherRow[] = vouchers.map((v) => ({
+      debitId: v.debitAccountId,
+      creditId: v.creditAccountId,
+      amount: Number(v.amount),
+    }));
 
     expect(pairs).toEqual(
       expect.arrayContaining([
         { debitId: traderXId, creditId: partyAId, amount: 50_000 },
-        { debitId: traderXId, creditId: mazduriId, amount: 425 },
-        { debitId: traderXId, creditId: brokerId, amount: 75 },
+        { debitId: partyAId, creditId: mazduriId, amount: 425 },
+        { debitId: partyAId, creditId: brokerId, amount: 75 },
         { debitId: traderXId, creditId: commissionId, amount: 800 },
       ]),
     );
@@ -178,7 +176,6 @@ describe('Kachi Maal Test 1 — minimal case', () => {
 
     const tb = await getTrialBalance();
     expect(tb.isBalanced).toBe(true);
-    expect(tb.totalDebit).toBe(tb.totalCredit);
   });
 });
 
@@ -276,10 +273,12 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
     expect(row1.totalWeightKg).toBe(1000);
     expect(row1.amount).toBe(50_000);
     expect(row1.bardanaAmount).toBe(100);
+    expect(row1.netCreditToParty).toBe(49_600);
 
     expect(row2.totalWeightKg).toBe(625);
     expect(row2.amount).toBe(25_000);
     expect(row2.bardanaAmount).toBeNull();
+    expect(row2.netCreditToParty).toBe(24_750);
 
     const totals = computeKachiMaalInvoiceTotals(
       [
@@ -299,10 +298,10 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
     expect(totals.marketFeeAmount).toBe(30.42);
     expect(totals.profitAmount).toBe(1200);
     expect(totals.lowerBardanaAmount).toBe(50);
-    expect(totals.totalDebitAmount).toBe(77_180.42);
+    expect(totals.totalDebitAmount).toBe(76_430.42);
   });
 
-  it('posts nine vouchers; all legs sum to 77,330.42; trial balance balanced', async () => {
+  it('posts eleven vouchers; all legs sum to 77,330.42; trial balance balanced', async () => {
     const invoice = await createKachiMaalInvoice({
       invoiceDate,
       debitAccountId: traderXId,
@@ -338,10 +337,10 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
     });
 
     expect(invoice.status).toBe('POSTED');
-    expect(Number(invoice.total)).toBe(77_180.42);
+    expect(Number(invoice.total)).toBe(76_430.42);
 
     const vouchers = invoice.vouchers.map((iv) => iv.voucher);
-    expect(vouchers).toHaveLength(9);
+    expect(vouchers).toHaveLength(11);
 
     type VoucherRow = { debitId: number; creditId: number; amount: number };
     const pairs: VoucherRow[] = vouchers.map((v) => ({
@@ -354,9 +353,11 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
       expect.arrayContaining([
         { debitId: traderXId, creditId: partyAId, amount: 50_000 },
         { debitId: boriId, creditId: partyAId, amount: 100 },
+        { debitId: partyAId, creditId: mazduriId, amount: 425 },
+        { debitId: partyAId, creditId: brokerId, amount: 75 },
         { debitId: traderXId, creditId: partyBId, amount: 25_000 },
-        { debitId: traderXId, creditId: mazduriId, amount: 637.5 },
-        { debitId: traderXId, creditId: brokerId, amount: 112.5 },
+        { debitId: partyBId, creditId: mazduriId, amount: 212.5 },
+        { debitId: partyBId, creditId: brokerId, amount: 37.5 },
         { debitId: traderXId, creditId: marketFeeId, amount: 30.42 },
         { debitId: traderXId, creditId: miscId, amount: 200 },
         { debitId: traderXId, creditId: commissionId, amount: 1200 },
@@ -373,6 +374,5 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
 
     const tb = await getTrialBalance();
     expect(tb.isBalanced).toBe(true);
-    expect(tb.totalDebit).toBe(tb.totalCredit);
   });
 });

@@ -22,6 +22,8 @@ export type KachiMaalRowComputed = {
   totalWeightKg: number;
   amount: number;
   bardanaAmount: number | null;
+  paleDari: number;
+  brokery: number;
   netCreditToParty: number;
   totalMazduriPreview: number;
 };
@@ -48,12 +50,12 @@ export function computeKachiMaalRow(
     ? roundMoney(input.bardanaQty! * input.bardanaRate!)
     : null;
 
-  const netCreditToParty = roundMoney(amount + (bardanaAmount ?? 0));
-  const totalMazduriPreview = roundMoney(
-    amount * ((prefs.paleDariPercent + prefs.brokeryPercent) / 100),
-  );
+  const paleDari = roundMoney(amount * (prefs.paleDariPercent / 100));
+  const brokery = roundMoney(amount * (prefs.brokeryPercent / 100));
+  const netCreditToParty = roundMoney(amount + (bardanaAmount ?? 0) - paleDari - brokery);
+  const totalMazduriPreview = roundMoney(paleDari + brokery);
 
-  return { totalWeightKg, amount, bardanaAmount, netCreditToParty, totalMazduriPreview };
+  return { totalWeightKg, amount, bardanaAmount, paleDari, brokery, netCreditToParty, totalMazduriPreview };
 }
 
 export type KachiMaalLineTotals = {
@@ -130,8 +132,6 @@ export function computeKachiMaalInvoiceTotals(
 
   const totalDebitAmount = roundMoney(
     lineTotals.totalGoodsAmount
-      + lineTotals.totalPaleDari
-      + lineTotals.totalBrokery
       + marketFeeAmount
       + misc
       + profitAmount,

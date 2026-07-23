@@ -108,6 +108,8 @@ type ComputedLine = KachiMaalLineInput & {
   totalWeightKg: number;
   amount: number;
   bardanaAmount: number | null;
+  paleDari: number;
+  brokery: number;
   netCreditToParty: number;
 };
 
@@ -168,26 +170,28 @@ function buildVoucherPlan(
       });
       seq += 1;
     }
-  }
 
-  if (totals.totalPaleDari > 0) {
-    planned.push({
-      debitAccountId,
-      creditAccountId: systemAccounts.mazduri.id,
-      amount: totals.totalPaleDari,
-      reference: ref('MAZ'),
-      description: 'Kachi Maal — Pale Dari / Mazduri',
-    });
-  }
+    if (line.paleDari > 0) {
+      planned.push({
+        debitAccountId: line.partyAccountId,
+        creditAccountId: systemAccounts.mazduri.id,
+        amount: line.paleDari,
+        reference: ref(`M${seq}`),
+        description: `Kachi Maal — row ${i + 1} Pale Dari / Mazduri`,
+      });
+      seq += 1;
+    }
 
-  if (totals.totalBrokery > 0) {
-    planned.push({
-      debitAccountId,
-      creditAccountId: systemAccounts.broker.id,
-      amount: totals.totalBrokery,
-      reference: ref('BRK'),
-      description: 'Kachi Maal — Brokery',
-    });
+    if (line.brokery > 0) {
+      planned.push({
+        debitAccountId: line.partyAccountId,
+        creditAccountId: systemAccounts.broker.id,
+        amount: line.brokery,
+        reference: ref(`R${seq}`),
+        description: `Kachi Maal — row ${i + 1} Brokery`,
+      });
+      seq += 1;
+    }
   }
 
   if (totals.marketFeeAmount > 0) {
@@ -203,8 +207,6 @@ function buildVoucherPlan(
   const miscAmount = roundMoney(
     totals.totalDebitAmount
       - totals.totalGoodsAmount
-      - totals.totalPaleDari
-      - totals.totalBrokery
       - totals.marketFeeAmount
       - totals.profitAmount,
   );
