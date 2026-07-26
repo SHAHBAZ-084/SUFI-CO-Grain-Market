@@ -73,6 +73,56 @@ export function sumLineAmounts(rows: BillLineRow[]) {
   return round2(rows.reduce((s, r) => s + r.amount, 0));
 }
 
+/** Bill From party for Purchase/Kachi Maal — supplier record or maal line party accounts. */
+export function resolveMaalBillFromPartyName(
+  invoice: Pick<InvoiceDetail, 'supplier'>,
+  lines: MaalLineDetail[],
+): string | null {
+  if (invoice.supplier?.name?.trim()) {
+    return invoice.supplier.name.trim();
+  }
+
+  const names = [
+    ...new Set(
+      lines
+        .map((line) => line.partyAccount?.name?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ];
+
+  if (names.length === 0) return null;
+  return names.join(', ');
+}
+
+export function computeMaalBillFromTotals(
+  lines: MaalLineDetail[],
+  tableRows: BillLineRow[],
+  prefs: Pick<SystemPreferences, 'kantaRate'>,
+  invoiceType: InvoiceDetail['type'],
+) {
+  const purchaseThela = tableRows.reduce((s, r) => s + r.thela, 0);
+  const kantaDeduction = round2(purchaseThela * prefs.kantaRate);
+  const purchaseGoods = sumLineAmounts(tableRows);
+
+  const purchaseNet =
+    invoiceType === 'PURCHASE_MAAL'
+      ? round2(lines.reduce((s, line) => s + Number(line.netCreditToParty), 0))
+      : Math.max(0, round2(purchaseGoods - kantaDeduction));
+
+  return {
+    purchaseThela,
+    kantaDeduction,
+    purchaseNet,
+    totals: [
+      { label: 'Less Kanta', value: formatBillAmount(kantaDeduction) },
+      {
+        label: `${purchaseThela} Thela @${formatBillAmount(prefs.kantaRate)}`,
+        value: formatBillAmount(0),
+      },
+    ],
+  };
+}
+
 export function computeKachiDeductions(
   lines: MaalLineDetail[],
   prefs: Pick<SystemPreferences, 'paleDariPercent' | 'brokeryPercent' | 'marketFeeRate' | 'kaatPercent'>,

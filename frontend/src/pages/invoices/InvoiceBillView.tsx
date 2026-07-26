@@ -2,6 +2,7 @@ import { BILL_LETTERHEAD, BILL_TITLES } from '../../config/billPrint';
 import type { InvoiceDetail, SystemPreferences } from '../../lib/api';
 import {
   computeKachiDeductions,
+  computeMaalBillFromTotals,
   computePurchaseDeductions,
   formatBillAmount,
   formatBillDate,
@@ -9,6 +10,7 @@ import {
   invoiceBillDate,
   maalLineToBillRow,
   parseInvoiceDisplayNumber,
+  resolveMaalBillFromPartyName,
   sumLineAmounts,
   type BillLineRow,
 } from '../../lib/billPrintFormat';
@@ -236,6 +238,12 @@ function MaalBillBody({
       ? formatBoriThelaLine(lowerBori, lowerRate, lowerThela, lowerRate)
       : formatBoriThelaLine(0, 0, 0, 0);
 
+  const billFromParty = resolveMaalBillFromPartyName(invoice, lines);
+  const billFrom =
+    billFromParty != null
+      ? computeMaalBillFromTotals(lines, tableRows, prefs, invoice.type)
+      : null;
+
   return (
     <>
       <BillHeader title={title} />
@@ -261,6 +269,14 @@ function MaalBillBody({
         ]}
         netAmount={formatBillAmount(invoice.total)}
       />
+      {billFromParty && billFrom ? (
+        <BillFromSection
+          supplierName={billFromParty}
+          rows={tableRows}
+          totals={billFrom.totals}
+          netAmount={formatBillAmount(billFrom.purchaseNet)}
+        />
+      ) : null}
     </>
   );
 }
