@@ -21,7 +21,7 @@ async function accountByName(name: string) {
 
 async function nextNumberForYear(financialYearId: number) {
   const { _max } = await prisma.voucher.aggregate({
-    where: { financialYearId },
+    where: { financialYearId, type: { in: ['PAYMENT', 'RECEIPT', 'JOURNAL'] } },
     _max: { number: true },
   });
   return (_max.number ?? 0) + 1;

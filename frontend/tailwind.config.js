@@ -32,6 +32,7 @@ export default {
         voucherPayment: 'var(--voucher-payment)',
         voucherReceipt: 'var(--voucher-receipt)',
         voucherJournal: 'var(--voucher-journal)',
+        voucherKachi: 'var(--voucher-kachi)',
         metricCashBg: 'var(--metric-cash-bg)',
         metricCashAccent: 'var(--metric-cash-accent)',
         metricReceivablesBg: 'var(--metric-receivables-bg)',

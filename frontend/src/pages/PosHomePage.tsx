@@ -163,7 +163,7 @@ export function PosHomePage() {
                 {summary.recentVouchers.map((v) => (
                   <tr key={v.id} className="border-b border-border last:border-0">
                     <td className="py-2 pr-3 font-mono text-xs font-semibold text-financial">
-                      {formatVoucherNumber(v.number)}
+                      {formatVoucherNumber(v.number, v.type)}
                     </td>
                     <td className="py-2 pr-3 text-textSecondary">{v.accountLabel}</td>
                     <td className={`py-2 pr-3 font-medium ${voucherTypeColorClass(v.type)}`}>

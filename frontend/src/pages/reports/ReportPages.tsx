@@ -30,11 +30,13 @@ function monthEndInputValue() {
 }
 
 function voucherFromAccount(voucher: Voucher) {
+  if (voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL') return 'Multi-leg';
   if (voucher.type === 'JOURNAL') return voucher.debitAccount?.name ?? '—';
   return voucher.creditAccount?.name ?? '—';
 }
 
 function voucherToAccount(voucher: Voucher) {
+  if (voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL') return `${voucher.ledgerEntries?.length ?? 0} legs`;
   if (voucher.type === 'JOURNAL') return voucher.creditAccount?.name ?? '—';
   return voucher.debitAccount?.name ?? '—';
 }
@@ -326,7 +328,7 @@ export function SalePurchaseReportsPage() {
 }
 
 type BalanceSideFilter = 'both' | 'debit' | 'credit';
-type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI_MAAL';
+type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | 'PURCHASE_MAAL';
 
 function BalanceTable({
   rows,
@@ -557,6 +559,8 @@ export function VouchersReportPage() {
       PAYMENT: 0,
       RECEIPT: 0,
       JOURNAL: 0,
+      KACHI: 0,
+      PURCHASE_MAAL: 0,
     };
     for (const v of vouchers) {
       if (v.type in byType) {
@@ -623,7 +627,7 @@ export function VouchersReportPage() {
     if (!loaded) return;
     const headers = ['Voucher #', 'Date', 'Type', 'From/Debit', 'To/Credit', 'Amount', 'Ref#', 'Status'];
     const rows = vouchers.map((v) => [
-      formatVoucherNumber(v.number),
+      formatVoucherNumber(v.number, v.type),
       formatDate(v.date),
       formatVoucherTypeLabel(v.type),
       voucherFromAccount(v),
@@ -665,7 +669,8 @@ export function VouchersReportPage() {
                 { value: 'PAYMENT', label: 'Payment' },
                 { value: 'RECEIPT', label: 'Receipt' },
                 { value: 'JOURNAL', label: 'Journal' },
-                { value: 'KACHI_MAAL', label: 'Kachi Maal' },
+                { value: 'KACHI', label: 'Kachi' },
+                { value: 'PURCHASE_MAAL', label: 'Purchase Maal' },
               ]}
             />
           </div>
@@ -710,7 +715,7 @@ export function VouchersReportPage() {
                       }`}
                     >
                       <td className="py-2 pr-2 text-right font-mono text-xs font-semibold text-financial">
-                        {formatVoucherNumber(v.number)}
+                        {formatVoucherNumber(v.number, v.type)}
                       </td>
                       <td className="py-2 pr-2 whitespace-nowrap">{formatDate(v.date)}</td>
                       <td className={`py-2 pr-2 font-medium ${voucherTypeColorClass(v.type)}`}>
@@ -745,7 +750,8 @@ export function VouchersReportPage() {
                       <td className="py-2" colSpan={8}>
                         Payments: {formatLedgerAmount(totals.byType.PAYMENT)} · Receipts:{' '}
                         {formatLedgerAmount(totals.byType.RECEIPT)} · Journal:{' '}
-                        {formatLedgerAmount(totals.byType.JOURNAL)}
+                        {formatLedgerAmount(totals.byType.JOURNAL)} · Kachi:{' '}
+                        {formatLedgerAmount(totals.byType.KACHI)}
                       </td>
                     </tr>
                   ) : null}

@@ -2,9 +2,13 @@ import { AccountType, BoriThelaMode } from '@prisma/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import {
+  cancelVoucher,
+  createVoucher,
   ensureKachiMaalAccounts,
+  getLedgerEntries,
   getTrialBalance,
   KACHI_MAAL_CATEGORY_NAMES,
+  previewNextVoucherNumber,
 } from '../accounting/accounting.service';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
 import { updateSystemPreferences } from '../preferences/preferences.service';
@@ -34,6 +38,40 @@ async function ensureAccountInCategory(categoryName: string, accountName: string
     await prisma.ledger.create({ data: { accountId: account.id, balance: 0 } });
   }
   return account;
+}
+
+async function ledgerBalance(accountId: number) {
+  const ledger = await prisma.ledger.findUnique({ where: { accountId } });
+  return ledger ? Number(ledger.balance) : 0;
+}
+
+async function snapshotBalances(accountIds: number[]) {
+  const balances = new Map<number, number>();
+  for (const accountId of accountIds) {
+    balances.set(accountId, await ledgerBalance(accountId));
+  }
+  return balances;
+}
+
+async function voucherLegs(voucherId: number) {
+  const entries = await prisma.ledgerEntry.findMany({
+    where: { voucherId, isReversal: false },
+    include: { ledger: { include: { account: true } } },
+    orderBy: { id: 'asc' },
+  });
+  return entries.map((entry) => ({
+    accountId: entry.ledger.accountId,
+    type: entry.type,
+    amount: Number(entry.amount),
+  }));
+}
+
+function entriesPerAccount(legs: { accountId: number }[]) {
+  const counts = new Map<number, number>();
+  for (const leg of legs) {
+    counts.set(leg.accountId, (counts.get(leg.accountId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 describe('Kachi Maal Test 1 — minimal case', () => {
@@ -119,7 +157,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
     expect(totals.lowerBardanaAmount).toBeNull();
   });
 
-  it('posts four vouchers; debits = credits = 51,300; trial balance balanced', async () => {
+  it('posts one KACHI voucher with five merged ledger entries; debits = credits = 50,800; trial balance balanced', async () => {
     const invoice = await createKachiMaalInvoice({
       invoiceDate,
       debitAccountId: traderXId,
@@ -145,37 +183,47 @@ describe('Kachi Maal Test 1 — minimal case', () => {
 
     expect(invoice.status).toBe('POSTED');
     expect(Number(invoice.total)).toBe(50_800);
+    expect(invoice.vouchers).toHaveLength(1);
 
-    const vouchers = invoice.vouchers.map((iv) => iv.voucher);
-    expect(vouchers).toHaveLength(4);
+    const voucher = invoice.vouchers[0]!.voucher;
+    expect(voucher.type).toBe('KACHI');
+    expect(voucher.debitAccountId).toBeNull();
+    expect(voucher.creditAccountId).toBeNull();
+    expect(Number(voucher.amount)).toBe(50_800);
 
-    type VoucherRow = { debitId: number; creditId: number; amount: number };
-    const pairs: VoucherRow[] = vouchers.map((v) => ({
-      debitId: v.debitAccountId,
-      creditId: v.creditAccountId,
-      amount: Number(v.amount),
-    }));
+    const legs = await voucherLegs(voucher.id);
+    expect(legs).toHaveLength(5);
 
-    expect(pairs).toEqual(
+    expect(legs).toEqual(
       expect.arrayContaining([
-        { debitId: traderXId, creditId: partyAId, amount: 50_000 },
-        { debitId: partyAId, creditId: mazduriId, amount: 425 },
-        { debitId: partyAId, creditId: brokerId, amount: 75 },
-        { debitId: traderXId, creditId: commissionId, amount: 800 },
+        { accountId: traderXId, type: 'DEBIT', amount: 50_800 },
+        { accountId: partyAId, type: 'CREDIT', amount: 49_500 },
+        { accountId: mazduriId, type: 'CREDIT', amount: 425 },
+        { accountId: brokerId, type: 'CREDIT', amount: 75 },
+        { accountId: commissionId, type: 'CREDIT', amount: 800 },
       ]),
     );
 
-    const totalDebit = pairs.reduce((s, v) => s + v.amount, 0);
-    const totalCredit = totalDebit;
-    expect(totalDebit).toBe(51_300);
-    expect(totalCredit).toBe(51_300);
+    const perAccount = entriesPerAccount(legs);
+    expect(perAccount.get(traderXId)).toBe(1);
+    expect(perAccount.get(partyAId)).toBe(1);
+    expect(perAccount.get(mazduriId)).toBe(1);
+    expect(perAccount.get(brokerId)).toBe(1);
+    expect(perAccount.get(commissionId)).toBe(1);
 
-    for (const v of vouchers) {
-      expect(v.type).toBe('KACHI_MAAL');
-    }
+    const totalDebit = legs.filter((leg) => leg.type === 'DEBIT').reduce((sum, leg) => sum + leg.amount, 0);
+    const totalCredit = legs.filter((leg) => leg.type === 'CREDIT').reduce((sum, leg) => sum + leg.amount, 0);
+    expect(totalDebit).toBe(50_800);
+    expect(totalCredit).toBe(50_800);
 
     const tb = await getTrialBalance();
     expect(tb.isBalanced).toBe(true);
+
+    const partyLedger = await getLedgerEntries(partyAId);
+    const partyVoucherRows = partyLedger.rows.filter(
+      (row) => row.type === 'Kachi' && row.ref === invoice.reference,
+    );
+    expect(partyVoucherRows).toHaveLength(1);
   });
 });
 
@@ -301,7 +349,7 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
     expect(totals.totalDebitAmount).toBe(76_430.42);
   });
 
-  it('posts eleven vouchers; all legs sum to 77,330.42; trial balance balanced', async () => {
+  it('posts one KACHI voucher with twelve merged ledger entries; all legs sum to 76,580.42; trial balance balanced', async () => {
     const invoice = await createKachiMaalInvoice({
       invoiceDate,
       debitAccountId: traderXId,
@@ -338,41 +386,228 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
 
     expect(invoice.status).toBe('POSTED');
     expect(Number(invoice.total)).toBe(76_430.42);
+    expect(invoice.vouchers).toHaveLength(1);
 
-    const vouchers = invoice.vouchers.map((iv) => iv.voucher);
-    expect(vouchers).toHaveLength(11);
+    const voucher = invoice.vouchers[0]!.voucher;
+    expect(voucher.type).toBe('KACHI');
 
-    type VoucherRow = { debitId: number; creditId: number; amount: number };
-    const pairs: VoucherRow[] = vouchers.map((v) => ({
-      debitId: v.debitAccountId,
-      creditId: v.creditAccountId,
-      amount: Number(v.amount),
-    }));
+    const legs = await voucherLegs(voucher.id);
+    expect(legs).toHaveLength(12);
 
-    expect(pairs).toEqual(
+    expect(legs).toEqual(
       expect.arrayContaining([
-        { debitId: traderXId, creditId: partyAId, amount: 50_000 },
-        { debitId: boriId, creditId: partyAId, amount: 100 },
-        { debitId: partyAId, creditId: mazduriId, amount: 425 },
-        { debitId: partyAId, creditId: brokerId, amount: 75 },
-        { debitId: traderXId, creditId: partyBId, amount: 25_000 },
-        { debitId: partyBId, creditId: mazduriId, amount: 212.5 },
-        { debitId: partyBId, creditId: brokerId, amount: 37.5 },
-        { debitId: traderXId, creditId: marketFeeId, amount: 30.42 },
-        { debitId: traderXId, creditId: miscId, amount: 200 },
-        { debitId: traderXId, creditId: commissionId, amount: 1200 },
-        { debitId: traderXId, creditId: thelaId, amount: 50 },
+        { accountId: traderXId, type: 'DEBIT', amount: 76_430.42 },
+        { accountId: traderXId, type: 'DEBIT', amount: 50 },
+        { accountId: partyAId, type: 'CREDIT', amount: 49_500 },
+        { accountId: partyAId, type: 'CREDIT', amount: 100 },
+        { accountId: partyBId, type: 'CREDIT', amount: 24_750 },
+        { accountId: boriId, type: 'DEBIT', amount: 100 },
+        { accountId: mazduriId, type: 'CREDIT', amount: 637.5 },
+        { accountId: brokerId, type: 'CREDIT', amount: 112.5 },
+        { accountId: marketFeeId, type: 'CREDIT', amount: 30.42 },
+        { accountId: miscId, type: 'CREDIT', amount: 200 },
+        { accountId: commissionId, type: 'CREDIT', amount: 1200 },
+        { accountId: thelaId, type: 'CREDIT', amount: 50 },
       ]),
     );
 
-    const totalAllLegs = pairs.reduce((s, v) => s + v.amount, 0);
-    expect(totalAllLegs).toBe(77_330.42);
+    const perAccount = entriesPerAccount(legs);
+    expect(perAccount.get(traderXId)).toBe(2);
+    expect(perAccount.get(partyAId)).toBe(2);
+    expect(perAccount.get(partyBId)).toBe(1);
+    expect(perAccount.get(boriId)).toBe(1);
+    expect(perAccount.get(thelaId)).toBe(1);
+    expect(perAccount.get(mazduriId)).toBe(1);
+    expect(perAccount.get(brokerId)).toBe(1);
+    expect(perAccount.get(marketFeeId)).toBe(1);
+    expect(perAccount.get(miscId)).toBe(1);
+    expect(perAccount.get(commissionId)).toBe(1);
 
-    for (const v of vouchers) {
-      expect(v.type).toBe('KACHI_MAAL');
-    }
+    const partyALedger = await getLedgerEntries(partyAId);
+    const partyAVoucherRows = partyALedger.rows.filter(
+      (row) => row.type === 'Kachi' && row.ref === invoice.reference,
+    );
+    expect(partyAVoucherRows).toHaveLength(2);
+
+    const totalDebit = legs.filter((leg) => leg.type === 'DEBIT').reduce((sum, leg) => sum + leg.amount, 0);
+    const totalCredit = legs.filter((leg) => leg.type === 'CREDIT').reduce((sum, leg) => sum + leg.amount, 0);
+    expect(totalDebit).toBe(76_580.42);
+    expect(totalCredit).toBe(76_580.42);
 
     const tb = await getTrialBalance();
     expect(tb.isBalanced).toBe(true);
+  });
+});
+
+describe('Kachi Maal voucher numbering and cancel', () => {
+  let userId: number;
+  let partyAId: number;
+  let traderXId: number;
+  let cashId: number;
+  let bankId: number;
+  let boriId: number;
+  let thelaId: number;
+  let mazduriId: number;
+  let brokerId: number;
+  let marketFeeId: number;
+  let miscId: number;
+  let commissionId: number;
+  let invoiceDate: string;
+
+  beforeAll(async () => {
+    invoiceDate = await voucherDateInActiveYear();
+    const user = await prisma.user.findFirst();
+    if (!user) throw new Error('Seed admin user first');
+    userId = user.id;
+
+    await updateSystemPreferences({
+      daamiPercent: 1.6,
+      paleDariPercent: 0.85,
+      brokeryPercent: 0.15,
+      marketFeeRate: 2,
+    });
+
+    await prisma.$transaction(async (tx) => {
+      const system = await ensureKachiMaalAccounts(tx);
+      boriId = system.bori.id;
+      thelaId = system.thela.id;
+      mazduriId = system.mazduri.id;
+      brokerId = system.broker.id;
+      marketFeeId = system.marketFee.id;
+      miscId = system.misc.id;
+      commissionId = system.commission.id;
+    });
+
+    partyAId = (await ensureAccountInCategory(
+      KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE,
+      'Party A',
+      AccountType.LIABILITY,
+      'KM-PARTY-A',
+    )).id;
+
+    traderXId = (await ensureAccountInCategory(
+      KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY,
+      'Trader X',
+      AccountType.ASSET,
+      'KM-TRADER-X',
+    )).id;
+
+    const cash = await prisma.account.findFirst({ where: { name: 'Cash in Hand', isActive: true } });
+    if (!cash) throw new Error('Cash in Hand account missing');
+    cashId = cash.id;
+
+    const bankCat = await prisma.accountCategory.findFirst({ where: { name: 'Bank' } });
+    if (!bankCat) throw new Error('Bank category missing');
+    let bank = await prisma.account.findFirst({ where: { categoryId: bankCat.id, isActive: true } });
+    if (!bank) {
+      bank = await prisma.account.create({
+        data: { categoryId: bankCat.id, name: 'Test Bank Kachi', code: 'BNK-KM', type: AccountType.ASSET },
+      });
+      await prisma.ledger.create({ data: { accountId: bank.id, balance: 0 } });
+    }
+    bankId = bank.id;
+  });
+
+  it('uses an independent KACHI sequence that does not affect Journal numbering', async () => {
+    const preview = await previewNextVoucherNumber();
+
+    const invoice = await createKachiMaalInvoice({
+      invoiceDate,
+      debitAccountId: traderXId,
+      miscAmount: 0,
+      lowerBardanaMode: null,
+      lowerBardanaQty: null,
+      lowerBardanaRate: null,
+      lines: [
+        {
+          partyAccountId: partyAId,
+          boriOrThelaMode: BoriThelaMode.BORI,
+          bagCount: 10,
+          bhartii: 100,
+          dharanCount: 0,
+          looseKg: 0,
+          ratePerMaund: 2000,
+          bardanaQty: null,
+          bardanaRate: null,
+        },
+      ],
+      createdById: userId,
+    });
+
+    const kachiVoucher = invoice.vouchers[0]!.voucher;
+    expect(kachiVoucher.type).toBe('KACHI');
+    expect(kachiVoucher.number).toBeGreaterThan(0);
+
+    const journal = await createVoucher({
+      type: 'JOURNAL',
+      debitAccountId: cashId,
+      creditAccountId: bankId,
+      amount: 100,
+      date: invoiceDate,
+      createdById: userId,
+      reference: 'KM-NUM-JRN',
+    });
+
+    expect(journal.number).toBe(preview.number);
+  });
+
+  it('cancelling a Kachi Maal voucher reverses every leg and restores all affected balances', async () => {
+    const trackedAccounts = [
+      partyAId,
+      traderXId,
+      boriId,
+      thelaId,
+      mazduriId,
+      brokerId,
+      marketFeeId,
+      miscId,
+      commissionId,
+    ];
+    const before = await snapshotBalances(trackedAccounts);
+
+    const invoice = await createKachiMaalInvoice({
+      invoiceDate,
+      debitAccountId: traderXId,
+      miscAmount: 200,
+      lowerBardanaMode: BoriThelaMode.THELA,
+      lowerBardanaQty: 5,
+      lowerBardanaRate: 10,
+      lines: [
+        {
+          partyAccountId: partyAId,
+          boriOrThelaMode: BoriThelaMode.BORI,
+          bagCount: 10,
+          bhartii: 100,
+          dharanCount: 0,
+          looseKg: 0,
+          ratePerMaund: 2000,
+          bardanaQty: 10,
+          bardanaRate: 10,
+        },
+      ],
+      createdById: userId,
+    });
+
+    const voucherId = invoice.vouchers[0]!.voucher.id;
+    const legsBeforeCancel = await voucherLegs(voucherId);
+    expect(legsBeforeCancel.length).toBeGreaterThan(0);
+
+    const tbAfterPost = await getTrialBalance();
+    expect(tbAfterPost.isBalanced).toBe(true);
+
+    await cancelVoucher(voucherId, userId);
+
+    const after = await snapshotBalances(trackedAccounts);
+    for (const accountId of trackedAccounts) {
+      expect(after.get(accountId)).toBeCloseTo(before.get(accountId)!, 2);
+    }
+
+    const reversalCount = await prisma.ledgerEntry.count({
+      where: { voucherId, isReversal: true },
+    });
+    expect(reversalCount).toBe(legsBeforeCancel.length);
+
+    const tbAfterCancel = await getTrialBalance();
+    expect(tbAfterCancel.isBalanced).toBe(true);
   });
 });

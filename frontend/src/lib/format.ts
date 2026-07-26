@@ -18,7 +18,8 @@ const VOUCHER_TYPE_LABELS: Record<string, string> = {
   PAYMENT: 'Payment',
   RECEIPT: 'Receipt',
   JOURNAL: 'Journal',
-  KACHI_MAAL: 'Kachi Maal',
+  KACHI: 'Kachi',
+  PURCHASE_MAAL: 'Purchase Maal',
 };
 
 export function formatVoucherTypeLabel(type: string) {
@@ -27,21 +28,24 @@ export function formatVoucherTypeLabel(type: string) {
   return VOUCHER_TYPE_LABELS[key] ?? type;
 }
 
-export function formatVoucherNumber(number: number | string | null | undefined) {
+export function formatVoucherNumber(number: number | string | null | undefined, type?: string) {
   if (number == null || number === '') return '';
+  if (type?.toUpperCase() === 'KACHI') return `K-${number}`;
+  if (type?.toUpperCase() === 'PURCHASE_MAAL') return `PM-${number}`;
   return String(number);
 }
 
 /** Voucher register number only — type is shown in its own column/label. */
-export function formatVoucherLabel(_type: string, number: number | string) {
-  return formatVoucherNumber(number);
+export function formatVoucherLabel(type: string, number: number | string) {
+  return formatVoucherNumber(number, type);
 }
 
 export function voucherTypeColorClass(type: string) {
   const key = type.toUpperCase();
   if (key === 'PAYMENT') return 'text-voucherPayment';
   if (key === 'RECEIPT') return 'text-voucherReceipt';
-  if (key === 'KACHI_MAAL') return 'text-voucherJournal';
+  if (key === 'KACHI') return 'text-voucherKachi';
+  if (key === 'PURCHASE_MAAL') return 'text-cardPurchaseMaalAccent';
   if (key.includes('JOURNAL')) return 'text-voucherJournal';
   return 'text-textSecondary';
 }

@@ -33,6 +33,7 @@
   --voucher-payment: #A32D2D;
   --voucher-receipt: #1E5C4A;
   --voucher-journal: #378ADD;
+  --voucher-kachi: #7D5A00;
 
   /* Dashboard metric cards — subtle tint + left accent */
   --metric-cash-bg: #E8F4EF;
@@ -98,6 +99,7 @@
   --voucher-payment: #E88888;
   --voucher-receipt: #6BC4A8;
   --voucher-journal: #5BA3E8;
+  --voucher-kachi: #D4A843;
 
   --metric-cash-bg: #1A2E28;
   --metric-cash-accent: #6BC4A8;

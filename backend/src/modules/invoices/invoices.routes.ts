@@ -5,11 +5,13 @@ import { requireAuth } from '../../middleware/auth';
 import { asyncHandler, param, validateBody } from '../../utils/helpers';
 import * as invoicesService from './invoices.service';
 import { registerKachiMaalRoutes } from './kachi-maal.routes';
+import { registerPurchaseMaalRoutes } from './purchase-maal.routes';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
 
 registerKachiMaalRoutes(invoicesRouter);
+registerPurchaseMaalRoutes(invoicesRouter);
 
 const itemSchema = z.object({
   productId: z.number().int().optional(),
@@ -24,6 +26,18 @@ const draftSchema = z.object({
   notes: z.string().optional(),
   items: z.array(itemSchema).min(1),
 });
+
+invoicesRouter.get(
+  '/by-reference',
+  asyncHandler(async (req, res) => {
+    const reference = req.query.reference as string | undefined;
+    if (!reference?.trim()) {
+      res.status(400).json({ error: 'reference is required' });
+      return;
+    }
+    res.json(await invoicesService.getInvoiceByReference(reference.trim()));
+  }),
+);
 
 invoicesRouter.get(
   '/',
@@ -53,4 +67,3 @@ function draftRoute(type: InvoiceType) {
 
 invoicesRouter.post('/sale-commission', validateBody(draftSchema), draftRoute(InvoiceType.SALE_COMMISSION));
 invoicesRouter.post('/sale-paunch', validateBody(draftSchema), draftRoute(InvoiceType.SALE_PAUNCH));
-invoicesRouter.post('/purchase-maal', validateBody(draftSchema), draftRoute(InvoiceType.PURCHASE_MAAL));

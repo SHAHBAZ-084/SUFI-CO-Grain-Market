@@ -250,6 +250,10 @@ async function validateVoucherCreate(
     throw new AppError(400, 'Amount must be greater than zero');
   }
 
+  if (data.type === 'KACHI' || data.type === 'PURCHASE_MAAL') {
+    throw new AppError(400, 'Invoice vouchers are created via invoice posting');
+  }
+
   const reference = data.reference?.trim();
   if (!reference) {
     throw new AppError(400, 'Reference is required');
@@ -752,7 +756,9 @@ function voucherTypeLabel(
   const base =
     type === 'PAYMENT' ? 'Payment'
       : type === 'RECEIPT' ? 'Receipt'
-        : 'Journal';
+        : type === 'KACHI' ? 'Kachi'
+          : type === 'PURCHASE_MAAL' ? 'Purchase Maal'
+          : 'Journal';
   return isReversal ? `${base} (Reversal)` : base;
 }
 
@@ -760,12 +766,14 @@ function voucherDisplayNo(type: VoucherType | null | undefined, number: number |
   return formatVoucherLabel(type, number);
 }
 
-/** Shared voucher label: number only (type shown separately). */
+/** Shared voucher label: number only (type shown separately). Kachi uses K-{n}. */
 export function formatVoucherLabel(
-  _type: VoucherType | null | undefined,
+  type: VoucherType | null | undefined,
   number: number | null | undefined,
 ): string {
   if (!number) return '0';
+  if (type === 'KACHI') return `K-${number}`;
+  if (type === 'PURCHASE_MAAL') return `PM-${number}`;
   return String(number);
 }
 
@@ -820,12 +828,27 @@ function buildLedgerEntryDescription(
   return custom ? `${auto} — ${custom}` : auto;
 }
 
+/** Payment, Receipt, and Journal share one number sequence per financial year. */
+const STANDARD_VOUCHER_TYPES: VoucherType[] = ['PAYMENT', 'RECEIPT', 'JOURNAL'];
+
 async function nextVoucherNumber(
   tx: Prisma.TransactionClient,
   financialYearId: number,
 ): Promise<number> {
   const { _max } = await tx.voucher.aggregate({
-    where: { financialYearId },
+    where: { financialYearId, type: { in: STANDARD_VOUCHER_TYPES } },
+    _max: { number: true },
+  });
+  return (_max.number ?? 0) + 1;
+}
+
+async function nextMultiLegVoucherNumber(
+  tx: Prisma.TransactionClient,
+  financialYearId: number,
+  type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL'>,
+): Promise<number> {
+  const { _max } = await tx.voucher.aggregate({
+    where: { financialYearId, type },
     _max: { number: true },
   });
   return (_max.number ?? 0) + 1;
@@ -1452,48 +1475,172 @@ async function postVoucherLedgerEntries(
   await recomputeLedgerRunningBalancesInTx(tx, creditLedger.id, financialYearId);
 }
 
+export type VoucherLeg = {
+  accountId: number;
+  type: LedgerEntryType;
+  amount: number;
+  description?: string;
+};
+
+async function postMultiLegVoucherEntries(
+  tx: Prisma.TransactionClient,
+  voucherId: number,
+  legs: VoucherLeg[],
+  financialYearId: number,
+) {
+  const ledgerByAccountId = new Map<number, number>();
+
+  for (const leg of legs) {
+    let ledgerId = ledgerByAccountId.get(leg.accountId);
+    if (ledgerId == null) {
+      const ledger = await tx.ledger.findUniqueOrThrow({ where: { accountId: leg.accountId } });
+      ledgerId = ledger.id;
+      ledgerByAccountId.set(leg.accountId, ledgerId);
+    }
+
+    await tx.ledgerEntry.create({
+      data: {
+        ledgerId,
+        voucherId,
+        type: leg.type,
+        amount: leg.amount,
+        balance: 0,
+        notes: leg.description ?? undefined,
+        isReversal: false,
+      },
+    });
+  }
+
+  for (const ledgerId of ledgerByAccountId.values()) {
+    await recomputeLedgerRunningBalancesInTx(tx, ledgerId, financialYearId);
+  }
+}
+
+export async function createMultiLegVoucherInTx(
+  tx: Prisma.TransactionClient,
+  data: {
+    type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL'>;
+    legs: VoucherLeg[];
+    amount: number;
+    date: Date | string;
+    description: string;
+    reference: string;
+    createdById: number;
+  },
+) {
+  if (data.legs.length < 2) {
+    throw new AppError(400, 'Multi-leg voucher requires at least two ledger legs');
+  }
+
+  const totalDebits = roundMoney(
+    data.legs
+      .filter((leg) => leg.type === LedgerEntryType.DEBIT)
+      .reduce((sum, leg) => sum + leg.amount, 0),
+  );
+  const totalCredits = roundMoney(
+    data.legs
+      .filter((leg) => leg.type === LedgerEntryType.CREDIT)
+      .reduce((sum, leg) => sum + leg.amount, 0),
+  );
+
+  if (Math.abs(totalDebits - totalCredits) > 0.01) {
+    throw new AppError(500, 'Multi-leg voucher debits and credits do not balance');
+  }
+
+  const trimmedReference = data.reference.trim();
+  if (!trimmedReference) {
+    throw new AppError(400, 'Reference is required');
+  }
+
+  let voucherDate: Date;
+  try {
+    voucherDate = parseVoucherDateInput(data.date);
+  } catch {
+    throw new AppError(400, 'Invalid voucher date');
+  }
+
+  const financialYearId = await assertVoucherDateInActiveFinancialYear(tx, voucherDate);
+  const number = await nextMultiLegVoucherNumber(tx, financialYearId, data.type);
+
+  const voucher = await tx.voucher.create({
+    data: {
+      type: data.type,
+      number,
+      date: voucherDate,
+      debitAccountId: null,
+      creditAccountId: null,
+      amount: data.amount,
+      description: data.description,
+      reference: trimmedReference,
+      createdById: data.createdById,
+      financialYearId,
+      status: VoucherStatus.ACTIVE,
+    },
+  });
+
+  await postMultiLegVoucherEntries(tx, voucher.id, data.legs, financialYearId);
+  await assertTrialBalanceInDev(tx);
+
+  return voucher;
+}
+
+export async function createKachiVoucherInTx(
+  tx: Prisma.TransactionClient,
+  data: {
+    legs: VoucherLeg[];
+    amount: number;
+    date: Date | string;
+    description: string;
+    reference: string;
+    createdById: number;
+  },
+) {
+  return createMultiLegVoucherInTx(tx, { ...data, type: VoucherType.KACHI });
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 async function reverseVoucherLedgerEntries(
   tx: Prisma.TransactionClient,
-  voucher: { id: number; debitAccountId: number; creditAccountId: number; amount: Prisma.Decimal },
+  voucher: { id: number },
   notes: string,
 ) {
-  const amount = Number(voucher.amount);
-
-  const debitLedger = await tx.ledger.findUniqueOrThrow({
-    where: { accountId: voucher.debitAccountId },
-  });
-  const creditLedger = await tx.ledger.findUniqueOrThrow({
-    where: { accountId: voucher.creditAccountId },
+  const entries = await tx.ledgerEntry.findMany({
+    where: { voucherId: voucher.id, isReversal: false },
+    orderBy: { id: 'asc' },
   });
 
-  await tx.ledgerEntry.create({
-    data: {
-      ledgerId: debitLedger.id,
-      voucherId: voucher.id,
-      type: LedgerEntryType.CREDIT,
-      amount,
-      balance: 0,
-      notes,
-      isReversal: true,
-    },
-  });
-
-  await tx.ledgerEntry.create({
-    data: {
-      ledgerId: creditLedger.id,
-      voucherId: voucher.id,
-      type: LedgerEntryType.DEBIT,
-      amount,
-      balance: 0,
-      notes,
-      isReversal: true,
-    },
-  });
+  for (const entry of entries) {
+    await tx.ledgerEntry.create({
+      data: {
+        ledgerId: entry.ledgerId,
+        voucherId: voucher.id,
+        type: entry.type === LedgerEntryType.DEBIT ? LedgerEntryType.CREDIT : LedgerEntryType.DEBIT,
+        amount: entry.amount,
+        balance: 0,
+        notes,
+        isReversal: true,
+      },
+    });
+  }
 }
 
 const voucherInclude = {
   debitAccount: true,
   creditAccount: true,
+  ledgerEntries: {
+    where: { isReversal: false },
+    orderBy: { id: 'asc' as const },
+    include: {
+      ledger: {
+        include: {
+          account: { select: { id: true, name: true, code: true } },
+        },
+      },
+    },
+  },
   createdBy: { select: { id: true, displayName: true, username: true } },
   modifiedBy: { select: { id: true, displayName: true, username: true } },
   deletedBy: { select: { id: true, displayName: true, username: true } },
@@ -1509,9 +1656,16 @@ function supplierAccountCode(id: number) {
 
 function voucherDashboardAccountLabel(voucher: {
   type: VoucherType;
+  description?: string | null;
   debitAccount?: { name: string } | null;
   creditAccount?: { name: string } | null;
 }) {
+  if (voucher.type === 'KACHI') {
+    return voucher.description?.trim() || 'Kachi Maal';
+  }
+  if (voucher.type === 'PURCHASE_MAAL') {
+    return voucher.description?.trim() || 'Purchase Maal';
+  }
   if (voucher.type === 'RECEIPT') return voucher.creditAccount?.name ?? '—';
   if (voucher.type === 'PAYMENT') return voucher.debitAccount?.name ?? '—';
   const debit = voucher.debitAccount?.name ?? '—';
@@ -1701,6 +1855,9 @@ export async function updateVoucherAmount(
     if (voucher.status === VoucherStatus.CANCELLED) {
       throw new AppError(400, 'Cannot update amount on a cancelled voucher');
     }
+    if (voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL') {
+      throw new AppError(400, 'Invoice voucher amounts cannot be edited');
+    }
     await assertActiveFinancialYear(tx, voucher.financialYearId);
 
     const oldAmount = Number(voucher.amount);
@@ -1769,7 +1926,7 @@ export async function cancelVoucherInTx(
   await reverseVoucherLedgerEntries(
     tx,
     voucher,
-    `Reversal — cancelled voucher #${voucher.number}`,
+    `Reversal — cancelled voucher #${formatVoucherLabel(voucher.type, voucher.number)}`,
   );
 
   const now = new Date();
@@ -1784,12 +1941,14 @@ export async function cancelVoucherInTx(
     include: voucherInclude,
   });
 
-  const [debitLedger, creditLedger] = await Promise.all([
-    tx.ledger.findUniqueOrThrow({ where: { accountId: voucher.debitAccountId } }),
-    tx.ledger.findUniqueOrThrow({ where: { accountId: voucher.creditAccountId } }),
-  ]);
-  await recomputeLedgerRunningBalancesInTx(tx, debitLedger.id, voucher.financialYearId!);
-  await recomputeLedgerRunningBalancesInTx(tx, creditLedger.id, voucher.financialYearId!);
+  const affectedEntries = await tx.ledgerEntry.findMany({
+    where: { voucherId: voucher.id },
+    select: { ledgerId: true },
+  });
+  const ledgerIds = [...new Set(affectedEntries.map((entry) => entry.ledgerId))];
+  for (const ledgerId of ledgerIds) {
+    await recomputeLedgerRunningBalancesInTx(tx, ledgerId, voucher.financialYearId!);
+  }
 
   await assertTrialBalanceInDev(tx);
 

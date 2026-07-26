@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatDate, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../../lib/format';
+import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../../lib/format';
 import { api, Account, AccountCategory, Voucher, VoucherAccount, VoucherUser } from '../../lib/api';
 import { DangerButton, FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput, Tile } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -465,6 +465,9 @@ export function VoucherDetailCard({
   updating: boolean;
 }) {
   const isCancelled = voucher.status === 'CANCELLED';
+  const isKachi = voucher.type === 'KACHI';
+  const isPurchaseMaal = voucher.type === 'PURCHASE_MAAL';
+  const isMultiLeg = isKachi || isPurchaseMaal;
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountDraft, setAmountDraft] = useState(String(voucher.amount ?? ''));
 
@@ -473,8 +476,9 @@ export function VoucherDetailCard({
     setAmountDraft(String(voucher.amount ?? ''));
   }, [voucher.id, voucher.amount]);
 
-  const rows =
-    voucher.type === 'JOURNAL'
+  const rows = isMultiLeg
+    ? []
+    : voucher.type === 'JOURNAL'
       ? [
           { label: 'Debit', value: accountLabel(voucher.debitAccount) },
           { label: 'Credit', value: accountLabel(voucher.creditAccount) },
@@ -483,6 +487,14 @@ export function VoucherDetailCard({
           { label: 'From', value: accountLabel(voucher.creditAccount) },
           { label: 'To', value: accountLabel(voucher.debitAccount) },
         ];
+
+  const kachiLegs = voucher.ledgerEntries ?? [];
+  const kachiDebitTotal = kachiLegs
+    .filter((leg) => leg.type === 'DEBIT')
+    .reduce((sum, leg) => sum + Number(leg.amount), 0);
+  const kachiCreditTotal = kachiLegs
+    .filter((leg) => leg.type === 'CREDIT')
+    .reduce((sum, leg) => sum + Number(leg.amount), 0);
 
   const auditParts: string[] = [];
   const creator = userLabel(voucher.createdBy);
@@ -510,7 +522,7 @@ export function VoucherDetailCard({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold tabular-nums text-textPrimary">
-              #{formatVoucherNumber(voucher.number)}
+              #{formatVoucherNumber(voucher.number, voucher.type)}
             </h2>
             <span className={`text-sm font-semibold ${voucherTypeColorClass(voucher.type)}`}>
               {formatVoucherTypeLabel(voucher.type)}
@@ -527,7 +539,7 @@ export function VoucherDetailCard({
         </div>
         {!isCancelled && (
           <div className="flex gap-2">
-            {!editingAmount && (
+            {!isMultiLeg && !editingAmount && (
               <SecondaryButton onClick={() => setEditingAmount(true)}>Update Amount</SecondaryButton>
             )}
             <DangerButton
@@ -547,14 +559,56 @@ export function VoucherDetailCard({
             <dd className="text-sm font-medium text-textPrimary">{row.value}</dd>
           </div>
         ))}
+        {isMultiLeg && kachiLegs.length > 0 ? (
+          <div className="py-3">
+            <dt className="mb-3 text-sm text-textSecondary">Ledger legs</dt>
+            <dd>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-textSecondary">
+                      <th className="py-2 pr-3">Account</th>
+                      <th className="py-2 pr-3">Type</th>
+                      <th className="py-2 pr-3 text-right">Amount</th>
+                      <th className="py-2">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kachiLegs.map((leg) => (
+                      <tr key={leg.id} className="border-b border-border">
+                        <td className="py-2 pr-3 font-medium text-textPrimary">
+                          {leg.ledger?.account?.name ?? '—'}
+                        </td>
+                        <td className={`py-2 pr-3 font-medium ${leg.type === 'DEBIT' ? 'text-danger' : 'text-success'}`}>
+                          {leg.type === 'DEBIT' ? 'Debit' : 'Credit'}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{formatLedgerAmount(leg.amount)}</td>
+                        <td className="py-2 text-textSecondary">{leg.notes ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border font-semibold">
+                      <td className="py-2" colSpan={2}>Totals</td>
+                      <td className="py-2 text-right tabular-nums">
+                        Dr {formatLedgerAmount(kachiDebitTotal)} / Cr {formatLedgerAmount(kachiCreditTotal)}
+                      </td>
+                      <td className="py-2" />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </dd>
+          </div>
+        ) : null}
         <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
           <dt className="text-sm text-textSecondary">Date</dt>
           <dd className="text-sm text-textPrimary">{formatDate(voucher.date)}</dd>
         </div>
         <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
-          <dt className="text-sm text-textSecondary">Amount</dt>
+          <dt className="text-sm text-textSecondary">{isMultiLeg ? 'Grand total' : 'Amount'}</dt>
           <dd className="text-sm font-semibold text-textPrimary">
-            {editingAmount ? (
+            {!isMultiLeg && editingAmount ? (
               <form onSubmit={submitAmount} className="flex flex-wrap items-center gap-2">
                 <TextInput
                   type="number"

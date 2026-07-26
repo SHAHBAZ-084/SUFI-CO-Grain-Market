@@ -2,13 +2,11 @@ import { InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
 import { getActiveFinancialYearId } from '../accounting/accounting.service';
+import { buildInvoiceReference, INVOICE_TYPE_PREFIX } from './invoice-reference';
 
-const TYPE_PREFIX: Record<InvoiceType, string> = {
-  SALE_COMMISSION: 'SC',
-  SALE_PAUNCH: 'SP',
-  PURCHASE_MAAL: 'PM',
-  KACHI_MAAL: 'KM',
-};
+export { INVOICE_TYPE_PREFIX, buildInvoiceReference };
+
+const TYPE_PREFIX = INVOICE_TYPE_PREFIX;
 
 async function nextReference(tx: Prisma.TransactionClient, type: InvoiceType) {
   const prefix = TYPE_PREFIX[type];
@@ -32,20 +30,57 @@ export async function listInvoices(filters?: { type?: InvoiceType; status?: Invo
   });
 }
 
+const invoiceDetailInclude = {
+  customer: true,
+  supplier: true,
+  items: { include: { product: true } },
+  kachiMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' as const } },
+  purchaseMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' as const } },
+  vouchers: {
+    include: {
+      voucher: {
+        include: {
+          debitAccount: true,
+          creditAccount: true,
+          ledgerEntries: {
+            where: { isReversal: false },
+            orderBy: { id: 'asc' as const },
+            include: {
+              ledger: {
+                include: {
+                  account: { select: { id: true, name: true, code: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  debitAccount: true,
+  createdBy: { select: { id: true, displayName: true, username: true } },
+} as const;
+
 export async function getInvoice(id: number) {
   const invoice = await prisma.invoice.findUnique({
     where: { id },
-    include: {
-      customer: true,
-      supplier: true,
-      items: { include: { product: true } },
-      kachiMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
-      vouchers: { include: { voucher: true } },
-      debitAccount: true,
-      createdBy: { select: { id: true, displayName: true, username: true } },
-    },
+    include: invoiceDetailInclude,
   });
   if (!invoice) throw new AppError(404, 'Invoice not found');
+  return invoice;
+}
+
+export async function getInvoiceByReference(reference: string) {
+  const trimmed = reference.trim();
+  if (!trimmed) throw new AppError(400, 'Reference is required');
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { reference: trimmed },
+    include: invoiceDetailInclude,
+  });
+  if (!invoice) {
+    throw new AppError(404, `No invoice found for ${trimmed}.`);
+  }
   return invoice;
 }
 

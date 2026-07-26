@@ -11,7 +11,8 @@ enum VoucherType {
   PAYMENT
   RECEIPT
   JOURNAL
-  KACHI_MAAL
+  KACHI
+  PURCHASE_MAAL
 }
 
 enum BoriThelaMode {
@@ -124,8 +125,9 @@ model Account {
   creditVouchers  Voucher[]                     @relation("CreditAccount")
   closingBalances FinancialYearClosingBalance[]
   product              Product?
-  kachiMaalLines       KachiMaalLine[] @relation("KachiMaalPartyAccount")
-  kachiMaalDebitInvoices Invoice[]     @relation("KachiMaalDebitAccount")
+  kachiMaalLines         KachiMaalLine[]   @relation("KachiMaalPartyAccount")
+  purchaseMaalLines        PurchaseMaalLine[] @relation("PurchaseMaalPartyAccount")
+  kachiMaalDebitInvoices   Invoice[]         @relation("KachiMaalDebitAccount")
 }
 
 model Ledger {
@@ -162,8 +164,8 @@ model Voucher {
   type            VoucherType
   number          Int
   date            DateTime
-  debitAccountId  Int
-  creditAccountId Int
+  debitAccountId  Int?
+  creditAccountId Int?
   amount          Decimal
   description     String?
   reference       String?
@@ -177,15 +179,15 @@ model Voucher {
   financialYearId Int?
 
   financialYear FinancialYear? @relation(fields: [financialYearId], references: [id])
-  debitAccount  Account        @relation("DebitAccount", fields: [debitAccountId], references: [id])
-  creditAccount Account        @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  debitAccount  Account?       @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  creditAccount Account?       @relation("CreditAccount", fields: [creditAccountId], references: [id])
   createdBy     User           @relation("VoucherCreatedBy", fields: [createdById], references: [id])
   modifiedBy    User?          @relation("VoucherModifiedBy", fields: [modifiedById], references: [id])
   deletedBy     User?          @relation("VoucherDeletedBy", fields: [deletedById], references: [id])
   ledgerEntries LedgerEntry[]
   invoiceLink   InvoiceVoucher?
 
-  @@unique([financialYearId, number])
+  @@unique([financialYearId, type, number])
   @@index([financialYearId, type])
   @@index([date])
   @@index([createdAt])
@@ -267,6 +269,8 @@ model Invoice {
   lowerBardanaQty      Decimal?
   lowerBardanaRate     Decimal?
   lowerBardanaAmount   Decimal?
+  marketFeeEnabled     Boolean       @default(false)
+  mazduriEnabled       Boolean       @default(false)
   financialYearId Int?
   createdById     Int
   createdAt       DateTime      @default(now())
@@ -280,6 +284,7 @@ model Invoice {
   items         InvoiceItem[]
   vouchers      InvoiceVoucher[]
   kachiMaalLines KachiMaalLine[]
+  purchaseMaalLines PurchaseMaalLine[]
 }
 
 model KachiMaalLine {
@@ -304,6 +309,34 @@ model KachiMaalLine {
 
   invoice      Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   partyAccount Account @relation("KachiMaalPartyAccount", fields: [partyAccountId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model PurchaseMaalLine {
+  id               Int           @id @default(autoincrement())
+  invoiceId        Int
+  partyAccountId   Int
+  jins             String?
+  qism             String?
+  boriOrThelaMode  BoriThelaMode
+  bagCount         Decimal       @default(0)
+  bhartii          Decimal       @default(0)
+  dharanCount      Decimal       @default(0)
+  looseKg          Decimal       @default(0)
+  totalWeightKg    Decimal       @default(0)
+  ratePerMaund     Decimal       @default(0)
+  amount           Decimal       @default(0)
+  bardanaQty       Decimal?
+  bardanaRate      Decimal?
+  bardanaAmount    Decimal?
+  dammiChecked     Boolean       @default(false)
+  dammiAmount      Decimal       @default(0)
+  netCreditToParty Decimal       @default(0)
+  sortOrder        Int           @default(0)
+
+  invoice      Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  partyAccount Account @relation("PurchaseMaalPartyAccount", fields: [partyAccountId], references: [id])
 
   @@index([invoiceId])
 }

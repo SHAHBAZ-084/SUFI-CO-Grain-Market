@@ -74,8 +74,62 @@ export type KachiMaalInvoiceResult = Invoice & {
   vouchers?: { voucher: Voucher }[];
 };
 
+export type InvoiceItemDetail = {
+  id: number;
+  label: string;
+  quantity: number | string;
+  unitPrice: number | string;
+  total: number | string;
+  product?: Product | null;
+};
+
+export type KachiMaalLineDetail = {
+  id: number;
+  partyAccount?: VoucherAccount | null;
+  totalWeightKg: number | string;
+  ratePerMaund: number | string;
+  amount: number | string;
+  bardanaAmount?: number | string | null;
+  netCreditToParty: number | string;
+};
+
+export type PurchaseMaalLineDetail = KachiMaalLineDetail & {
+  dammiChecked?: boolean;
+  dammiAmount?: number | string | null;
+};
+
+export type InvoiceDetail = Invoice & {
+  invoiceDate?: string | null;
+  billNo?: string | null;
+  gariNo?: string | null;
+  jins?: string | null;
+  qism?: string | null;
+  tafseel?: string | null;
+  notes?: string | null;
+  miscAmount?: number | string | null;
+  lowerBardanaAmount?: number | string | null;
+  marketFeeEnabled?: boolean;
+  mazduriEnabled?: boolean;
+  debitAccount?: VoucherAccount | null;
+  items?: InvoiceItemDetail[];
+  kachiMaalLines?: KachiMaalLineDetail[];
+  purchaseMaalLines?: PurchaseMaalLineDetail[];
+  vouchers?: { voucher: Voucher }[];
+  createdBy?: VoucherUser | null;
+};
+
 export type VoucherAccount = { id: number; name: string; code: string };
 export type VoucherUser = { id: number; displayName: string; username: string };
+
+export type VoucherLedgerEntry = {
+  id: number;
+  type: string;
+  amount: number | string;
+  notes?: string | null;
+  ledger?: {
+    account?: VoucherAccount | null;
+  } | null;
+};
 
 export type Voucher = {
   id: number;
@@ -91,6 +145,7 @@ export type Voucher = {
   deletedAt?: string | null;
   debitAccount?: VoucherAccount | null;
   creditAccount?: VoucherAccount | null;
+  ledgerEntries?: VoucherLedgerEntry[];
   createdBy?: VoucherUser | null;
   modifiedBy?: VoucherUser | null;
   deletedBy?: VoucherUser | null;
@@ -171,6 +226,11 @@ export const api = {
     return request<Invoice[]>(`/api/invoices${query}`);
   },
 
+  getInvoiceByReference(reference: string) {
+    const query = new URLSearchParams({ reference });
+    return request<InvoiceDetail>(`/api/invoices/by-reference?${query.toString()}`);
+  },
+
   getNextKachiMaalReference() {
     return request<{ reference: string }>('/api/invoices/kachi-maal/next-reference');
   },
@@ -202,6 +262,44 @@ export const api = {
     }[];
   }) {
     return request<KachiMaalInvoiceResult>('/api/invoices/kachi-maal', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getNextPurchaseMaalReference() {
+    return request<{ reference: string }>('/api/invoices/purchase-maal/next-reference');
+  },
+
+  createPurchaseMaalInvoice(data: {
+    invoiceDate: string;
+    billNo?: string;
+    gariNo?: string;
+    jins?: string;
+    qism?: string;
+    tafseel?: string;
+    debitAccountId: number;
+    marketFeeEnabled?: boolean;
+    mazduriEnabled?: boolean;
+    lowerBardanaMode?: 'BORI' | 'THELA' | null;
+    lowerBardanaQty?: number | null;
+    lowerBardanaRate?: number | null;
+    lines: {
+      partyAccountId: number;
+      jins?: string;
+      qism?: string;
+      boriOrThelaMode: 'BORI' | 'THELA';
+      bagCount: number;
+      bhartii: number;
+      dharanCount: number;
+      looseKg: number;
+      ratePerMaund: number;
+      bardanaQty?: number | null;
+      bardanaRate?: number | null;
+      dammiChecked?: boolean;
+    }[];
+  }) {
+    return request<KachiMaalInvoiceResult>('/api/invoices/purchase-maal', {
       method: 'POST',
       body: JSON.stringify(data),
     });
