@@ -1,6 +1,7 @@
 import { AccountType, FinancialYearStatus, LedgerEntryType, Prisma, VoucherStatus, VoucherType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import { assertNotMaalKhataLinkedAccount, isMaalKhataCategoryName } from '../products/maal-khata';
 import {
   compareLedgerEntries,
   computeLedgerBalance,
@@ -354,6 +355,7 @@ export function isSystemAccountCategoryName(name: string) {
     isCustomersCategoryName(name)
     || isSuppliersCategoryName(name)
     || isInventoryCategoryName(name)
+    || isMaalKhataCategoryName(name)
   );
 }
 
@@ -574,6 +576,13 @@ export async function createAccount(data: {
     throw new AppError(
       400,
       'Customer and supplier accounts are created from the Customers and Suppliers menus',
+    );
+  }
+
+  if (isMaalKhataCategoryName(category.name)) {
+    throw new AppError(
+      400,
+      'Maal Khata ledgers are created automatically when you add a product',
     );
   }
 
@@ -2379,6 +2388,7 @@ export async function softDeleteAccount(id: number) {
   if (isInventoryAccountName(account.name)) {
     throw new AppError(400, 'The Inventory account cannot be deleted');
   }
+  await assertNotMaalKhataLinkedAccount(id);
   return prisma.account.update({
     where: { id },
     data: { isActive: false },

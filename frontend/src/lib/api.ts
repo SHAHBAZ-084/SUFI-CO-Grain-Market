@@ -28,6 +28,7 @@ export type Product = {
   code: string;
   unit: string | null;
   accountId: number;
+  account?: { id: number; name: string; code: string; ledger?: { balance: number | string } | null };
 };
 
 export type Party = {
@@ -83,20 +84,30 @@ export type InvoiceItemDetail = {
   product?: Product | null;
 };
 
-export type KachiMaalLineDetail = {
+export type MaalLineDetail = {
   id: number;
-  partyAccount?: VoucherAccount | null;
+  jins?: string | null;
+  qism?: string | null;
+  boriOrThelaMode: 'BORI' | 'THELA';
+  bagCount: number | string;
+  bhartii: number | string;
+  dharanCount: number | string;
+  looseKg: number | string;
   totalWeightKg: number | string;
   ratePerMaund: number | string;
   amount: number | string;
+  bardanaQty?: number | string | null;
+  bardanaRate?: number | string | null;
   bardanaAmount?: number | string | null;
   netCreditToParty: number | string;
-};
-
-export type PurchaseMaalLineDetail = KachiMaalLineDetail & {
+  partyAccount?: VoucherAccount | null;
   dammiChecked?: boolean;
   dammiAmount?: number | string | null;
 };
+
+export type KachiMaalLineDetail = MaalLineDetail;
+
+export type PurchaseMaalLineDetail = MaalLineDetail;
 
 export type InvoiceDetail = Invoice & {
   invoiceDate?: string | null;
@@ -107,6 +118,9 @@ export type InvoiceDetail = Invoice & {
   tafseel?: string | null;
   notes?: string | null;
   miscAmount?: number | string | null;
+  lowerBardanaMode?: 'BORI' | 'THELA' | null;
+  lowerBardanaQty?: number | string | null;
+  lowerBardanaRate?: number | string | null;
   lowerBardanaAmount?: number | string | null;
   marketFeeEnabled?: boolean;
   mazduriEnabled?: boolean;
@@ -273,6 +287,7 @@ export const api = {
 
   createPurchaseMaalInvoice(data: {
     invoiceDate: string;
+    productId: number;
     billNo?: string;
     gariNo?: string;
     jins?: string;

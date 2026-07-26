@@ -58,6 +58,7 @@ const invoiceDetailInclude = {
     },
   },
   debitAccount: true,
+  product: { include: { account: true } },
   createdBy: { select: { id: true, displayName: true, username: true } },
 } as const;
 

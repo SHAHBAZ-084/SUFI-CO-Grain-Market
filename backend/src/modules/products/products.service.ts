@@ -1,27 +1,13 @@
-import { AccountType, Prisma } from '@prisma/client';
+import { AccountType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import {
+  ensureMaalKhataCategoryInTx,
+  generateNextMaalKhataCodeInTx,
+  maalKhataAccountName,
+} from './maal-khata';
 
-export const PRODUCTS_CATEGORY_NAME = 'Products';
-
-async function ensureProductsCategoryInTx(tx: Prisma.TransactionClient) {
-  const existing = await tx.accountCategory.findFirst({
-    where: { isActive: true, name: PRODUCTS_CATEGORY_NAME },
-  });
-  if (existing) return existing;
-  return tx.accountCategory.create({ data: { name: PRODUCTS_CATEGORY_NAME } });
-}
-
-async function generateNextAccountCodeInTx(tx: Prisma.TransactionClient): Promise<string> {
-  const accounts = await tx.account.findMany({ select: { code: true } });
-  let max = 0;
-  for (const { code } of accounts) {
-    if (!/^\d+$/.test(code)) continue;
-    const num = parseInt(code, 10);
-    if (!Number.isNaN(num) && num > max) max = num;
-  }
-  return String(max + 1);
-}
+export { MAAL_KHATA_CATEGORY_NAME, maalKhataAccountName } from './maal-khata';
 
 export async function listProducts() {
   return prisma.product.findMany({
@@ -41,16 +27,22 @@ export async function createProduct(data: { name: string; unit?: string; code?: 
   if (existing) throw new AppError(400, `Product "${name}" already exists`);
 
   return prisma.$transaction(async (tx) => {
-    const category = await ensureProductsCategoryInTx(tx);
-    const code = data.code?.trim() || `P${String((await tx.product.count()) + 1).padStart(4, '0')}`;
+    const category = await ensureMaalKhataCategoryInTx(tx);
+    const accountName = maalKhataAccountName(name);
+    const code = data.code?.trim() || (await generateNextMaalKhataCodeInTx(tx));
 
     const codeTaken = await tx.account.findFirst({ where: { code } });
     if (codeTaken) throw new AppError(400, `Account code "${code}" already exists`);
 
+    const nameTaken = await tx.account.findFirst({
+      where: { isActive: true, name: accountName, categoryId: category.id },
+    });
+    if (nameTaken) throw new AppError(400, `Maal Khata ledger "${accountName}" already exists`);
+
     const account = await tx.account.create({
       data: {
         categoryId: category.id,
-        name,
+        name: accountName,
         code,
         type: AccountType.ASSET,
       },

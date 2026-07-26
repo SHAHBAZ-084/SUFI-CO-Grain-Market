@@ -21,6 +21,7 @@ const lineSchema = z.object({
 
 const createSchema = z.object({
   invoiceDate: z.string().min(1),
+  productId: z.number().int().positive(),
   billNo: z.string().optional(),
   gariNo: z.string().optional(),
   jins: z.string().optional(),

@@ -6,6 +6,7 @@ import {
   getTrialBalance,
   KACHI_MAAL_CATEGORY_NAMES,
 } from '../accounting/accounting.service';
+import { createProduct, MAAL_KHATA_CATEGORY_NAME } from '../products/products.service';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
 import { updateSystemPreferences } from '../preferences/preferences.service';
 import { createPurchaseMaalInvoice } from './purchase-maal.service';
@@ -50,6 +51,8 @@ describe('Purchase Maal posting', () => {
   let partyAId: number;
   let buyerId: number;
   let commissionId: number;
+  let wheatProductId: number;
+  let wheatMaalKhataId: number;
   let invoiceDate: string;
 
   beforeAll(async () => {
@@ -78,11 +81,19 @@ describe('Purchase Maal posting', () => {
       AccountType.ASSET,
       'PM-BUYER',
     )).id;
+
+    const wheat = await createProduct({ name: `Wheat PM Test ${Date.now()}` });
+    expect(wheat.account.categoryId).toBeTruthy();
+    const category = await prisma.accountCategory.findUnique({ where: { id: wheat.account.categoryId } });
+    expect(category?.name).toBe(MAAL_KHATA_CATEGORY_NAME);
+    wheatProductId = wheat.id;
+    wheatMaalKhataId = wheat.accountId;
   });
 
-  it('posts one PURCHASE_MAAL voucher with dammi; buyer debit = goods + dammi; trial balance balanced', async () => {
+  it('posts goods to Maal Khata product ledger; buyer debited only for dammi add-ons', async () => {
     const invoice = await createPurchaseMaalInvoice({
       invoiceDate,
+      productId: wheatProductId,
       debitAccountId: buyerId,
       marketFeeEnabled: false,
       mazduriEnabled: false,
@@ -106,6 +117,8 @@ describe('Purchase Maal posting', () => {
 
     expect(invoice.reference).toMatch(/^PM-/);
     expect(Number(invoice.total)).toBe(50_800);
+    expect(invoice.legacyInventoryPosting).toBe(false);
+    expect(invoice.productId).toBeTruthy();
     expect(invoice.vouchers).toHaveLength(1);
 
     const voucher = invoice.vouchers[0]!.voucher;
@@ -114,7 +127,8 @@ describe('Purchase Maal posting', () => {
     const legs = await voucherLegs(voucher.id);
     expect(legs).toEqual(
       expect.arrayContaining([
-        { accountId: buyerId, type: 'DEBIT', amount: 50_800 },
+        { accountId: wheatMaalKhataId, type: 'DEBIT', amount: 50_000 },
+        { accountId: buyerId, type: 'DEBIT', amount: 800 },
         { accountId: partyAId, type: 'CREDIT', amount: 50_000 },
         { accountId: commissionId, type: 'CREDIT', amount: 800 },
       ]),

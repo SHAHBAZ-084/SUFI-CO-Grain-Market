@@ -14,7 +14,7 @@ export function ProductAddPage() {
     setMessage('');
     try {
       const product = await api.createProduct({ name, unit: unit || undefined });
-      setMessage(`Product "${product.name}" created with its ledger account.`);
+      setMessage(`Product "${product.name}" created with Maal Khata ledger ${product.account?.name ?? ''}.`.trim());
       setName('');
       setUnit('');
     } catch (err) {
@@ -23,7 +23,7 @@ export function ProductAddPage() {
   }
 
   return (
-    <PageShell title="Add Product" subtitle="Creates the product and its matching ledger account automatically">
+    <PageShell title="Add Product" subtitle="Creates the product and its Maal Khata inventory ledger automatically">
       <Panel className="max-w-lg">
         <form className="space-y-4" onSubmit={onSubmit}>
           <div>

@@ -40,7 +40,7 @@ export const TOP_NAV: NavGroup[] = [
         kind: 'submenu',
         label: 'Product',
         children: [
-          { label: 'Add Product', to: '/accounts/products/add', description: 'Auto-creates product ledger' },
+          { label: 'Add Product', to: '/accounts/products/add', description: 'Auto-creates Maal Khata inventory ledger' },
           { label: 'Remove Product', to: '/accounts/products/remove' },
         ],
       },

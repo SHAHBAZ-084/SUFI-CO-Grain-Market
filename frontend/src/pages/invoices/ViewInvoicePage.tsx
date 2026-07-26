@@ -2,7 +2,7 @@ import { FormEvent, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { INVOICE_TYPE_LABELS } from '../../config/navigation';
-import { api, type InvoiceDetail } from '../../lib/api';
+import { api, type InvoiceDetail, type SystemPreferences } from '../../lib/api';
 import { buildInvoiceReference, type InvoiceTypeKey } from '../../lib/invoiceReference';
 import { FieldLabel, FinancialButton, PageShell, Panel, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -20,6 +20,7 @@ export function ViewInvoicePage() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
   const [notFoundRef, setNotFoundRef] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -28,6 +29,7 @@ export function ViewInvoicePage() {
     setError('');
     setNotFoundRef(null);
     setInvoice(null);
+    setPrefs(null);
 
     const num = parseInt(invoiceNumber.trim(), 10);
     if (!Number.isFinite(num) || num < 1) {
@@ -38,8 +40,12 @@ export function ViewInvoicePage() {
     const reference = buildInvoiceReference(invoiceType, num);
     setLoading(true);
     try {
-      const row = await api.getInvoiceByReference(reference);
+      const [row, systemPrefs] = await Promise.all([
+        api.getInvoiceByReference(reference),
+        api.getSystemPreferences(),
+      ]);
       setInvoice(row);
+      setPrefs(systemPrefs);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Lookup failed';
       if (message.toLowerCase().includes('no invoice found')) {
@@ -120,7 +126,7 @@ export function ViewInvoicePage() {
           </div>
           <div className="overflow-x-auto rounded-lg border border-border bg-surface2 p-4">
             <div ref={printRef} className="mx-auto w-[800px] max-w-full shadow-sm">
-              <InvoiceBillView invoice={invoice} />
+              <InvoiceBillView invoice={invoice} prefs={prefs} />
             </div>
           </div>
         </div>

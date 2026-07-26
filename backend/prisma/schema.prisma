@@ -246,6 +246,7 @@ model Product {
 
   account      Account       @relation(fields: [accountId], references: [id])
   invoiceItems InvoiceItem[]
+  invoices     Invoice[]
 }
 
 model Invoice {
@@ -271,6 +272,8 @@ model Invoice {
   lowerBardanaAmount   Decimal?
   marketFeeEnabled     Boolean       @default(false)
   mazduriEnabled       Boolean       @default(false)
+  productId              Int?
+  legacyInventoryPosting Boolean       @default(false)
   financialYearId Int?
   createdById     Int
   createdAt       DateTime      @default(now())
@@ -279,6 +282,7 @@ model Invoice {
   customer      Customer?     @relation(fields: [customerId], references: [id])
   supplier      Supplier?     @relation(fields: [supplierId], references: [id])
   debitAccount  Account?      @relation("KachiMaalDebitAccount", fields: [debitAccountId], references: [id])
+  product       Product?      @relation(fields: [productId], references: [id])
   financialYear FinancialYear? @relation(fields: [financialYearId], references: [id])
   createdBy     User          @relation(fields: [createdById], references: [id])
   items         InvoiceItem[]

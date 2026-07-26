@@ -1,288 +1,376 @@
-import { formatDate, formatLedgerAmount, formatVoucherNumber, formatVoucherTypeLabel } from '../../lib/format';
-import { INVOICE_TYPE_LABELS } from '../../config/navigation';
-import type { InvoiceDetail } from '../../lib/api';
+import { BILL_LETTERHEAD, BILL_TITLES } from '../../config/billPrint';
+import type { InvoiceDetail, SystemPreferences } from '../../lib/api';
+import {
+  computeKachiDeductions,
+  computePurchaseDeductions,
+  formatBillAmount,
+  formatBillDate,
+  formatBoriThelaLine,
+  invoiceBillDate,
+  maalLineToBillRow,
+  parseInvoiceDisplayNumber,
+  sumLineAmounts,
+  type BillLineRow,
+} from '../../lib/billPrintFormat';
 
-function FieldRow({ label, value }: { label: string; value: string }) {
+const billFont = 'font-serif text-[13px] leading-snug text-black';
+
+function BillHeader({ title }: { title: string }) {
+  const h = BILL_LETTERHEAD;
   return (
-    <div className="grid grid-cols-[120px_1fr] gap-2 border-b border-border/50 py-2 text-sm">
-      <span className="text-textSecondary">{label}</span>
-      <span className="font-medium text-textPrimary">{value || '—'}</span>
+    <header className="text-center">
+      <h1 className="text-[22px] font-normal underline decoration-1 underline-offset-[3px]">
+        {h.companyName}
+      </h1>
+      <p className="mt-0.5 text-[13px]">{h.subtitle}</p>
+      <p className="mt-1 text-[11px]">
+        Phone:{h.phone}&nbsp;&nbsp;Mobile:{h.mobile}&nbsp;&nbsp;Email:{h.email}
+      </p>
+      <p className="mt-0.5 text-[11px]">Proprietor:{h.proprietor}</p>
+      <div className="my-3 border-b border-dashed border-black" />
+      <h2 className="text-[15px] font-bold tracking-wide">{title}</h2>
+    </header>
+  );
+}
+
+function MetaRow({
+  invoiceNo,
+  date,
+  billNo,
+  gariNo,
+}: {
+  invoiceNo: string;
+  date: string;
+  billNo: string;
+  gariNo: string;
+}) {
+  return (
+    <div className="mt-4 flex justify-between gap-2 text-[12px]">
+      <span>
+        <strong>Invoice#</strong>&nbsp;{invoiceNo}
+      </span>
+      <span>
+        <strong>Date:</strong>&nbsp;{date}
+      </span>
+      <span>
+        <strong>Bill#</strong>&nbsp;{billNo || '—'}
+      </span>
+      <span>
+        <strong>Gari#</strong>&nbsp;{gariNo || '—'}
+      </span>
     </div>
   );
 }
 
-function BillSection({ title, children }: { title: string; children: React.ReactNode }) {
+function PartyBlock({
+  billToLabel,
+  partyCode,
+  partyName,
+  address,
+  product,
+}: {
+  billToLabel: string;
+  partyCode?: string;
+  partyName: string;
+  address?: string | null;
+  product: string;
+}) {
+  const codePrefix = partyCode ? `[${partyCode}]` : '';
   return (
-    <section className="mt-6">
-      <h3 className="mb-3 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-textMuted">
-        {title}
-      </h3>
-      {children}
+    <div className="mt-4 flex items-start justify-between gap-6 border-y border-black py-3">
+      <div className="min-w-0 flex-1">
+        <span className="text-[12px] font-semibold">{billToLabel}</span>
+        <div className="mt-1 inline-block min-w-[240px] border border-black px-3 py-2">
+          <div>
+            {codePrefix}
+            {partyName}
+          </div>
+          {address ? <div className="mt-0.5">{address}</div> : null}
+        </div>
+      </div>
+      <div className="shrink-0 pt-5 text-[12px]">
+        <strong>Product:</strong>&nbsp;{product || '—'}
+      </div>
+    </div>
+  );
+}
+
+function LineTable({ rows }: { rows: BillLineRow[] }) {
+  return (
+    <table className="mt-3 w-full border-collapse text-[12px]">
+      <thead>
+        <tr className="border-y border-black">
+          <th className="py-1.5 pr-2 text-left font-semibold">Variety</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Bori</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Thela</th>
+          <th className="px-1 py-1.5 text-right font-semibold">CompWeight</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Kaat</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Net Weight</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Rate</th>
+          <th className="py-1.5 pl-1 text-right font-semibold">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i} className="border-b border-black/20">
+            <td className="py-1.5 pr-2">{row.variety || '\u00A0'}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{row.bori || '0'}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{row.thela || '0'}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.compWeight)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.kaat)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.netWeight)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.rate)}</td>
+            <td className="py-1.5 pl-1 text-right tabular-nums">{formatBillAmount(row.amount)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function TotalsStack({
+  lines,
+  netAmount,
+}: {
+  lines: Array<{ label: string; value: string; bold?: boolean; boxed?: boolean }>;
+  netAmount: string;
+}) {
+  return (
+    <div className="mt-4 flex justify-end">
+      <div className="min-w-[280px] space-y-1 text-[12px]">
+        {lines.map((line) => (
+          <div key={line.label} className="flex justify-between gap-8">
+            <span>{line.label}</span>
+            <span className={`tabular-nums ${line.bold ? 'font-bold' : ''}`}>{line.value}</span>
+          </div>
+        ))}
+        <div className="flex items-center justify-between gap-4 pt-2">
+          <span className="font-bold">Net Amount:</span>
+          <span className="border-2 border-black px-3 py-0.5 text-[13px] font-bold tabular-nums">
+            {netAmount}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BillFromSection({
+  supplierName,
+  rows,
+  totals,
+  netAmount,
+}: {
+  supplierName: string;
+  rows: BillLineRow[];
+  totals: Array<{ label: string; value: string }>;
+  netAmount: string;
+}) {
+  return (
+    <section className="mt-8">
+      <p className="text-[12px] font-semibold">
+        Bill From:&nbsp;{supplierName}
+      </p>
+      <LineTable rows={rows} />
+      <div className="mt-4 flex justify-end">
+        <div className="min-w-[280px] space-y-1 text-[12px]">
+          {totals.map((line) => (
+            <div key={line.label} className="flex justify-between gap-8">
+              <span>{line.label}</span>
+              <span className="tabular-nums">{line.value}</span>
+            </div>
+          ))}
+          <div className="flex justify-between gap-8 pt-1 font-bold">
+            <span>Net Amount</span>
+            <span className="tabular-nums">{netAmount}</span>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
 
-function MaalHeader({ invoice }: { invoice: InvoiceDetail }) {
-  return (
-    <div className="grid grid-cols-2 gap-x-8 gap-y-1 sm:grid-cols-4">
-      <FieldRow label="Date" value={invoice.invoiceDate ? formatDate(invoice.invoiceDate) : formatDate(invoice.createdAt)} />
-      <FieldRow label="Invoice #" value={invoice.reference} />
-      <FieldRow label="Jins" value={invoice.jins ?? ''} />
-      <FieldRow label="Qism" value={invoice.qism ?? ''} />
-      <FieldRow label="Bill #" value={invoice.billNo ?? ''} />
-      <FieldRow label="Gari #" value={invoice.gariNo ?? ''} />
-      <FieldRow label="Tafseel" value={invoice.tafseel ?? invoice.notes ?? ''} />
-      <FieldRow label="Status" value={invoice.status} />
-    </div>
-  );
-}
+function MaalBillBody({
+  invoice,
+  prefs,
+  title,
+}: {
+  invoice: InvoiceDetail;
+  prefs: SystemPreferences;
+  title: string;
+}) {
+  const lines =
+    invoice.type === 'KACHI_MAAL'
+      ? (invoice.kachiMaalLines ?? [])
+      : (invoice.purchaseMaalLines ?? []);
 
-function KachiMaalBill({ invoice }: { invoice: InvoiceDetail }) {
-  const lines = invoice.kachiMaalLines ?? [];
-  const goodsTotal = lines.reduce((s, l) => s + Number(l.amount), 0);
-  const bardanaTotal = lines.reduce((s, l) => s + Number(l.bardanaAmount ?? 0), 0);
-  const netTotal = lines.reduce((s, l) => s + Number(l.netCreditToParty), 0);
+  const tableRows = lines.map((l) => maalLineToBillRow(l, prefs.kaatPercent));
+  const goodsTotal = sumLineAmounts(tableRows);
+  const misc = Number(invoice.miscAmount ?? 0);
+
+  const lowerQty = Number(invoice.lowerBardanaQty ?? 0);
+  const lowerRate = Number(invoice.lowerBardanaRate ?? 0);
+  const lowerAmount = Number(invoice.lowerBardanaAmount ?? 0);
+  const lowerMode = invoice.lowerBardanaMode;
+  const lowerBori = lowerMode === 'BORI' ? lowerQty : 0;
+  const lowerThela = lowerMode === 'THELA' ? lowerQty : 0;
+
+  let deduction = 0;
+  let deductionLabel = 'Deduction Of Bilty';
+  if (invoice.type === 'KACHI_MAAL') {
+    deduction = computeKachiDeductions(lines, prefs).deduction;
+  } else {
+    const calc = computePurchaseDeductions(
+      lines,
+      prefs,
+      invoice.marketFeeEnabled ?? false,
+      invoice.mazduriEnabled ?? false,
+    );
+    deduction = calc.kanta + calc.marketFee;
+    deductionLabel = 'Less Kanta';
+  }
+
+  const debit = invoice.debitAccount;
+  const extraLine =
+    lowerQty > 0 && lowerRate > 0
+      ? formatBoriThelaLine(lowerBori, lowerRate, lowerThela, lowerRate)
+      : formatBoriThelaLine(0, 0, 0, 0);
 
   return (
     <>
-      <MaalHeader invoice={invoice} />
-      <BillSection title="Party grid">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs uppercase text-textMuted">
-              <th className="py-2 pr-2">Party</th>
-              <th className="py-2 pr-2 text-right">Weight</th>
-              <th className="py-2 pr-2 text-right">Rate</th>
-              <th className="py-2 pr-2 text-right">Amount</th>
-              <th className="py-2 pr-2 text-right">Bardana</th>
-              <th className="py-2 text-right">Net to party</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((line) => (
-              <tr key={line.id} className="border-b border-border/40">
-                <td className="py-2 pr-2">{line.partyAccount?.name ?? '—'}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{formatLedgerAmount(line.totalWeightKg)}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{formatLedgerAmount(line.ratePerMaund)}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{formatLedgerAmount(line.amount)}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">
-                  {line.bardanaAmount != null ? formatLedgerAmount(line.bardanaAmount) : '—'}
-                </td>
-                <td className="py-2 text-right tabular-nums">{formatLedgerAmount(line.netCreditToParty)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </BillSection>
-      <BillSection title="Settlement">
-        <div className="grid grid-cols-2 gap-x-8 sm:grid-cols-3">
-          <FieldRow label="Debit account" value={invoice.debitAccount?.name ?? '—'} />
-          <FieldRow label="Goods total" value={formatLedgerAmount(goodsTotal)} />
-          <FieldRow label="Bardana (rows)" value={formatLedgerAmount(bardanaTotal)} />
-          <FieldRow label="Misc" value={formatLedgerAmount(invoice.miscAmount ?? 0)} />
-          <FieldRow
-            label="Lower bardana"
-            value={
-              invoice.lowerBardanaAmount != null
-                ? formatLedgerAmount(invoice.lowerBardanaAmount)
-                : '—'
-            }
-          />
-          <FieldRow label="Net to parties" value={formatLedgerAmount(netTotal)} />
-          <FieldRow label="Total debit" value={formatLedgerAmount(invoice.total)} />
-        </div>
-      </BillSection>
+      <BillHeader title={title} />
+      <MetaRow
+        invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
+        date={formatBillDate(invoiceBillDate(invoice))}
+        billNo={invoice.billNo ?? ''}
+        gariNo={invoice.gariNo ?? ''}
+      />
+      <PartyBlock
+        billToLabel="Bill To:"
+        partyCode={debit?.code}
+        partyName={debit?.name ?? '—'}
+        product={invoice.jins ?? ''}
+      />
+      <LineTable rows={tableRows} />
+      <TotalsStack
+        lines={[
+          { label: 'Misc. Expanse:', value: formatBillAmount(misc) },
+          { label: 'Total Amount:', value: formatBillAmount(goodsTotal), bold: true },
+          { label: extraLine, value: formatBillAmount(lowerAmount) },
+          { label: deductionLabel, value: formatBillAmount(deduction) },
+        ]}
+        netAmount={formatBillAmount(invoice.total)}
+      />
     </>
   );
 }
 
-function PurchaseMaalBill({ invoice }: { invoice: InvoiceDetail }) {
-  const lines = invoice.purchaseMaalLines ?? [];
-  const goodsTotal = lines.reduce((s, l) => s + Number(l.amount), 0);
-  const dammiTotal = lines.reduce((s, l) => s + Number(l.dammiAmount ?? 0), 0);
-  const bardanaTotal = lines.reduce((s, l) => s + Number(l.bardanaAmount ?? 0), 0);
-  const netTotal = lines.reduce((s, l) => s + Number(l.netCreditToParty), 0);
-
-  return (
-    <>
-      <MaalHeader invoice={invoice} />
-      <BillSection title="Party grid">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs uppercase text-textMuted">
-              <th className="py-2 pr-2">Party</th>
-              <th className="py-2 pr-2 text-right">Weight</th>
-              <th className="py-2 pr-2 text-right">Rate</th>
-              <th className="py-2 pr-2 text-right">Amount</th>
-              <th className="py-2 pr-2 text-right">Bardana</th>
-              <th className="py-2 pr-2 text-right">Dammi</th>
-              <th className="py-2 text-right">Net to party</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((line) => (
-              <tr key={line.id} className="border-b border-border/40">
-                <td className="py-2 pr-2">{line.partyAccount?.name ?? '—'}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{formatLedgerAmount(line.totalWeightKg)}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{formatLedgerAmount(line.ratePerMaund)}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{formatLedgerAmount(line.amount)}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">
-                  {line.bardanaAmount != null ? formatLedgerAmount(line.bardanaAmount) : '—'}
-                </td>
-                <td className="py-2 pr-2 text-right tabular-nums">
-                  {line.dammiChecked && line.dammiAmount != null
-                    ? formatLedgerAmount(line.dammiAmount)
-                    : '—'}
-                </td>
-                <td className="py-2 text-right tabular-nums">{formatLedgerAmount(line.netCreditToParty)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </BillSection>
-      <BillSection title="Settlement">
-        <div className="grid grid-cols-2 gap-x-8 sm:grid-cols-3">
-          <FieldRow label="Debit account" value={invoice.debitAccount?.name ?? '—'} />
-          <FieldRow label="Goods total" value={formatLedgerAmount(goodsTotal)} />
-          <FieldRow label="Dammi total" value={formatLedgerAmount(dammiTotal)} />
-          <FieldRow label="Market fee" value={invoice.marketFeeEnabled ? 'Applied' : 'Off'} />
-          <FieldRow label="Mazduri" value={invoice.mazduriEnabled ? 'Applied' : 'Off'} />
-          <FieldRow label="Bardana (rows)" value={formatLedgerAmount(bardanaTotal)} />
-          <FieldRow
-            label="Lower bardana"
-            value={
-              invoice.lowerBardanaAmount != null
-                ? formatLedgerAmount(invoice.lowerBardanaAmount)
-                : '—'
-            }
-          />
-          <FieldRow label="Net to parties" value={formatLedgerAmount(netTotal)} />
-          <FieldRow label="Buyer total debit" value={formatLedgerAmount(invoice.total)} />
-        </div>
-      </BillSection>
-    </>
-  );
-}
-
-function SaleBill({ invoice }: { invoice: InvoiceDetail }) {
+function SaleBillBody({ invoice, prefs }: { invoice: InvoiceDetail; prefs: SystemPreferences }) {
   const items = invoice.items ?? [];
+  const tableRows: BillLineRow[] = items.map((item) => ({
+    variety: item.label,
+    bori: 0,
+    thela: 0,
+    compWeight: Number(item.quantity),
+    kaat: 0,
+    netWeight: Number(item.quantity),
+    rate: Number(item.unitPrice),
+    amount: Number(item.total),
+  }));
+
+  const goodsTotal = sumLineAmounts(tableRows);
+  const misc = Number(invoice.miscAmount ?? 0);
+  const biltyDeduction = 0;
+
+  const customer = invoice.customer;
+  const supplier = invoice.supplier;
+
+  const purchaseRows = supplier
+    ? tableRows.map((r) => {
+        const kaat = prefs.kaatPercent > 0 ? Math.round(r.compWeight * (prefs.kaatPercent / 100) * 100) / 100 : 0;
+        return { ...r, kaat, netWeight: r.compWeight - kaat };
+      })
+    : [];
+
+  const purchaseThela = purchaseRows.reduce((s, r) => s + r.thela, 0);
+  const kantaDeduction = purchaseThela * prefs.kantaRate;
+  const purchaseNet = Math.max(0, goodsTotal - kantaDeduction);
+
   return (
     <>
-      <div className="grid grid-cols-2 gap-x-8 sm:grid-cols-3">
-        <FieldRow label="Invoice #" value={invoice.reference} />
-        <FieldRow label="Date" value={formatDate(invoice.createdAt)} />
-        <FieldRow label="Status" value={invoice.status} />
-        <FieldRow label="Customer" value={invoice.customer?.name ?? '—'} />
-        <FieldRow label="Supplier" value={invoice.supplier?.name ?? '—'} />
-        <FieldRow label="Notes" value={invoice.notes ?? ''} />
-      </div>
-      <BillSection title="Line items">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs uppercase text-textMuted">
-              <th className="py-2 pr-2">Description</th>
-              <th className="py-2 pr-2 text-right">Qty</th>
-              <th className="py-2 pr-2 text-right">Unit price</th>
-              <th className="py-2 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-b border-border/40">
-                <td className="py-2 pr-2">{item.label}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{formatLedgerAmount(item.quantity)}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{formatLedgerAmount(item.unitPrice)}</td>
-                <td className="py-2 text-right tabular-nums">{formatLedgerAmount(item.total)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-border font-semibold">
-              <td className="py-2" colSpan={3}>Invoice total</td>
-              <td className="py-2 text-right tabular-nums">{formatLedgerAmount(invoice.total)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </BillSection>
+      <BillHeader title="Sale Bill" />
+      <MetaRow
+        invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
+        date={formatBillDate(invoiceBillDate(invoice))}
+        billNo={invoice.billNo ?? ''}
+        gariNo={invoice.gariNo ?? ''}
+      />
+      <PartyBlock
+        billToLabel="Bill To:"
+        partyName={customer?.name ?? '—'}
+        address={customer?.address}
+        product={invoice.jins ?? items[0]?.label ?? ''}
+      />
+      <LineTable rows={tableRows.length ? tableRows : [{ variety: '', bori: 0, thela: 0, compWeight: 0, kaat: 0, netWeight: 0, rate: 0, amount: 0 }]} />
+      <TotalsStack
+        lines={[
+          { label: 'Misc. Expanse:', value: formatBillAmount(misc) },
+          { label: 'Total Amount:', value: formatBillAmount(goodsTotal), bold: true },
+          { label: formatBoriThelaLine(0, 0, 0, 0), value: formatBillAmount(0) },
+          { label: 'Deduction Of Bilty', value: formatBillAmount(biltyDeduction) },
+        ]}
+        netAmount={formatBillAmount(invoice.total)}
+      />
+      {supplier ? (
+        <BillFromSection
+          supplierName={supplier.name}
+          rows={purchaseRows.length ? purchaseRows : tableRows}
+          totals={[
+            { label: 'Less Kanta', value: formatBillAmount(kantaDeduction) },
+            { label: `${purchaseThela} Thela @${formatBillAmount(prefs.kantaRate)}`, value: formatBillAmount(0) },
+          ]}
+          netAmount={formatBillAmount(purchaseNet)}
+        />
+      ) : null}
     </>
   );
 }
 
-function VoucherAudit({ invoice }: { invoice: InvoiceDetail }) {
-  const links = invoice.vouchers ?? [];
-  if (links.length === 0) return null;
+const DEFAULT_PREFS: SystemPreferences = {
+  daamiPercent: 0,
+  paleDariPercent: 0,
+  brokeryPercent: 0,
+  marketFeeRate: 0,
+  bardanaRate: 0,
+  taxPercent: 0,
+  kaatPercent: 0,
+  mazduriPercent: 0,
+  commissionPercent: 0,
+  dalaliPercent: 0,
+  sutliRate: 0,
+  markeetFeeRate: 0,
+  kantaRate: 0,
+  closingDate: null,
+  updatedAt: '',
+};
+
+export function InvoiceBillView({
+  invoice,
+  prefs,
+}: {
+  invoice: InvoiceDetail;
+  prefs?: SystemPreferences | null;
+}) {
+  const p = prefs ?? DEFAULT_PREFS;
+  const title = BILL_TITLES[invoice.type] ?? 'Bill';
 
   return (
-    <BillSection title="Linked vouchers">
-      {links.map(({ voucher }) => {
-        const legs = voucher.ledgerEntries ?? [];
-        const isMultiLeg = voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL';
-
-        return (
-          <div key={voucher.id} className="mb-4 rounded-lg border border-border/60 p-4 last:mb-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold tabular-nums">
-                #{formatVoucherNumber(voucher.number, voucher.type)}
-              </span>
-              <span className="text-textSecondary">{formatVoucherTypeLabel(voucher.type)}</span>
-              <span className="text-textMuted">· {formatLedgerAmount(voucher.amount)}</span>
-              <span className="text-textMuted">· {voucher.status}</span>
-            </div>
-            {isMultiLeg && legs.length > 0 ? (
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-border text-textMuted">
-                    <th className="py-1 pr-2">Account</th>
-                    <th className="py-1 pr-2">Type</th>
-                    <th className="py-1 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {legs.map((leg) => (
-                    <tr key={leg.id} className="border-b border-border/30">
-                      <td className="py-1 pr-2">{leg.ledger?.account?.name ?? '—'}</td>
-                      <td className="py-1 pr-2">{leg.type === 'DEBIT' ? 'Debit' : 'Credit'}</td>
-                      <td className="py-1 text-right tabular-nums">{formatLedgerAmount(leg.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 text-xs text-textSecondary">
-                <span>From: {voucher.creditAccount?.name ?? '—'}</span>
-                <span>To: {voucher.debitAccount?.name ?? '—'}</span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </BillSection>
-  );
-}
-
-export function InvoiceBillView({ invoice }: { invoice: InvoiceDetail }) {
-  const typeLabel = INVOICE_TYPE_LABELS[invoice.type] ?? invoice.type;
-
-  return (
-    <div className="bg-white p-8 text-textPrimary">
-      <header className="border-b-2 border-financial pb-4">
-        <p className="text-xs font-semibold uppercase tracking-widest text-textMuted">Sufi Co Grain Market</p>
-        <h1 className="mt-1 text-2xl font-bold text-financial">{typeLabel}</h1>
-        <p className="mt-1 text-sm text-textSecondary">{invoice.reference}</p>
-      </header>
-
-      {invoice.type === 'KACHI_MAAL' ? <KachiMaalBill invoice={invoice} /> : null}
-      {invoice.type === 'PURCHASE_MAAL' ? <PurchaseMaalBill invoice={invoice} /> : null}
-      {invoice.type === 'SALE_COMMISSION' || invoice.type === 'SALE_PAUNCH' ? (
-        <SaleBill invoice={invoice} />
+    <div className={`${billFont} bg-white px-6 py-8`}>
+      {invoice.type === 'KACHI_MAAL' || invoice.type === 'PURCHASE_MAAL' ? (
+        <MaalBillBody invoice={invoice} prefs={p} title={title} />
       ) : null}
-
-      <VoucherAudit invoice={invoice} />
-
-      {invoice.createdBy ? (
-        <p className="mt-8 border-t border-border pt-4 text-xs text-textMuted">
-          Posted by {invoice.createdBy.displayName || invoice.createdBy.username}
-        </p>
+      {invoice.type === 'SALE_COMMISSION' || invoice.type === 'SALE_PAUNCH' ? (
+        <SaleBillBody invoice={invoice} prefs={p} />
       ) : null}
     </div>
   );

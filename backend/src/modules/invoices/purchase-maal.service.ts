@@ -15,6 +15,7 @@ import {
   KACHI_MAAL_CATEGORY_NAMES,
   type VoucherLeg,
 } from '../accounting/accounting.service';
+import { resolveMaalKhataAccountForProduct } from '../products/maal-khata';
 import { getSystemPreferences } from '../preferences/preferences.service';
 import {
   computePurchaseMaalInvoiceTotals,
@@ -54,6 +55,7 @@ export type PurchaseMaalLineInput = {
 
 export type CreatePurchaseMaalInput = {
   invoiceDate: string;
+  productId: number;
   billNo?: string;
   gariNo?: string;
   jins?: string;
@@ -135,6 +137,7 @@ function buildComputedLines(
 
 function buildLedgerLegs(
   debitAccountId: number,
+  maalKhataAccountId: number,
   computedLines: ComputedLine[],
   totals: ReturnType<typeof computePurchaseMaalInvoiceTotals>,
   systemAccounts: Awaited<ReturnType<typeof ensureKachiMaalAccounts>>,
@@ -143,12 +146,24 @@ function buildLedgerLegs(
 ) {
   const legs: VoucherLeg[] = [];
 
-  legs.push({
-    accountId: debitAccountId,
-    type: LedgerEntryType.DEBIT,
-    amount: totals.totalDebitAmount,
-    description: 'Purchase Maal — goods, dammi & market fee',
-  });
+  if (totals.totalGoodsAmount > 0) {
+    legs.push({
+      accountId: maalKhataAccountId,
+      type: LedgerEntryType.DEBIT,
+      amount: totals.totalGoodsAmount,
+      description: 'Purchase Maal — goods (Maal Khata)',
+    });
+  }
+
+  const buyerAddonDebit = roundMoney(totals.totalDammiAmount + totals.marketFeeAmount);
+  if (buyerAddonDebit > 0) {
+    legs.push({
+      accountId: debitAccountId,
+      type: LedgerEntryType.DEBIT,
+      amount: buyerAddonDebit,
+      description: 'Purchase Maal — dammi & market fee',
+    });
+  }
 
   const mazduriShares = mazduriEnabled
     ? splitMazduriByParty(computedLines, totals.mazduriAmount, totals.totalGoodsAmount)
@@ -278,6 +293,7 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
   return prisma.$transaction(async (tx) => {
     await getActiveFinancialYearId(tx);
     const systemAccounts = await ensureKachiMaalAccounts(tx);
+    const { product, maalKhataAccountId } = await resolveMaalKhataAccountForProduct(tx, data.productId);
     await assertDebitAccount(tx, data.debitAccountId);
     for (const line of computedLines) {
       await assertPurchasePartyAccount(tx, line.partyAccountId);
@@ -286,6 +302,7 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
     const reference = await nextReference(tx);
     const { legs, totalDebits, totalCredits } = buildLedgerLegs(
       data.debitAccountId,
+      maalKhataAccountId,
       computedLines,
       totals,
       systemAccounts,
@@ -308,10 +325,12 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
         invoiceDate,
         billNo: data.billNo?.trim() || null,
         gariNo: data.gariNo?.trim() || null,
-        jins: data.jins?.trim() || null,
+        jins: data.jins?.trim() || product.name,
         qism: data.qism?.trim() || null,
         tafseel: data.tafseel?.trim() || null,
         notes: data.tafseel?.trim() || null,
+        productId: product.id,
+        legacyInventoryPosting: false,
         debitAccountId: data.debitAccountId,
         marketFeeEnabled,
         mazduriEnabled,
@@ -365,6 +384,7 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
       where: { id: invoice.id },
       include: {
         purchaseMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
+        product: { include: { account: true } },
         vouchers: { include: { voucher: { include: { ledgerEntries: true } } } },
         debitAccount: true,
         createdBy: { select: { id: true, displayName: true, username: true } },

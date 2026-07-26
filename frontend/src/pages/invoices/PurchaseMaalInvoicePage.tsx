@@ -321,6 +321,10 @@ export function PurchaseMaalInvoicePage() {
       setError('Add at least one row to the grid');
       return;
     }
+    if (!productId) {
+      setError('Select the product (Maal Khata) for this purchase');
+      return;
+    }
     if (!debitAccountId) {
       setError('Select the debit account for this invoice');
       return;
@@ -334,6 +338,7 @@ export function PurchaseMaalInvoicePage() {
     try {
       const result = await api.createPurchaseMaalInvoice({
         invoiceDate,
+        productId: Number(productId),
         billNo: billNo.trim() || undefined,
         gariNo: gariNo.trim() || undefined,
         jins: jins.trim() || undefined,
