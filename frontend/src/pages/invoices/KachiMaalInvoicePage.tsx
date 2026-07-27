@@ -400,10 +400,9 @@ export function KachiMaalInvoicePage() {
               </div>
             </FormSection>
 
-            {/* Add row — two rows with breathing room */}
             <FormSection label="Add dheri row">
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 xl:items-end">
+                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 xl:items-end">
                   <Field className="sm:col-span-2 xl:col-span-2">
                     <FlatAccountSelect
                       label="Party"
