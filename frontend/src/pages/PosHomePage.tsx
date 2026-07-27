@@ -90,7 +90,7 @@ function MetricCard({
   const Icon = style.icon;
   return (
     <Tile
-      className={`relative min-h-[6.5rem] !p-4 transition-shadow hover:shadow-md ${style.card}`}
+      className={`relative flex min-h-[7rem] flex-col justify-end !p-5 transition-shadow duration-200 ease-out hover:shadow-md ${style.card}`}
     >
       <div
         className={`absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full ${style.badge}`}
@@ -98,9 +98,11 @@ function MetricCard({
       >
         <Icon className="h-5 w-5" strokeWidth={2} />
       </div>
-      <div className="pr-12">
+      <div className="pr-11">
         <p className="text-xs font-medium text-textSecondary">{label}</p>
-        <p className={`mt-2 text-[22px] font-semibold leading-tight ${style.value}`}>{value}</p>
+        <p className={`mt-1.5 text-2xl font-semibold tabular-nums leading-none ${style.value}`}>
+          {value}
+        </p>
       </div>
     </Tile>
   );
@@ -149,7 +151,7 @@ export function PosHomePage() {
     <PageShell title="Dashboard" subtitle="Today at a glance">
       {loadError ? <p className="mb-4 text-sm text-danger">{loadError}</p> : null}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Cash Balance"
           value={summary ? formatLedgerAmount(summary.cashBalance) : '—'}
