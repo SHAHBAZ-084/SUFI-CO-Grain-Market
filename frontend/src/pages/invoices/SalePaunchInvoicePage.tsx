@@ -12,6 +12,10 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { api, Account, AccountCategory, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import {
+  InvoiceGridPlaceholderRows,
+  InvoicePreviewGridShell,
+} from './InvoicePreviewGrid';
+import {
   computeSalePaunchInvoiceTotals,
   computeSalePaunchRow,
   MAAL_KHATA_CATEGORIES,
@@ -34,7 +38,6 @@ type GridRow = {
   totalWeightKg: number;
   netWeightKg: number;
   upperRatePerMaund: number;
-  lowerRatePerMaund: number;
   dammiChecked: boolean;
   bardanaQty: number | null;
   bardanaRate: number | null;
@@ -43,8 +46,6 @@ type GridRow = {
   kanta: number;
   netUpperAmount: number;
   dammiAmount: number;
-  lowerAmount: number;
-  rowRevenue: number;
   bardanaAmount: number | null;
 };
 
@@ -183,12 +184,12 @@ export function SalePaunchInvoicePage() {
   const [kaatKg, setKaatKg] = useState('');
   const [kanta, setKanta] = useState('');
   const [upperRatePerMaund, setUpperRatePerMaund] = useState('');
-  const [lowerRatePerMaund, setLowerRatePerMaund] = useState('');
   const [rowBardanaQty, setRowBardanaQty] = useState('');
   const [rowBardanaRate, setRowBardanaRate] = useState('');
   const [dammiChecked, setDammiChecked] = useState(false);
 
   const [salePartyAccountId, setSalePartyAccountId] = useState('');
+  const [lowerRatePerMaund, setLowerRatePerMaund] = useState('');
   const [taxAmount, setTaxAmount] = useState('');
   const [miscAmount, setMiscAmount] = useState('');
   const [biltyKirayaAmount, setBiltyKirayaAmount] = useState('');
@@ -225,7 +226,6 @@ export function SalePaunchInvoicePage() {
       looseKg: parseNum(looseKg),
       kaatKg: kaatKg.trim() ? parseNum(kaatKg) : 0,
       upperRatePerMaund: parseNum(upperRatePerMaund),
-      lowerRatePerMaund: parseNum(lowerRatePerMaund),
       kanta: kanta.trim() ? parseNum(kanta) : 0,
       bardanaQty: rowBardanaQty.trim() ? parseNum(rowBardanaQty) : null,
       bardanaRate: rowBardanaRate.trim() ? parseNum(rowBardanaRate) : null,
@@ -239,7 +239,6 @@ export function SalePaunchInvoicePage() {
     looseKg,
     kaatKg,
     upperRatePerMaund,
-    lowerRatePerMaund,
     kanta,
     rowBardanaQty,
     rowBardanaRate,
@@ -250,13 +249,14 @@ export function SalePaunchInvoicePage() {
   const invoiceTotals = useMemo(
     () =>
       computeSalePaunchInvoiceTotals(gridRows, {
+        lowerRatePerMaund: lowerRatePerMaund.trim() ? parseNum(lowerRatePerMaund) : 0,
         taxAmount: taxAmount.trim() ? parseNum(taxAmount) : 0,
         miscAmount: miscAmount.trim() ? parseNum(miscAmount) : 0,
         biltyKirayaAmount: biltyKirayaAmount.trim() ? parseNum(biltyKirayaAmount) : 0,
         lowerBardanaQty: lowerBardanaQty.trim() ? parseNum(lowerBardanaQty) : null,
         lowerBardanaRate: lowerBardanaRate.trim() ? parseNum(lowerBardanaRate) : null,
       }),
-    [gridRows, taxAmount, miscAmount, biltyKirayaAmount, lowerBardanaQty, lowerBardanaRate],
+    [gridRows, lowerRatePerMaund, taxAmount, miscAmount, biltyKirayaAmount, lowerBardanaQty, lowerBardanaRate],
   );
 
   function addRow() {
@@ -267,17 +267,12 @@ export function SalePaunchInvoicePage() {
     }
     const bh = parseNum(bhartii);
     const upperRate = parseNum(upperRatePerMaund);
-    const lowerRate = parseNum(lowerRatePerMaund);
     if (!(bh > 0)) {
       setError('Bhartii must be greater than zero');
       return;
     }
     if (!(upperRate > 0)) {
       setError('Upper rate must be greater than zero');
-      return;
-    }
-    if (!(lowerRate > 0)) {
-      setError('Lower rate must be greater than zero');
       return;
     }
     const kaat = kaatKg.trim() ? parseNum(kaatKg) : 0;
@@ -293,10 +288,6 @@ export function SalePaunchInvoicePage() {
       setError('Net upper amount must be greater than zero after kanta');
       return;
     }
-    if (!(entryPreview.lowerAmount > 0)) {
-      setError('Lower amount must be greater than zero');
-      return;
-    }
 
     const maalKhata = accounts.find((a) => String(a.id) === maalKhataAccountId);
     const row: GridRow = {
@@ -310,7 +301,6 @@ export function SalePaunchInvoicePage() {
       looseKg: parseNum(looseKg),
       kaatKg: kaat,
       upperRatePerMaund: upperRate,
-      lowerRatePerMaund: lowerRate,
       dammiChecked,
       bardanaQty: rowBardanaQty.trim() ? parseNum(rowBardanaQty) : null,
       bardanaRate: rowBardanaRate.trim() ? parseNum(rowBardanaRate) : null,
@@ -321,8 +311,6 @@ export function SalePaunchInvoicePage() {
       kanta: entryPreview.kanta,
       netUpperAmount: entryPreview.netUpperAmount,
       dammiAmount: entryPreview.dammiAmount,
-      lowerAmount: entryPreview.lowerAmount,
-      rowRevenue: entryPreview.rowRevenue,
       bardanaAmount: entryPreview.bardanaAmount,
     };
     setGridRows((prev) => [...prev, row]);
@@ -332,7 +320,6 @@ export function SalePaunchInvoicePage() {
     setKaatKg('');
     setKanta('');
     setUpperRatePerMaund('');
-    setLowerRatePerMaund('');
     setRowBardanaQty('');
     setRowBardanaRate('');
     setDammiChecked(false);
@@ -352,6 +339,15 @@ export function SalePaunchInvoicePage() {
     }
     if (!salePartyAccountId) {
       setError('Select a sale party for settlement');
+      return;
+    }
+    const lowerRate = lowerRatePerMaund.trim() ? parseNum(lowerRatePerMaund) : 0;
+    if (!(lowerRate > 0)) {
+      setError('Lower rate must be greater than zero');
+      return;
+    }
+    if (!(invoiceTotals.totalLowerAmount > 0)) {
+      setError('Lower amount must be greater than zero');
       return;
     }
     if (invoiceTotals.lowerBardanaAmount != null && invoiceTotals.lowerBardanaAmount > 0 && !lowerBoriThela) {
@@ -385,7 +381,7 @@ export function SalePaunchInvoicePage() {
           looseKg: row.looseKg,
           kaatKg: row.kaatKg,
           upperRatePerMaund: row.upperRatePerMaund,
-          lowerRatePerMaund: row.lowerRatePerMaund,
+          lowerRatePerMaund: lowerRate,
           kanta: row.kanta,
           bardanaQty: row.bardanaQty,
           bardanaRate: row.bardanaRate,
@@ -400,6 +396,7 @@ export function SalePaunchInvoicePage() {
       setBiltyKirayaAmount('');
       setLowerBardanaQty('');
       setLowerBardanaRate('');
+      setLowerRatePerMaund('');
       const refRow = await api.getNextSalePaunchReference();
       setPredictedRef(refRow.reference);
     } catch (err) {
@@ -410,7 +407,7 @@ export function SalePaunchInvoicePage() {
   }
 
   return (
-    <PageShell title="Sale on Paunch" subtitle="Multi–Maal Khata sale with upper/lower rates, per-row kaat (kg), and kanta">
+    <PageShell title="Sale on Paunch" subtitle="Multi–Maal Khata upper-side rows; lower rate and settlement on the debit side">
       <Panel className="mx-auto w-full overflow-visible !p-6 sm:!p-8">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
@@ -443,7 +440,7 @@ export function SalePaunchInvoicePage() {
 
             <FormSection label="Add dheri row">
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-10 xl:items-end">
+                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 xl:items-end">
                   <Field className="sm:col-span-2 xl:col-span-2">
                     <FlatAccountSelect
                       label="Maal Khata"
@@ -494,15 +491,8 @@ export function SalePaunchInvoicePage() {
                     <FieldLabel>Upper rate / Maund</FieldLabel>
                     <TextInput value={upperRatePerMaund} onChange={(e) => setUpperRatePerMaund(e.target.value)} inputMode="decimal" />
                   </Field>
-                  <Field>
-                    <FieldLabel>Lower rate / Maund</FieldLabel>
-                    <TextInput value={lowerRatePerMaund} onChange={(e) => setLowerRatePerMaund(e.target.value)} inputMode="decimal" />
-                  </Field>
                 </div>
                 <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Net weight (kg)" value={entryPreview.netWeightKg} />
-                  </Field>
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                     <FieldLabel>Bardana qty</FieldLabel>
                     <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
@@ -517,13 +507,10 @@ export function SalePaunchInvoicePage() {
                     onChange={setDammiChecked}
                   />
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Amount" value={entryPreview.netUpperAmount} />
+                    <ReadOnlyAmount label="Net weight (kg)" value={entryPreview.netWeightKg} />
                   </Field>
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Lower amount" value={entryPreview.lowerAmount} />
-                  </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Row revenue" value={entryPreview.rowRevenue} />
+                    <ReadOnlyAmount label="Upper net" value={entryPreview.netUpperAmount} />
                   </Field>
                   {dammiChecked ? (
                     <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
@@ -539,56 +526,49 @@ export function SalePaunchInvoicePage() {
               </div>
             </FormSection>
 
-            {gridRows.length > 0 ? (
-              <FormSection label="Preview grid">
-                <div className="max-h-40 overflow-auto rounded-lg border border-border/60">
-                  <table className="w-full min-w-[1100px] text-left text-sm">
-                    <thead className="sticky top-0 z-10 bg-surface2">
-                      <tr className="border-b border-border text-xs uppercase tracking-wide text-textMuted">
-                        <th className="px-3 py-2.5">Maal Khata</th>
-                        <th className="px-3 py-2.5">Dheri</th>
-                        <th className="px-3 py-2.5 text-right">Weight</th>
-                        <th className="px-3 py-2.5 text-right">Kaat</th>
-                        <th className="px-3 py-2.5 text-right">Net wt</th>
-                        <th className="px-3 py-2.5 text-right">Upper rate</th>
-                        <th className="px-3 py-2.5 text-right">Lower rate</th>
-                        <th className="px-3 py-2.5 text-right">Kanta</th>
-                        <th className="px-3 py-2.5 text-right">Upper net</th>
-                        <th className="px-3 py-2.5 text-right">Lower</th>
-                        <th className="px-3 py-2.5 text-right">Revenue</th>
-                        <th className="px-3 py-2.5 text-right">Dammi</th>
-                        <th className="px-3 py-2.5" />
+            <FormSection label="Preview grid">
+              <InvoicePreviewGridShell>
+                <table className="w-full min-w-[900px] text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-surface2">
+                    <tr className="border-b border-border text-xs uppercase tracking-wide text-textMuted">
+                      <th className="px-3 py-2.5">Maal Khata</th>
+                      <th className="px-3 py-2.5">Dheri</th>
+                      <th className="px-3 py-2.5 text-right">Weight</th>
+                      <th className="px-3 py-2.5 text-right">Kaat</th>
+                      <th className="px-3 py-2.5 text-right">Net wt</th>
+                      <th className="px-3 py-2.5 text-right">Upper rate</th>
+                      <th className="px-3 py-2.5 text-right">Kanta</th>
+                      <th className="px-3 py-2.5 text-right">Upper net</th>
+                      <th className="px-3 py-2.5 text-right">Dammi</th>
+                      <th className="px-3 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gridRows.map((row) => (
+                      <tr key={row.clientId} className="border-b border-border/40">
+                        <td className="px-3 py-2">{row.maalKhataName}</td>
+                        <td className="px-3 py-2 tabular-nums">{row.bagCount}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.totalWeightKg.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.kaatKg.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.netWeightKg.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.upperRatePerMaund)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.kanta)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.netUpperAmount)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {row.dammiChecked ? formatLedgerAmount(row.dammiAmount) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <button type="button" className="text-xs text-danger hover:underline" onClick={() => removeRow(row.clientId)}>
+                            Remove
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {gridRows.map((row) => (
-                        <tr key={row.clientId} className="border-b border-border/40">
-                          <td className="px-3 py-2">{row.maalKhataName}</td>
-                          <td className="px-3 py-2 tabular-nums">{row.bagCount}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{row.totalWeightKg.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{row.kaatKg.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{row.netWeightKg.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.upperRatePerMaund)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.lowerRatePerMaund)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.kanta)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.netUpperAmount)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.lowerAmount)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.rowRevenue)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {row.dammiChecked ? formatLedgerAmount(row.dammiAmount) : '—'}
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <button type="button" className="text-xs text-danger hover:underline" onClick={() => removeRow(row.clientId)}>
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </FormSection>
-            ) : null}
+                    ))}
+                    <InvoiceGridPlaceholderRows columnCount={10} dataRowCount={gridRows.length} />
+                  </tbody>
+                </table>
+              </InvoicePreviewGridShell>
+            </FormSection>
 
             <FormSection label="Settlement (Sale Party debit)">
               <div className="space-y-5">
@@ -604,20 +584,24 @@ export function SalePaunchInvoicePage() {
                       placeholder="Search sale party…"
                     />
                   </Field>
-                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     <ReadOnlyAmount label="Net upper total" value={invoiceTotals.totalNetUpperAmount} />
-                    <ReadOnlyAmount label="Lower total" value={invoiceTotals.totalLowerAmount} />
-                    <ReadOnlyAmount label="Revenue total" value={invoiceTotals.totalRowRevenue} />
                     <ReadOnlyAmount label="Dammi total" value={invoiceTotals.totalDammiAmount} />
+                    {invoiceTotals.totalKaatKg > 0 ? (
+                      <ReadOnlyAmount label="Total kaat (kg)" value={invoiceTotals.totalKaatKg} />
+                    ) : null}
+                    {invoiceTotals.paunchRevenueDifference !== 0 ? (
+                      <ReadOnlyAmount label="Paunch revenue" value={invoiceTotals.paunchRevenueDifference} />
+                    ) : null}
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 xl:items-end">
-                  {invoiceTotals.totalKaatKg > 0 ? (
-                    <ReadOnlyAmount label="Total kaat (kg)" value={invoiceTotals.totalKaatKg} />
-                  ) : null}
-                  {invoiceTotals.paunchRevenueDifference !== 0 ? (
-                    <ReadOnlyAmount label="Paunch revenue" value={invoiceTotals.paunchRevenueDifference} />
-                  ) : null}
+                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 xl:items-end">
+                  <Field>
+                    <FieldLabel>Lower rate / Maund</FieldLabel>
+                    <TextInput value={lowerRatePerMaund} onChange={(e) => setLowerRatePerMaund(e.target.value)} inputMode="decimal" />
+                  </Field>
+                  <ReadOnlyAmount label="Lower amount" value={invoiceTotals.totalLowerAmount} />
+                  <ReadOnlyAmount label="Row revenue" value={invoiceTotals.totalRowRevenue} />
                   <Field>
                     <FieldLabel>Tax</FieldLabel>
                     <TextInput value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} inputMode="decimal" />

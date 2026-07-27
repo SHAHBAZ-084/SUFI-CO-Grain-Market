@@ -126,4 +126,43 @@ describe('Sale Paunch posting', () => {
     const tb = await getTrialBalance();
     expect(tb.isBalanced).toBe(true);
   });
+
+  it('credits misc and increases sale party debit (opposite of tax/bilty party credit)', async () => {
+    let miscId: number;
+    await prisma.$transaction(async (tx) => {
+      miscId = (await ensureSalePaunchAccounts(tx)).misc.id;
+    });
+
+    const invoice = await createSalePaunchInvoice({
+      invoiceDate,
+      salePartyAccountId: salePartyId,
+      miscAmount: 200,
+      lines: [
+        {
+          maalKhataAccountId: wheatMaalKhataId,
+          boriOrThelaMode: BoriThelaMode.BORI,
+          bagCount: 10,
+          bhartii: 100,
+          dharanCount: 0,
+          looseKg: 0,
+          upperRatePerMaund: 2000,
+          lowerRatePerMaund: 2500,
+          kanta: 400,
+          dammiChecked: true,
+        },
+      ],
+      createdById: userId,
+    });
+
+    const legs = await voucherLegs(invoice.vouchers[0]!.voucher.id);
+    expect(legs).toEqual(
+      expect.arrayContaining([
+        { accountId: miscId!, type: 'CREDIT', amount: 200 },
+        { accountId: salePartyId, type: 'DEBIT', amount: 63_493.6 },
+      ]),
+    );
+    expect(legs.some((leg) => leg.accountId === salePartyId && leg.type === 'CREDIT' && leg.amount === 200)).toBe(
+      false,
+    );
+  });
 });

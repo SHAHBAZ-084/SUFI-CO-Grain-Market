@@ -12,6 +12,10 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import {
+  InvoiceGridPlaceholderRows,
+  InvoicePreviewGridShell,
+} from './InvoicePreviewGrid';
+import {
   computeKachiMaalInvoiceTotals,
   computeKachiMaalRow,
   DEBIT_ACCOUNT_CATEGORIES,
@@ -448,15 +452,15 @@ export function KachiMaalInvoicePage() {
                 </div>
                 <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Amount" value={entryPreview.amount} />
-                  </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                     <FieldLabel>Bardana qty</FieldLabel>
                     <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
                   </Field>
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                     <FieldLabel>Bardana rate</FieldLabel>
                     <TextInput value={rowBardanaRate} onChange={(e) => setRowBardanaRate(e.target.value)} inputMode="decimal" />
+                  </Field>
+                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
+                    <ReadOnlyAmount label="Amount" value={entryPreview.amount} />
                   </Field>
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                     <ReadOnlyAmount label="Net to party" value={entryPreview.netCreditToParty} />
@@ -470,54 +474,53 @@ export function KachiMaalInvoicePage() {
               </div>
             </FormSection>
 
-            {gridRows.length > 0 ? (
-              <FormSection label="Preview grid">
-                <div className="max-h-40 overflow-auto rounded-lg border border-border/60">
-                  <table className="w-full min-w-[900px] text-left text-sm">
-                    <thead className="sticky top-0 z-10 bg-surface2">
-                      <tr className="border-b border-border text-xs uppercase tracking-wide text-textMuted">
-                        <th className="px-3 py-2.5">Party</th>
-                        <th className="px-3 py-2.5">Dheri</th>
-                        <th className="px-3 py-2.5">Variety</th>
-                        <th className="px-3 py-2.5 text-right">Weight</th>
-                        <th className="px-3 py-2.5 text-right">Rate</th>
-                        <th className="px-3 py-2.5 text-right">Amount</th>
-                        <th className="px-3 py-2.5 text-right">Bardana</th>
-                        <th className="px-3 py-2.5 text-right">Net</th>
-                        <th className="px-3 py-2.5">Mode</th>
-                        <th className="px-3 py-2.5" />
+            <FormSection label="Preview grid">
+              <InvoicePreviewGridShell>
+                <table className="w-full min-w-[900px] text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-surface2">
+                    <tr className="border-b border-border text-xs uppercase tracking-wide text-textMuted">
+                      <th className="px-3 py-2.5">Party</th>
+                      <th className="px-3 py-2.5">Dheri</th>
+                      <th className="px-3 py-2.5">Variety</th>
+                      <th className="px-3 py-2.5 text-right">Weight</th>
+                      <th className="px-3 py-2.5 text-right">Rate</th>
+                      <th className="px-3 py-2.5 text-right">Amount</th>
+                      <th className="px-3 py-2.5 text-right">Bardana</th>
+                      <th className="px-3 py-2.5 text-right">Net</th>
+                      <th className="px-3 py-2.5">Mode</th>
+                      <th className="px-3 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gridRows.map((row) => (
+                      <tr key={row.clientId} className="border-b border-border/40">
+                        <td className="px-3 py-2">{row.partyName}</td>
+                        <td className="px-3 py-2 tabular-nums">{row.bagCount}</td>
+                        <td className="px-3 py-2">{row.qism || row.jins || '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.totalWeightKg)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.ratePerMaund)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.amount)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {row.bardanaAmount != null ? formatLedgerAmount(row.bardanaAmount) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.netCreditToParty)}</td>
+                        <td className="px-3 py-2">{row.boriOrThelaMode === 'BORI' ? 'Bori' : 'Thela'}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            className="text-xs text-danger hover:underline"
+                            onClick={() => removeRow(row.clientId)}
+                          >
+                            Remove
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {gridRows.map((row) => (
-                        <tr key={row.clientId} className="border-b border-border/40">
-                          <td className="px-3 py-2">{row.partyName}</td>
-                          <td className="px-3 py-2 tabular-nums">{row.bagCount}</td>
-                          <td className="px-3 py-2">{row.qism || row.jins || '—'}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.totalWeightKg)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.ratePerMaund)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.amount)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {row.bardanaAmount != null ? formatLedgerAmount(row.bardanaAmount) : '—'}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.netCreditToParty)}</td>
-                          <td className="px-3 py-2">{row.boriOrThelaMode === 'BORI' ? 'Bori' : 'Thela'}</td>
-                          <td className="px-3 py-2 text-right">
-                            <button
-                              type="button"
-                              className="text-xs text-danger hover:underline"
-                              onClick={() => removeRow(row.clientId)}
-                            >
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </FormSection>
-            ) : null}
+                    ))}
+                    <InvoiceGridPlaceholderRows columnCount={10} dataRowCount={gridRows.length} />
+                  </tbody>
+                </table>
+              </InvoicePreviewGridShell>
+            </FormSection>
 
             {/* Settlement — debit + totals in structured rows */}
             <FormSection label="Settlement (debit side)">

@@ -105,7 +105,7 @@ export type SalePaunchInvoiceTotals = {
   lowerBardanaAmount: number | null;
   /** Maal Khata credits (post-kanta) + commission credits — upper-side net. */
   upperNetTotal: number;
-  /** Net owed by sale party after tax, bilty, misc, and bardana. */
+  /** Net owed by sale party after tax, bilty, and bardana; misc increases party debit. */
   lowerNetTotal: number;
   /** lowerNetTotal − upperNetTotal — single invoice-level revenue plug. */
   paunchRevenueDifference: number;
@@ -177,17 +177,17 @@ export function computeSalePaunchInvoiceTotals(
 
   const upperNetTotal = roundMoney(totalNetUpperAmount + totalDammiAmount);
 
-  const lowerNetTotal = roundMoney(
+  const baseLowerNetTotal = roundMoney(
     totalLowerAmount
     + totalDammiAmount
     + totalRowBardanaAmount
     - (lowerBardanaAmount ?? 0)
     - taxAmount
-    - biltyKirayaAmount
-    - miscAmount,
+    - biltyKirayaAmount,
   );
+  const lowerNetTotal = roundMoney(baseLowerNetTotal + miscAmount);
 
-  const paunchRevenueDifference = roundMoney(lowerNetTotal - upperNetTotal);
+  const paunchRevenueDifference = roundMoney(baseLowerNetTotal - upperNetTotal);
 
   return {
     totalWeightKg,

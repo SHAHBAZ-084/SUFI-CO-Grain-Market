@@ -21,7 +21,7 @@ export type SalePaunchRowInput = {
   looseKg: number;
   kaatKg?: number;
   upperRatePerMaund: number;
-  lowerRatePerMaund: number;
+  lowerRatePerMaund?: number;
   kanta?: number;
   bardanaQty?: number | null;
   bardanaRate?: number | null;
@@ -50,8 +50,9 @@ export function computeSalePaunchRow(
   const dammiAmount = input.dammiChecked
     ? roundMoney(netUpperAmount * (prefs.daamiPercent / 100))
     : 0;
-  const lowerAmount = roundMoney(maunds * input.lowerRatePerMaund);
-  const rowRevenue = roundMoney(lowerAmount - upperAmount);
+  const lowerRate = input.lowerRatePerMaund ?? 0;
+  const lowerAmount = lowerRate > 0 ? roundMoney(maunds * lowerRate) : 0;
+  const rowRevenue = lowerRate > 0 ? roundMoney(lowerAmount - upperAmount) : 0;
 
   const hasBardana =
     input.bardanaQty != null
@@ -85,12 +86,11 @@ export function computeSalePaunchInvoiceTotals(
     upperAmount: number;
     kanta: number;
     netUpperAmount: number;
-    lowerAmount: number;
-    rowRevenue: number;
     dammiAmount: number;
     bardanaAmount: number | null;
   }>,
   options: {
+    lowerRatePerMaund?: number;
     taxAmount?: number;
     biltyKirayaAmount?: number;
     miscAmount?: number;
@@ -108,16 +108,21 @@ export function computeSalePaunchInvoiceTotals(
   let totalRowRevenue = 0;
   let totalDammiAmount = 0;
   let totalRowBardanaAmount = 0;
+  const lowerRate = options.lowerRatePerMaund ?? 0;
 
   for (const row of rows) {
+    const maunds = row.netWeightKg / 40;
+    const lowerAmount = lowerRate > 0 ? roundMoney(maunds * lowerRate) : 0;
+    const rowRevenue = lowerRate > 0 ? roundMoney(lowerAmount - row.upperAmount) : 0;
+
     totalWeightKg += row.totalWeightKg;
     totalKaatKg += row.kaatKg;
     totalNetWeightKg += row.netWeightKg;
     totalUpperAmount += row.upperAmount;
     totalKanta += row.kanta;
     totalNetUpperAmount += row.netUpperAmount;
-    totalLowerAmount += row.lowerAmount;
-    totalRowRevenue += row.rowRevenue;
+    totalLowerAmount += lowerAmount;
+    totalRowRevenue += rowRevenue;
     totalDammiAmount += row.dammiAmount;
     totalRowBardanaAmount += row.bardanaAmount ?? 0;
   }
@@ -145,16 +150,16 @@ export function computeSalePaunchInvoiceTotals(
   const miscAmount = roundMoney(Math.max(0, options.miscAmount ?? 0));
 
   const upperNetTotal = roundMoney(totalNetUpperAmount + totalDammiAmount);
-  const lowerNetTotal = roundMoney(
+  const baseLowerNetTotal = roundMoney(
     totalLowerAmount
     + totalDammiAmount
     + totalRowBardanaAmount
     - (lowerBardanaAmount ?? 0)
     - taxAmount
-    - biltyKirayaAmount
-    - miscAmount,
+    - biltyKirayaAmount,
   );
-  const paunchRevenueDifference = roundMoney(lowerNetTotal - upperNetTotal);
+  const lowerNetTotal = roundMoney(baseLowerNetTotal + miscAmount);
+  const paunchRevenueDifference = roundMoney(baseLowerNetTotal - upperNetTotal);
 
   return {
     totalWeightKg,

@@ -12,6 +12,10 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import {
+  InvoiceGridPlaceholderRows,
+  InvoicePreviewGridShell,
+} from './InvoicePreviewGrid';
+import {
   computePurchaseMaalInvoiceTotals,
   computePurchaseMaalRow,
   parseNum,
@@ -472,9 +476,6 @@ export function PurchaseMaalInvoicePage() {
                 </div>
                 <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Amount" value={entryPreview.amount} />
-                  </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                     <FieldLabel>Bardana qty</FieldLabel>
                     <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
                   </Field>
@@ -482,14 +483,17 @@ export function PurchaseMaalInvoicePage() {
                     <FieldLabel>Bardana rate</FieldLabel>
                     <TextInput value={rowBardanaRate} onChange={(e) => setRowBardanaRate(e.target.value)} inputMode="decimal" />
                   </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Net to party" value={entryPreview.netCreditToParty} />
-                  </Field>
                   <ToggleField
                     label={`Dammi (${prefRates.daamiPercent}%)`}
                     checked={dammiChecked}
                     onChange={setDammiChecked}
                   />
+                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
+                    <ReadOnlyAmount label="Amount" value={entryPreview.amount} />
+                  </Field>
+                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
+                    <ReadOnlyAmount label="Net to party" value={entryPreview.netCreditToParty} />
+                  </Field>
                   {dammiChecked ? (
                     <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                       <ReadOnlyAmount label="Dammi amount" value={entryPreview.dammiAmount} />
@@ -504,46 +508,45 @@ export function PurchaseMaalInvoicePage() {
               </div>
             </FormSection>
 
-            {gridRows.length > 0 ? (
-              <FormSection label="Preview grid">
-                <div className="max-h-40 overflow-auto rounded-lg border border-border/60">
-                  <table className="w-full min-w-[980px] text-left text-sm">
-                    <thead className="sticky top-0 z-10 bg-surface2">
-                      <tr className="border-b border-border text-xs uppercase tracking-wide text-textMuted">
-                        <th className="px-3 py-2.5">Party</th>
-                        <th className="px-3 py-2.5">Dheri</th>
-                        <th className="px-3 py-2.5 text-right">Amount</th>
-                        <th className="px-3 py-2.5 text-right">Bardana</th>
-                        <th className="px-3 py-2.5 text-right">Dammi</th>
-                        <th className="px-3 py-2.5 text-right">Net</th>
-                        <th className="px-3 py-2.5" />
+            <FormSection label="Preview grid">
+              <InvoicePreviewGridShell>
+                <table className="w-full min-w-[980px] text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-surface2">
+                    <tr className="border-b border-border text-xs uppercase tracking-wide text-textMuted">
+                      <th className="px-3 py-2.5">Party</th>
+                      <th className="px-3 py-2.5">Dheri</th>
+                      <th className="px-3 py-2.5 text-right">Amount</th>
+                      <th className="px-3 py-2.5 text-right">Bardana</th>
+                      <th className="px-3 py-2.5 text-right">Dammi</th>
+                      <th className="px-3 py-2.5 text-right">Net</th>
+                      <th className="px-3 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gridRows.map((row) => (
+                      <tr key={row.clientId} className="border-b border-border/40">
+                        <td className="px-3 py-2">{row.partyName}</td>
+                        <td className="px-3 py-2 tabular-nums">{row.bagCount}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.amount)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {row.bardanaAmount != null ? formatLedgerAmount(row.bardanaAmount) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {row.dammiChecked ? formatLedgerAmount(row.dammiAmount) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.netCreditToParty)}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button type="button" className="text-xs text-danger hover:underline" onClick={() => removeRow(row.clientId)}>
+                            Remove
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {gridRows.map((row) => (
-                        <tr key={row.clientId} className="border-b border-border/40">
-                          <td className="px-3 py-2">{row.partyName}</td>
-                          <td className="px-3 py-2 tabular-nums">{row.bagCount}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.amount)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {row.bardanaAmount != null ? formatLedgerAmount(row.bardanaAmount) : '—'}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {row.dammiChecked ? formatLedgerAmount(row.dammiAmount) : '—'}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.netCreditToParty)}</td>
-                          <td className="px-3 py-2 text-right">
-                            <button type="button" className="text-xs text-danger hover:underline" onClick={() => removeRow(row.clientId)}>
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </FormSection>
-            ) : null}
+                    ))}
+                    <InvoiceGridPlaceholderRows columnCount={7} dataRowCount={gridRows.length} />
+                  </tbody>
+                </table>
+              </InvoicePreviewGridShell>
+            </FormSection>
 
             <FormSection label="Settlement (Maal Khata debit)">
               <div className="space-y-5">
@@ -567,22 +570,30 @@ export function PurchaseMaalInvoicePage() {
                       </div>
                     )}
                   </Field>
-                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
                     <ReadOnlyAmount label="Goods total" value={invoiceTotals.totalGoodsAmount} />
                     <ReadOnlyAmount label="Dammi total" value={invoiceTotals.totalDammiAmount} />
-                    <ReadOnlyAmount
-                      label={`Market fee (${invoiceTotals.totalCalculatedBags.toFixed(2)} bags)`}
-                      value={invoiceTotals.marketFeeAmount}
-                    />
-                    <ReadOnlyAmount
-                      label={`Mazduri (${prefRates.mazduriPercent}%)`}
-                      value={invoiceTotals.mazduriAmount}
-                    />
+                    <div className="flex flex-wrap items-end gap-x-3 gap-y-4 sm:col-span-2">
+                      <ToggleField label="Apply Market Fee" checked={marketFeeEnabled} onChange={setMarketFeeEnabled} />
+                      <Field className="min-w-[7rem] flex-1">
+                        <ReadOnlyAmount
+                          label={`Market fee (${invoiceTotals.totalCalculatedBags.toFixed(2)} bags)`}
+                          value={invoiceTotals.marketFeeAmount}
+                        />
+                      </Field>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-x-3 gap-y-4 sm:col-span-2">
+                      <ToggleField label="Apply Mazduri" checked={mazduriEnabled} onChange={setMazduriEnabled} />
+                      <Field className="min-w-[7rem] flex-1">
+                        <ReadOnlyAmount
+                          label={`Mazduri (${prefRates.mazduriPercent}%)`}
+                          value={invoiceTotals.mazduriAmount}
+                        />
+                      </Field>
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 xl:items-end">
-                  <ToggleField label="Apply Market Fee" checked={marketFeeEnabled} onChange={setMarketFeeEnabled} />
-                  <ToggleField label="Apply Mazduri" checked={mazduriEnabled} onChange={setMazduriEnabled} />
+                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 xl:items-end">
                   <Field>
                     <FieldLabel>Lower bardana</FieldLabel>
                     <SegmentedControl

@@ -97,4 +97,27 @@ describe('sale-paunch.calculations', () => {
     expect(totals.lowerNetTotal).toBe(60_128.6);
     expect(totals.paunchRevenueDifference).toBe(12_275);
   });
+
+  it('adds misc to sale party debit like Kachi Maal (opposite of tax and bilty)', () => {
+    const row = computeSalePaunchRow(
+      {
+        bagCount: 10,
+        bhartii: 100,
+        dharanCount: 0,
+        looseKg: 0,
+        upperRatePerMaund: 2000,
+        lowerRatePerMaund: 2500,
+        kanta: 400,
+        dammiChecked: true,
+      },
+      prefs,
+    );
+    const withoutMisc = computeSalePaunchInvoiceTotals([row], {});
+    const withMisc = computeSalePaunchInvoiceTotals([row], { miscAmount: 200 });
+    const withTax = computeSalePaunchInvoiceTotals([row], { taxAmount: 200 });
+
+    expect(withMisc.lowerNetTotal).toBe(withoutMisc.lowerNetTotal + 200);
+    expect(withTax.lowerNetTotal).toBe(withoutMisc.lowerNetTotal - 200);
+    expect(withMisc.paunchRevenueDifference).toBe(withoutMisc.paunchRevenueDifference);
+  });
 });

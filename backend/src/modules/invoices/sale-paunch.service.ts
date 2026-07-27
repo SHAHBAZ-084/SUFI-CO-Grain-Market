@@ -249,20 +249,12 @@ function buildLedgerLegs(
   }
 
   if (miscAmount > 0) {
-    legs.push(
-      {
-        accountId: systemAccounts.misc.id,
-        type: LedgerEntryType.DEBIT,
-        amount: miscAmount,
-        description: `Misc${invoiceVoucherHeaderSuffix(header)}`,
-      },
-      {
-        accountId: salePartyAccountId,
-        type: LedgerEntryType.CREDIT,
-        amount: miscAmount,
-        description: `Misc${invoiceVoucherHeaderSuffix(header)}`,
-      },
-    );
+    legs.push({
+      accountId: systemAccounts.misc.id,
+      type: LedgerEntryType.CREDIT,
+      amount: miscAmount,
+      description: `Misc${invoiceVoucherHeaderSuffix(header)}`,
+    });
   }
 
   if (totals.lowerNetTotal > 0) {
