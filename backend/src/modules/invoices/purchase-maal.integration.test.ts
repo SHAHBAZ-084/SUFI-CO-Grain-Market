@@ -49,7 +49,6 @@ async function voucherLegs(voucherId: number) {
 describe('Purchase Maal posting', () => {
   let userId: number;
   let partyAId: number;
-  let buyerId: number;
   let commissionId: number;
   let wheatProductId: number;
   let wheatMaalKhataId: number;
@@ -75,13 +74,6 @@ describe('Purchase Maal posting', () => {
       'PM-PARTY-A',
     )).id;
 
-    buyerId = (await ensureAccountInCategory(
-      KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY,
-      'Buyer PM',
-      AccountType.ASSET,
-      'PM-BUYER',
-    )).id;
-
     const wheat = await createProduct({ name: `Wheat PM Test ${Date.now()}` });
     expect(wheat.account.categoryId).toBeTruthy();
     const category = await prisma.accountCategory.findUnique({ where: { id: wheat.account.categoryId } });
@@ -90,11 +82,11 @@ describe('Purchase Maal posting', () => {
     wheatMaalKhataId = wheat.accountId;
   });
 
-  it('posts goods to Maal Khata product ledger; buyer debited only for dammi add-ons', async () => {
+  it('posts all settlement debits to the product Maal Khata ledger', async () => {
     const invoice = await createPurchaseMaalInvoice({
       invoiceDate,
+      billNo: 'PM-BILL-1',
       productId: wheatProductId,
-      debitAccountId: buyerId,
       marketFeeEnabled: false,
       mazduriEnabled: false,
       lowerBardanaMode: null,
@@ -119,20 +111,27 @@ describe('Purchase Maal posting', () => {
     expect(Number(invoice.total)).toBe(50_800);
     expect(invoice.legacyInventoryPosting).toBe(false);
     expect(invoice.productId).toBeTruthy();
+    expect(invoice.debitAccountId).toBe(wheatMaalKhataId);
     expect(invoice.vouchers).toHaveLength(1);
 
     const voucher = invoice.vouchers[0]!.voucher;
     expect(voucher.type).toBe('PURCHASE_MAAL');
+    expect(voucher.reference).toBe('PM-BILL-1');
 
     const legs = await voucherLegs(voucher.id);
     expect(legs).toEqual(
       expect.arrayContaining([
-        { accountId: wheatMaalKhataId, type: 'DEBIT', amount: 50_000 },
-        { accountId: buyerId, type: 'DEBIT', amount: 800 },
+        { accountId: wheatMaalKhataId, type: 'DEBIT', amount: 50_800 },
         { accountId: partyAId, type: 'CREDIT', amount: 50_000 },
         { accountId: commissionId, type: 'CREDIT', amount: 800 },
       ]),
     );
+
+    const maalKhataDebits = legs.filter(
+      (leg) => leg.type === 'DEBIT' && leg.accountId === wheatMaalKhataId,
+    );
+    expect(maalKhataDebits).toHaveLength(1);
+    expect(maalKhataDebits[0]!.amount).toBe(50_800);
 
     const totalDebit = legs.filter((leg) => leg.type === 'DEBIT').reduce((s, leg) => s + leg.amount, 0);
     const totalCredit = legs.filter((leg) => leg.type === 'CREDIT').reduce((s, leg) => s + leg.amount, 0);

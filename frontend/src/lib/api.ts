@@ -293,7 +293,6 @@ export const api = {
     jins?: string;
     qism?: string;
     tafseel?: string;
-    debitAccountId: number;
     marketFeeEnabled?: boolean;
     mazduriEnabled?: boolean;
     lowerBardanaMode?: 'BORI' | 'THELA' | null;

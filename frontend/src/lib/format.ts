@@ -28,10 +28,8 @@ export function formatVoucherTypeLabel(type: string) {
   return VOUCHER_TYPE_LABELS[key] ?? type;
 }
 
-export function formatVoucherNumber(number: number | string | null | undefined, type?: string) {
+export function formatVoucherNumber(number: number | string | null | undefined, _type?: string) {
   if (number == null || number === '') return '';
-  if (type?.toUpperCase() === 'KACHI') return `K-${number}`;
-  if (type?.toUpperCase() === 'PURCHASE_MAAL') return `PM-${number}`;
   return String(number);
 }
 

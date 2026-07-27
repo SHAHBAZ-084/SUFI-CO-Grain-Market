@@ -160,6 +160,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
   it('posts one KACHI voucher with five merged ledger entries; debits = credits = 50,800; trial balance balanced', async () => {
     const invoice = await createKachiMaalInvoice({
       invoiceDate,
+      billNo: 'KM-BILL-1',
       debitAccountId: traderXId,
       miscAmount: 0,
       lowerBardanaMode: null,
@@ -187,6 +188,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
 
     const voucher = invoice.vouchers[0]!.voucher;
     expect(voucher.type).toBe('KACHI');
+    expect(voucher.reference).toBe('KM-BILL-1');
     expect(voucher.debitAccountId).toBeNull();
     expect(voucher.creditAccountId).toBeNull();
     expect(Number(voucher.amount)).toBe(50_800);
@@ -220,10 +222,12 @@ describe('Kachi Maal Test 1 — minimal case', () => {
     expect(tb.isBalanced).toBe(true);
 
     const partyLedger = await getLedgerEntries(partyAId);
+    const voucherNo = String(voucher.number);
     const partyVoucherRows = partyLedger.rows.filter(
-      (row) => row.type === 'Kachi' && row.ref === invoice.reference,
+      (row) => row.type === 'Kachi' && row.voucherNo === voucherNo,
     );
     expect(partyVoucherRows).toHaveLength(1);
+    expect(partyVoucherRows.every((row) => row.ref === 'KM-BILL-1')).toBe(true);
   });
 });
 
@@ -352,6 +356,7 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
   it('posts one KACHI voucher with twelve merged ledger entries; all legs sum to 76,580.42; trial balance balanced', async () => {
     const invoice = await createKachiMaalInvoice({
       invoiceDate,
+      billNo: 'KM-BILL-2',
       debitAccountId: traderXId,
       miscAmount: 200,
       lowerBardanaMode: BoriThelaMode.THELA,
@@ -390,6 +395,7 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
 
     const voucher = invoice.vouchers[0]!.voucher;
     expect(voucher.type).toBe('KACHI');
+    expect(voucher.reference).toBe('KM-BILL-2');
 
     const legs = await voucherLegs(voucher.id);
     expect(legs).toHaveLength(12);
@@ -424,10 +430,12 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
     expect(perAccount.get(commissionId)).toBe(1);
 
     const partyALedger = await getLedgerEntries(partyAId);
+    const voucherNo = String(voucher.number);
     const partyAVoucherRows = partyALedger.rows.filter(
-      (row) => row.type === 'Kachi' && row.ref === invoice.reference,
+      (row) => row.type === 'Kachi' && row.voucherNo === voucherNo,
     );
     expect(partyAVoucherRows).toHaveLength(2);
+    expect(partyAVoucherRows.every((row) => row.ref === 'KM-BILL-2')).toBe(true);
 
     const totalDebit = legs.filter((leg) => leg.type === 'DEBIT').reduce((sum, leg) => sum + leg.amount, 0);
     const totalCredit = legs.filter((leg) => leg.type === 'CREDIT').reduce((sum, leg) => sum + leg.amount, 0);

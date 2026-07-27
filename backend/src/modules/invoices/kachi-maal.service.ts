@@ -20,6 +20,12 @@ import {
   computeKachiMaalRow,
   roundMoney,
 } from './kachi-maal.calculations';
+import {
+  blendedLegDescription,
+  rowLegDescription,
+  type InvoiceVoucherHeader,
+  voucherReferenceFromBillNo,
+} from './invoice-voucher-descriptions';
 
 const TYPE_PREFIX = 'KM';
 
@@ -136,14 +142,16 @@ function buildLedgerLegs(
   totals: ReturnType<typeof computeKachiMaalInvoiceTotals>,
   systemAccounts: Awaited<ReturnType<typeof ensureKachiMaalAccounts>>,
   lowerBardanaMode: BoriThelaMode | null | undefined,
+  header: InvoiceVoucherHeader,
 ) {
   const legs: VoucherLeg[] = [];
+  const allLines = computedLines;
 
   legs.push({
     accountId: debitAccountId,
     type: LedgerEntryType.DEBIT,
     amount: totals.totalDebitAmount,
-    description: 'Kachi Maal — goods, fees & commission',
+    description: blendedLegDescription(allLines, header),
   });
 
   const partyNetByAccount = new Map<number, number>();
@@ -161,7 +169,10 @@ function buildLedgerLegs(
       accountId: partyAccountId,
       type: LedgerEntryType.CREDIT,
       amount: netAmount,
-      description: 'Kachi Maal — net settlement',
+      description: blendedLegDescription(
+        allLines.filter((line) => line.partyAccountId === partyAccountId),
+        header,
+      ),
     });
   }
 
@@ -173,13 +184,13 @@ function buildLedgerLegs(
           accountId: bardanaAccountId(line.boriOrThelaMode, systemAccounts),
           type: LedgerEntryType.DEBIT,
           amount: line.bardanaAmount,
-          description: `Kachi Maal — row ${i + 1} bardana`,
+          description: rowLegDescription(line, header),
         },
         {
           accountId: line.partyAccountId,
           type: LedgerEntryType.CREDIT,
           amount: line.bardanaAmount,
-          description: `Kachi Maal — row ${i + 1} bardana`,
+          description: rowLegDescription(line, header),
         },
       );
     }
@@ -194,13 +205,13 @@ function buildLedgerLegs(
         accountId: debitAccountId,
         type: LedgerEntryType.DEBIT,
         amount: totals.lowerBardanaAmount,
-        description: 'Kachi Maal — lower section bardana',
+        description: blendedLegDescription(allLines, header),
       },
       {
         accountId: bardanaAccountId(lowerBardanaMode, systemAccounts),
         type: LedgerEntryType.CREDIT,
         amount: totals.lowerBardanaAmount,
-        description: 'Kachi Maal — lower section bardana',
+        description: blendedLegDescription(allLines, header),
       },
     );
   }
@@ -210,7 +221,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.mazduri.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.totalPaleDari,
-      description: 'Kachi Maal — Pale Dari / Mazduri',
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -219,7 +230,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.broker.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.totalBrokery,
-      description: 'Kachi Maal — Brokery',
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -228,7 +239,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.marketFee.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.marketFeeAmount,
-      description: 'Kachi Maal — Market Fee',
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -244,7 +255,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.misc.id,
       type: LedgerEntryType.CREDIT,
       amount: miscAmount,
-      description: 'Kachi Maal — Misc',
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -253,7 +264,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.commission.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.profitAmount,
-      description: 'Kachi Maal — Daami / Commission',
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -298,6 +309,11 @@ export async function createKachiMaalInvoice(data: CreateKachiMaalInput) {
       await assertPurchasePartyAccount(tx, line.partyAccountId);
     }
 
+    const voucherHeader: InvoiceVoucherHeader = {
+      tafseel: data.tafseel,
+      gariNo: data.gariNo,
+    };
+
     const reference = await nextReference(tx);
     const { legs, totalDebits, totalCredits, miscAmount } = buildLedgerLegs(
       data.debitAccountId,
@@ -305,6 +321,7 @@ export async function createKachiMaalInvoice(data: CreateKachiMaalInput) {
       totals,
       systemAccounts,
       data.lowerBardanaMode,
+      voucherHeader,
     );
 
     if (Math.abs(totalDebits - totalCredits) > 0.01) {
@@ -363,7 +380,7 @@ export async function createKachiMaalInvoice(data: CreateKachiMaalInput) {
       amount: totalDebits,
       date: data.invoiceDate,
       description: `Kachi Maal Invoice ${reference}`,
-      reference: invoice.reference,
+      reference: voucherReferenceFromBillNo(data.billNo),
       createdById: data.createdById,
     });
 

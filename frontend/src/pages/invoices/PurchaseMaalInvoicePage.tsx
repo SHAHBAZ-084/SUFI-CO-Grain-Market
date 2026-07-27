@@ -14,7 +14,6 @@ import { formatLedgerAmount } from '../../lib/format';
 import {
   computePurchaseMaalInvoiceTotals,
   computePurchaseMaalRow,
-  DEBIT_ACCOUNT_CATEGORIES,
   parseNum,
   PURCHASE_PARTY_CATEGORIES,
 } from '../../lib/purchaseMaalCalculations';
@@ -184,7 +183,6 @@ export function PurchaseMaalInvoicePage() {
   const [rowBardanaRate, setRowBardanaRate] = useState('');
   const [dammiChecked, setDammiChecked] = useState(false);
 
-  const [debitAccountId, setDebitAccountId] = useState('');
   const [marketFeeEnabled, setMarketFeeEnabled] = useState(false);
   const [mazduriEnabled, setMazduriEnabled] = useState(false);
   const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>('BORI');
@@ -195,6 +193,14 @@ export function PurchaseMaalInvoicePage() {
     () => products.map((p) => ({ value: String(p.id), label: p.name })),
     [products],
   );
+
+  const selectedProduct = useMemo(
+    () => products.find((p) => String(p.id) === productId) ?? null,
+    [products, productId],
+  );
+
+  const maalKhataAccount = selectedProduct?.account ?? null;
+  const maalKhataMissing = Boolean(productId && !maalKhataAccount?.id);
 
   const reload = useCallback(async () => {
     const refRow = await api.getNextPurchaseMaalReference();
@@ -322,11 +328,11 @@ export function PurchaseMaalInvoicePage() {
       return;
     }
     if (!productId) {
-      setError('Select the product (Maal Khata) for this purchase');
+      setError('Select Jins (product) first');
       return;
     }
-    if (!debitAccountId) {
-      setError('Select the debit account for this invoice');
+    if (maalKhataMissing) {
+      setError('This product has no Maal Khata ledger — re-add the product or migrate it before posting');
       return;
     }
     if (invoiceTotals.lowerBardanaAmount != null && invoiceTotals.lowerBardanaAmount > 0 && !lowerBoriThela) {
@@ -344,7 +350,6 @@ export function PurchaseMaalInvoicePage() {
         jins: jins.trim() || undefined,
         qism: qism.trim() || undefined,
         tafseel: tafseel.trim() || undefined,
-        debitAccountId: Number(debitAccountId),
         marketFeeEnabled,
         mazduriEnabled,
         lowerBardanaMode:
@@ -546,18 +551,27 @@ export function PurchaseMaalInvoicePage() {
               </FormSection>
             ) : null}
 
-            <FormSection label="Settlement (debit side)">
+            <FormSection label="Settlement (Maal Khata debit)">
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,280px)_1fr] lg:items-start">
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,320px)_1fr] lg:items-start">
                   <Field>
-                    <FlatAccountSelect
-                      label="Debit account"
-                      categoryNames={DEBIT_ACCOUNT_CATEGORIES}
-                      categories={categories}
-                      accounts={accounts}
-                      value={debitAccountId}
-                      onChange={setDebitAccountId}
-                    />
+                    <FieldLabel>Debit account</FieldLabel>
+                    {!productId ? (
+                      <div className="rounded-lg border border-border/60 bg-surface3/70 px-3 py-2 text-sm text-textMuted">
+                        Select Jins first
+                      </div>
+                    ) : maalKhataMissing ? (
+                      <div className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-sm text-danger">
+                        No Maal Khata ledger linked to this product
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm font-medium text-textPrimary">
+                        {maalKhataAccount?.name ?? '—'}
+                        {maalKhataAccount?.code ? (
+                          <span className="ml-2 text-textMuted">({maalKhataAccount.code})</span>
+                        ) : null}
+                      </div>
+                    )}
                   </Field>
                   <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
                     <ReadOnlyAmount label="Goods total" value={invoiceTotals.totalGoodsAmount} />
@@ -601,7 +615,7 @@ export function PurchaseMaalInvoicePage() {
               </div>
               <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5">
                 <div className="flex items-baseline gap-4">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-textMuted">Buyer total debit</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-textMuted">Maal Khata total debit</span>
                   <span className="text-2xl font-bold tabular-nums text-financial">
                     {formatLedgerAmount(invoiceTotals.totalDebitAmount)}
                   </span>

@@ -23,6 +23,12 @@ import {
   roundMoney,
   splitMazduriByParty,
 } from './purchase-maal.calculations';
+import {
+  blendedLegDescription,
+  rowLegDescription,
+  type InvoiceVoucherHeader,
+  voucherReferenceFromBillNo,
+} from './invoice-voucher-descriptions';
 
 const TYPE_PREFIX = 'PM';
 
@@ -61,7 +67,6 @@ export type CreatePurchaseMaalInput = {
   jins?: string;
   qism?: string;
   tafseel?: string;
-  debitAccountId: number;
   marketFeeEnabled?: boolean;
   mazduriEnabled?: boolean;
   lowerBardanaMode?: BoriThelaMode | null;
@@ -94,23 +99,6 @@ async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountI
   return account;
 }
 
-async function assertDebitAccount(tx: Prisma.TransactionClient, accountId: number) {
-  const account = await tx.account.findFirst({
-    where: { id: accountId, isActive: true },
-    include: { category: true },
-  });
-  if (!account) throw new AppError(400, 'Invalid debit account');
-  const allowed = new Set<string>([
-    KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE,
-    KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE,
-    KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY,
-  ]);
-  if (!allowed.has(account.category.name)) {
-    throw new AppError(400, 'Debit account must be a Purchase Party or Sale Party account');
-  }
-  return account;
-}
-
 type ComputedLine = PurchaseMaalLineInput & {
   totalWeightKg: number;
   amount: number;
@@ -136,32 +124,23 @@ function buildComputedLines(
 }
 
 function buildLedgerLegs(
-  debitAccountId: number,
   maalKhataAccountId: number,
   computedLines: ComputedLine[],
   totals: ReturnType<typeof computePurchaseMaalInvoiceTotals>,
   systemAccounts: Awaited<ReturnType<typeof ensureKachiMaalAccounts>>,
   lowerBardanaMode: BoriThelaMode | null | undefined,
   mazduriEnabled: boolean,
+  header: InvoiceVoucherHeader,
 ) {
   const legs: VoucherLeg[] = [];
+  const allLines = computedLines;
 
-  if (totals.totalGoodsAmount > 0) {
+  if (totals.totalDebitAmount > 0) {
     legs.push({
       accountId: maalKhataAccountId,
       type: LedgerEntryType.DEBIT,
-      amount: totals.totalGoodsAmount,
-      description: 'Purchase Maal — goods (Maal Khata)',
-    });
-  }
-
-  const buyerAddonDebit = roundMoney(totals.totalDammiAmount + totals.marketFeeAmount);
-  if (buyerAddonDebit > 0) {
-    legs.push({
-      accountId: debitAccountId,
-      type: LedgerEntryType.DEBIT,
-      amount: buyerAddonDebit,
-      description: 'Purchase Maal — dammi & market fee',
+      amount: totals.totalDebitAmount,
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -185,7 +164,10 @@ function buildLedgerLegs(
       accountId: partyAccountId,
       type: LedgerEntryType.CREDIT,
       amount: net,
-      description: 'Purchase Maal — net settlement',
+      description: blendedLegDescription(
+        allLines.filter((line) => line.partyAccountId === partyAccountId),
+        header,
+      ),
     });
   }
 
@@ -197,13 +179,13 @@ function buildLedgerLegs(
           accountId: bardanaAccountId(line.boriOrThelaMode, systemAccounts),
           type: LedgerEntryType.DEBIT,
           amount: line.bardanaAmount,
-          description: `Purchase Maal — row ${i + 1} bardana`,
+          description: rowLegDescription(line, header),
         },
         {
           accountId: line.partyAccountId,
           type: LedgerEntryType.CREDIT,
           amount: line.bardanaAmount,
-          description: `Purchase Maal — row ${i + 1} bardana`,
+          description: rowLegDescription(line, header),
         },
       );
     }
@@ -215,16 +197,16 @@ function buildLedgerLegs(
     }
     legs.push(
       {
-        accountId: debitAccountId,
+        accountId: maalKhataAccountId,
         type: LedgerEntryType.DEBIT,
         amount: totals.lowerBardanaAmount,
-        description: 'Purchase Maal — lower section bardana',
+        description: blendedLegDescription(allLines, header),
       },
       {
         accountId: bardanaAccountId(lowerBardanaMode, systemAccounts),
         type: LedgerEntryType.CREDIT,
         amount: totals.lowerBardanaAmount,
-        description: 'Purchase Maal — lower section bardana',
+        description: blendedLegDescription(allLines, header),
       },
     );
   }
@@ -234,7 +216,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.mazduri.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.mazduriAmount,
-      description: 'Purchase Maal — Mazduri',
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -243,7 +225,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.marketFee.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.marketFeeAmount,
-      description: 'Purchase Maal — Market Fee',
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -252,7 +234,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.commission.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.totalDammiAmount,
-      description: 'Purchase Maal — Dammi / Commission',
+      description: blendedLegDescription(allLines, header),
     });
   }
 
@@ -294,20 +276,24 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
     await getActiveFinancialYearId(tx);
     const systemAccounts = await ensureKachiMaalAccounts(tx);
     const { product, maalKhataAccountId } = await resolveMaalKhataAccountForProduct(tx, data.productId);
-    await assertDebitAccount(tx, data.debitAccountId);
     for (const line of computedLines) {
       await assertPurchasePartyAccount(tx, line.partyAccountId);
     }
 
+    const voucherHeader: InvoiceVoucherHeader = {
+      tafseel: data.tafseel,
+      gariNo: data.gariNo,
+    };
+
     const reference = await nextReference(tx);
     const { legs, totalDebits, totalCredits } = buildLedgerLegs(
-      data.debitAccountId,
       maalKhataAccountId,
       computedLines,
       totals,
       systemAccounts,
       data.lowerBardanaMode,
       mazduriEnabled,
+      voucherHeader,
     );
 
     if (Math.abs(totalDebits - totalCredits) > 0.01) {
@@ -331,7 +317,7 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
         notes: data.tafseel?.trim() || null,
         productId: product.id,
         legacyInventoryPosting: false,
-        debitAccountId: data.debitAccountId,
+        debitAccountId: maalKhataAccountId,
         marketFeeEnabled,
         mazduriEnabled,
         lowerBardanaMode: data.lowerBardanaMode ?? null,
@@ -372,7 +358,7 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
       amount: totalDebits,
       date: data.invoiceDate,
       description: `Purchase Maal Invoice ${reference}`,
-      reference: invoice.reference,
+      reference: voucherReferenceFromBillNo(data.billNo),
       createdById: data.createdById,
     });
 

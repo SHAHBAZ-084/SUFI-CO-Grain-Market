@@ -775,14 +775,12 @@ function voucherDisplayNo(type: VoucherType | null | undefined, number: number |
   return formatVoucherLabel(type, number);
 }
 
-/** Shared voucher label: number only (type shown separately). Kachi uses K-{n}. */
+/** Voucher label — number only; type is shown in its own column. */
 export function formatVoucherLabel(
-  type: VoucherType | null | undefined,
+  _type: VoucherType | null | undefined,
   number: number | null | undefined,
 ): string {
   if (!number) return '0';
-  if (type === 'KACHI') return `K-${number}`;
-  if (type === 'PURCHASE_MAAL') return `PM-${number}`;
   return String(number);
 }
 
@@ -1557,9 +1555,6 @@ export async function createMultiLegVoucherInTx(
   }
 
   const trimmedReference = data.reference.trim();
-  if (!trimmedReference) {
-    throw new AppError(400, 'Reference is required');
-  }
 
   let voucherDate: Date;
   try {
@@ -1580,7 +1575,7 @@ export async function createMultiLegVoucherInTx(
       creditAccountId: null,
       amount: data.amount,
       description: data.description,
-      reference: trimmedReference,
+      reference: trimmedReference || null,
       createdById: data.createdById,
       financialYearId,
       status: VoucherStatus.ACTIVE,

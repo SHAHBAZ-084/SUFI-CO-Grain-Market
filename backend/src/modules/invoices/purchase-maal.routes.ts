@@ -27,7 +27,6 @@ const createSchema = z.object({
   jins: z.string().optional(),
   qism: z.string().optional(),
   tafseel: z.string().optional(),
-  debitAccountId: z.number().int().positive(),
   marketFeeEnabled: z.boolean().optional(),
   mazduriEnabled: z.boolean().optional(),
   lowerBardanaMode: z.nativeEnum(BoriThelaMode).nullable().optional(),
