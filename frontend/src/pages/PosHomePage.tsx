@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Receipt,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
 import { TOP_NAV } from '../config/navigation';
 import { PageShell, Tile } from '../components/ui/PageShell';
 import { api } from '../lib/api';
@@ -9,22 +16,35 @@ type DashboardSummary = Awaited<ReturnType<typeof api.getDashboardSummary>>;
 
 type MetricTone = 'cash' | 'receivables' | 'payables' | 'vouchers';
 
-const METRIC_STYLES: Record<MetricTone, { card: string; value: string }> = {
+const METRIC_STYLES: Record<
+  MetricTone,
+  { card: string; value: string; badge: string; icon: LucideIcon }
+> = {
   cash: {
     card: 'border-l-4 border-metricCashAccent bg-metricCashBg',
     value: 'text-metricCashAccent',
+    badge: 'bg-[color-mix(in_srgb,var(--metric-cash-accent)_14%,var(--surface-2))] text-metricCashAccent',
+    icon: Wallet,
   },
   receivables: {
     card: 'border-l-4 border-metricReceivablesAccent bg-metricReceivablesBg',
     value: 'text-metricReceivablesAccent',
+    badge:
+      'bg-[color-mix(in_srgb,var(--metric-receivables-accent)_14%,var(--surface-2))] text-metricReceivablesAccent',
+    icon: ArrowDownCircle,
   },
   payables: {
     card: 'border-l-4 border-metricPayablesAccent bg-metricPayablesBg',
     value: 'text-metricPayablesAccent',
+    badge: 'bg-[color-mix(in_srgb,var(--metric-payables-accent)_14%,var(--surface-2))] text-metricPayablesAccent',
+    icon: ArrowUpCircle,
   },
   vouchers: {
     card: 'border-l-4 border-metricVouchersAccent bg-metricVouchersBg',
     value: 'text-metricVouchersAccent',
+    badge:
+      'bg-[color-mix(in_srgb,var(--metric-vouchers-accent)_14%,var(--surface-2))] text-metricVouchersAccent',
+    icon: Receipt,
   },
 };
 
@@ -67,10 +87,21 @@ function MetricCard({
   tone: MetricTone;
 }) {
   const style = METRIC_STYLES[tone];
+  const Icon = style.icon;
   return (
-    <Tile className={style.card}>
-      <p className="text-xs font-medium text-textSecondary">{label}</p>
-      <p className={`mt-1 text-[22px] font-semibold leading-tight ${style.value}`}>{value}</p>
+    <Tile
+      className={`relative min-h-[6.5rem] !p-4 transition-shadow hover:shadow-md ${style.card}`}
+    >
+      <div
+        className={`absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full ${style.badge}`}
+        aria-hidden="true"
+      >
+        <Icon className="h-5 w-5" strokeWidth={2} />
+      </div>
+      <div className="pr-12">
+        <p className="text-xs font-medium text-textSecondary">{label}</p>
+        <p className={`mt-2 text-[22px] font-semibold leading-tight ${style.value}`}>{value}</p>
+      </div>
     </Tile>
   );
 }
@@ -141,7 +172,42 @@ export function PosHomePage() {
         />
       </div>
 
-      <Tile className="mt-4">
+      <div className="mt-6">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">New voucher</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {VOUCHER_ACTIONS.map((action) => (
+            <ActionCard
+              key={action.to}
+              to={action.to}
+              title={action.label}
+              description="Open voucher form"
+              cardClassName={action.card}
+              titleClassName={action.title}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">Invoices</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {invoiceLinks.map((link) => {
+            const style = INVOICE_CARD_STYLES[link.to] ?? INVOICE_CARD_STYLES['/invoices/history'];
+            return (
+              <ActionCard
+                key={link.to}
+                to={link.to}
+                title={link.label}
+                description={link.to === '/invoices/history' ? 'All invoice types in one list' : 'Open invoice form'}
+                cardClassName={style.card}
+                titleClassName={style.title}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      <Tile className="mt-6">
         <h2 className="mb-3 text-base font-semibold text-textPrimary">Recent vouchers</h2>
 
         {!summary ? (
@@ -179,41 +245,6 @@ export function PosHomePage() {
           </div>
         )}
       </Tile>
-
-      <div className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">New voucher</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {VOUCHER_ACTIONS.map((action) => (
-            <ActionCard
-              key={action.to}
-              to={action.to}
-              title={action.label}
-              description="Open voucher form"
-              cardClassName={action.card}
-              titleClassName={action.title}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">Invoices</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {invoiceLinks.map((link) => {
-            const style = INVOICE_CARD_STYLES[link.to] ?? INVOICE_CARD_STYLES['/invoices/history'];
-            return (
-              <ActionCard
-                key={link.to}
-                to={link.to}
-                title={link.label}
-                description={link.to === '/invoices/history' ? 'All invoice types in one list' : 'Open invoice form'}
-                cardClassName={style.card}
-                titleClassName={style.title}
-              />
-            );
-          })}
-        </div>
-      </div>
     </PageShell>
   );
 }
