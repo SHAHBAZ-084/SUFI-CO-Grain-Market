@@ -394,7 +394,7 @@ export function PurchaseMaalInvoicePage() {
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <FormSection>
-              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <Field>
                   <FieldLabel>Date</FieldLabel>
                   <TextInput ref={dateRef} type="date" required value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
@@ -410,12 +410,6 @@ export function PurchaseMaalInvoicePage() {
                   <SearchSelect value={productId} onChange={onProductChange} options={productOptions} placeholder="Select product…" />
                 </Field>
                 <Field>
-                  <FieldLabel>Qism</FieldLabel>
-                  <TextInput value={qism} onChange={(e) => setQism(e.target.value)} />
-                </Field>
-              </div>
-              <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-                <Field>
                   <FieldLabel>Bill #</FieldLabel>
                   <TextInput value={billNo} onChange={(e) => setBillNo(e.target.value)} />
                 </Field>
@@ -423,7 +417,7 @@ export function PurchaseMaalInvoicePage() {
                   <FieldLabel>Gari #</FieldLabel>
                   <TextInput value={gariNo} onChange={(e) => setGariNo(e.target.value)} />
                 </Field>
-                <Field className="sm:col-span-2 lg:col-span-1">
+                <Field>
                   <FieldLabel>Tafseel</FieldLabel>
                   <TextInput value={tafseel} onChange={(e) => setTafseel(e.target.value)} />
                 </Field>
@@ -460,16 +454,16 @@ export function PurchaseMaalInvoicePage() {
                     <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
                   </Field>
                   <Field>
-                    <FieldLabel>Bhartii</FieldLabel>
-                    <TextInput value={bhartii} onChange={(e) => setBhartii(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
                     <FieldLabel>Dharan</FieldLabel>
                     <TextInput value={dharanCount} onChange={(e) => setDharanCount(e.target.value)} inputMode="decimal" />
                   </Field>
                   <Field>
                     <FieldLabel>Kilo</FieldLabel>
                     <TextInput value={looseKg} onChange={(e) => setLooseKg(e.target.value)} inputMode="decimal" />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Bhartii</FieldLabel>
+                    <TextInput value={bhartii} onChange={(e) => setBhartii(e.target.value)} inputMode="decimal" />
                   </Field>
                   <Field>
                     <FieldLabel>Rate / Maund</FieldLabel>
