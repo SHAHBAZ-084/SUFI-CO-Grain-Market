@@ -2,6 +2,7 @@ import { INVOICE_TYPE_LABELS } from '../../config/navigation';
 import { PageShell, Panel } from '../../components/ui/PageShell';
 import { KachiMaalInvoicePage } from './KachiMaalInvoicePage';
 import { PurchaseMaalInvoicePage } from './PurchaseMaalInvoicePage';
+import { SalePaunchInvoicePage } from './SalePaunchInvoicePage';
 
 const ROUTE_TO_TYPE: Record<string, string> = {
   'sale-commission': 'SALE_COMMISSION',
@@ -16,6 +17,9 @@ export function InvoiceFormPage({ slug }: { slug: string }) {
   }
   if (slug === 'purchase-maal') {
     return <PurchaseMaalInvoicePage />;
+  }
+  if (slug === 'sale-paunch') {
+    return <SalePaunchInvoicePage />;
   }
 
   const typeKey = ROUTE_TO_TYPE[slug];

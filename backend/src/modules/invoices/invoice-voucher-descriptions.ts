@@ -58,3 +58,18 @@ export function blendedLegDescription(
   const core = `${formatWeightKg(totalWeightKg)} kg @ Rs ${formatRate(blendedRate)}/maund`;
   return core + invoiceVoucherHeaderSuffix(header);
 }
+
+export function salePaunchRowLegDescription(
+  line: InvoiceVoucherLine & { kanta?: number; upperRatePerMaund?: number; lowerRatePerMaund?: number },
+  header: InvoiceVoucherHeader,
+): string {
+  const rate = line.upperRatePerMaund ?? line.ratePerMaund;
+  let core = `${formatWeightKg(line.totalWeightKg)} kg @ Rs ${formatRate(rate)}/maund`;
+  if (line.kanta != null && line.kanta > 0) {
+    core += ` — less kanta ${formatRate(line.kanta)}`;
+  }
+  if (line.lowerRatePerMaund != null && line.lowerRatePerMaund > 0) {
+    core += ` / sale Rs ${formatRate(line.lowerRatePerMaund)}/maund`;
+  }
+  return core + invoiceVoucherHeaderSuffix(header);
+}

@@ -83,6 +83,21 @@ export async function resolveMaalKhataAccountForProduct(
   };
 }
 
+export async function assertMaalKhataAccount(tx: Prisma.TransactionClient, accountId: number) {
+  const account = await tx.account.findFirst({
+    where: { id: accountId, isActive: true },
+    include: { category: true, ledger: true },
+  });
+  if (!account) throw new AppError(400, 'Invalid Maal Khata account');
+  if (!isMaalKhataCategoryName(account.category.name)) {
+    throw new AppError(400, 'Row account must be a Maal Khata ledger');
+  }
+  if (!account.ledger) {
+    await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
+  }
+  return account;
+}
+
 export async function assertNotMaalKhataLinkedAccount(accountId: number) {
   const product = await prisma.product.findFirst({
     where: { accountId, isActive: true },

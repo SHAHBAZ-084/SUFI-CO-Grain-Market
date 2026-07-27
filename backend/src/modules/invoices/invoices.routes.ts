@@ -6,12 +6,14 @@ import { asyncHandler, param, validateBody } from '../../utils/helpers';
 import * as invoicesService from './invoices.service';
 import { registerKachiMaalRoutes } from './kachi-maal.routes';
 import { registerPurchaseMaalRoutes } from './purchase-maal.routes';
+import { registerSalePaunchRoutes } from './sale-paunch.routes';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
 
 registerKachiMaalRoutes(invoicesRouter);
 registerPurchaseMaalRoutes(invoicesRouter);
+registerSalePaunchRoutes(invoicesRouter);
 
 const itemSchema = z.object({
   productId: z.number().int().optional(),
@@ -66,4 +68,3 @@ function draftRoute(type: InvoiceType) {
 }
 
 invoicesRouter.post('/sale-commission', validateBody(draftSchema), draftRoute(InvoiceType.SALE_COMMISSION));
-invoicesRouter.post('/sale-paunch', validateBody(draftSchema), draftRoute(InvoiceType.SALE_PAUNCH));

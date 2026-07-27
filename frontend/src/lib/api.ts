@@ -319,6 +319,48 @@ export const api = {
     });
   },
 
+  getNextSalePaunchReference() {
+    return request<{ reference: string }>('/api/invoices/sale-paunch/next-reference');
+  },
+
+  createSalePaunchInvoice(data: {
+    invoiceDate: string;
+    salePartyAccountId: number;
+    billNo?: string;
+    gariNo?: string;
+    jins?: string;
+    qism?: string;
+    tafseel?: string;
+    taxAmount?: number;
+    biltyKirayaAmount?: number;
+    miscAmount?: number;
+    lowerBardanaMode?: 'BORI' | 'THELA' | null;
+    lowerBardanaQty?: number | null;
+    lowerBardanaRate?: number | null;
+    lines: {
+      maalKhataAccountId: number;
+      jins?: string;
+      qism?: string;
+      boriOrThelaMode: 'BORI' | 'THELA';
+      bagCount: number;
+      bhartii: number;
+      dharanCount: number;
+      looseKg: number;
+      kaatKg?: number;
+      upperRatePerMaund: number;
+      lowerRatePerMaund: number;
+      kanta?: number;
+      bardanaQty?: number | null;
+      bardanaRate?: number | null;
+      dammiChecked?: boolean;
+    }[];
+  }) {
+    return request<KachiMaalInvoiceResult>('/api/invoices/sale-paunch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   getSystemPreferences() {
     return request<SystemPreferences>('/api/preferences');
   },
