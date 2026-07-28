@@ -370,12 +370,15 @@ model SalePaunchLine {
   qism               String?
   boriOrThelaMode    BoriThelaMode
   bagCount           Decimal       @default(0)
+  thelaCount         Decimal       @default(0)
   bhartii            Decimal       @default(0)
   dharanCount        Decimal       @default(0)
   looseKg            Decimal       @default(0)
   totalWeightKg      Decimal       @default(0)
   kaatKg             Decimal       @default(0)
   netWeightKg        Decimal       @default(0)
+  lowerKaatKg        Decimal       @default(0)
+  lowerNetWeightKg   Decimal       @default(0)
   upperRatePerMaund  Decimal       @default(0)
   upperAmount        Decimal       @default(0)
   kanta              Decimal       @default(0)

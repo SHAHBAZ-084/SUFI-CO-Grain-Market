@@ -354,10 +354,10 @@ export const api = {
       qism?: string;
       boriOrThelaMode: 'BORI' | 'THELA';
       bagCount: number;
-      bhartii: number;
-      dharanCount: number;
-      looseKg: number;
+      thelaCount?: number;
+      compWeightKg: number;
       kaatKg?: number;
+      lowerKaatKg?: number;
       upperRatePerMaund: number;
       lowerRatePerMaund: number;
       kanta?: number;

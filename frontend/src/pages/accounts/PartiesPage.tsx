@@ -119,7 +119,7 @@ export function SalePartiesPage() {
   return (
     <PartyPage
       title="Sale Party"
-      subtitle="Customer category with quick-create — each party gets a ledger account"
+      subtitle="Sale Party ledger accounts — each party gets an account under Sale Party"
       listFn={api.listSaleParties}
       createFn={api.createSaleParty}
       removeFn={api.removeSaleParty}
@@ -131,7 +131,7 @@ export function PurchasePartiesPage() {
   return (
     <PartyPage
       title="Purchase Party"
-      subtitle="Supplier category with quick-create — each party gets a ledger account"
+      subtitle="Ext. Purchase Party ledger accounts — each party gets an account under Ext. Purchase Party"
       listFn={api.listPurchaseParties}
       createFn={api.createPurchaseParty}
       removeFn={api.removePurchaseParty}

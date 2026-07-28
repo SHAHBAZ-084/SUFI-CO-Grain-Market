@@ -1,4 +1,3 @@
-export const DHARAN_KG = 5;
 export const MAUND_KG = 40;
 
 export type SalePaunchPreferenceRates = {
@@ -6,13 +5,18 @@ export type SalePaunchPreferenceRates = {
 };
 
 export type SalePaunchRowInput = {
-  bagCount: number;
-  bhartii: number;
-  dharanCount: number;
-  looseKg: number;
+  /** Bori count — stock tracking only, not used in weight/amount calc. */
+  bagCount?: number;
+  /** Thela count — stock tracking only, not used in weight/amount calc. */
+  thelaCount?: number;
+  /** Computer weight in kg (single entry shared by upper & lower). */
+  compWeightKg: number;
+  /** Upper-section kaat deducted from computer weight. */
   kaatKg?: number;
+  /** Lower-section kaat deducted from computer weight (independent of upper). */
+  lowerKaatKg?: number;
   upperRatePerMaund: number;
-  lowerRatePerMaund: number;
+  lowerRatePerMaund?: number;
   kanta?: number;
   bardanaQty?: number | null;
   bardanaRate?: number | null;
@@ -28,6 +32,9 @@ export type SalePaunchRowComputed = {
   kanta: number;
   netUpperAmount: number;
   dammiAmount: number;
+  lowerKaatKg: number;
+  lowerNetWeightKg: number;
+  lowerMaunds: number;
   lowerAmount: number;
   rowRevenue: number;
   bardanaAmount: number | null;
@@ -47,9 +54,7 @@ export function computeSalePaunchRow(
   input: SalePaunchRowInput,
   prefs: Pick<SalePaunchPreferenceRates, 'daamiPercent'>,
 ): SalePaunchRowComputed {
-  const totalWeightKg = roundWeightKg(
-    input.bagCount * input.bhartii + input.dharanCount * DHARAN_KG + input.looseKg,
-  );
+  const totalWeightKg = roundWeightKg(Math.max(0, input.compWeightKg));
   const kaatKg = roundWeightKg(Math.max(0, input.kaatKg ?? 0));
   const netWeightKg = roundWeightKg(Math.max(0, totalWeightKg - kaatKg));
   const maunds = netWeightKg / MAUND_KG;
@@ -59,8 +64,13 @@ export function computeSalePaunchRow(
   const dammiAmount = input.dammiChecked
     ? roundMoney(netUpperAmount * (prefs.daamiPercent / 100))
     : 0;
-  const lowerAmount = roundMoney(maunds * input.lowerRatePerMaund);
-  const rowRevenue = roundMoney(lowerAmount - upperAmount);
+
+  const lowerKaatKg = roundWeightKg(Math.max(0, input.lowerKaatKg ?? 0));
+  const lowerNetWeightKg = roundWeightKg(Math.max(0, totalWeightKg - lowerKaatKg));
+  const lowerMaunds = lowerNetWeightKg / MAUND_KG;
+  const lowerRate = input.lowerRatePerMaund ?? 0;
+  const lowerAmount = lowerRate > 0 ? roundMoney(lowerMaunds * lowerRate) : 0;
+  const rowRevenue = lowerRate > 0 ? roundMoney(lowerAmount - upperAmount) : 0;
 
   const hasBardana =
     input.bardanaQty != null
@@ -80,6 +90,9 @@ export function computeSalePaunchRow(
     kanta,
     netUpperAmount,
     dammiAmount,
+    lowerKaatKg,
+    lowerNetWeightKg,
+    lowerMaunds,
     lowerAmount,
     rowRevenue,
     bardanaAmount,
@@ -95,6 +108,8 @@ export type SalePaunchInvoiceTotals = {
   totalWeightKg: number;
   totalKaatKg: number;
   totalNetWeightKg: number;
+  totalLowerKaatKg: number;
+  totalLowerNetWeightKg: number;
   totalUpperAmount: number;
   totalKanta: number;
   totalNetUpperAmount: number;
@@ -116,6 +131,8 @@ export function computeSalePaunchInvoiceTotals(
     totalWeightKg: number;
     kaatKg: number;
     netWeightKg: number;
+    lowerKaatKg: number;
+    lowerNetWeightKg: number;
     upperAmount: number;
     kanta: number;
     netUpperAmount: number;
@@ -135,6 +152,8 @@ export function computeSalePaunchInvoiceTotals(
   let totalWeightKg = 0;
   let totalKaatKg = 0;
   let totalNetWeightKg = 0;
+  let totalLowerKaatKg = 0;
+  let totalLowerNetWeightKg = 0;
   let totalUpperAmount = 0;
   let totalKanta = 0;
   let totalNetUpperAmount = 0;
@@ -147,6 +166,8 @@ export function computeSalePaunchInvoiceTotals(
     totalWeightKg += row.totalWeightKg;
     totalKaatKg += row.kaatKg;
     totalNetWeightKg += row.netWeightKg;
+    totalLowerKaatKg += row.lowerKaatKg;
+    totalLowerNetWeightKg += row.lowerNetWeightKg;
     totalUpperAmount += row.upperAmount;
     totalKanta += row.kanta;
     totalNetUpperAmount += row.netUpperAmount;
@@ -159,6 +180,8 @@ export function computeSalePaunchInvoiceTotals(
   totalWeightKg = roundWeightKg(totalWeightKg);
   totalKaatKg = roundWeightKg(totalKaatKg);
   totalNetWeightKg = roundWeightKg(totalNetWeightKg);
+  totalLowerKaatKg = roundWeightKg(totalLowerKaatKg);
+  totalLowerNetWeightKg = roundWeightKg(totalLowerNetWeightKg);
   totalUpperAmount = roundMoney(totalUpperAmount);
   totalKanta = roundMoney(totalKanta);
   totalNetUpperAmount = roundMoney(totalNetUpperAmount);
@@ -193,6 +216,8 @@ export function computeSalePaunchInvoiceTotals(
     totalWeightKg,
     totalKaatKg,
     totalNetWeightKg,
+    totalLowerKaatKg,
+    totalLowerNetWeightKg,
     totalUpperAmount,
     totalKanta,
     totalNetUpperAmount,

@@ -51,10 +51,11 @@ export type SalePaunchLineInput = {
   qism?: string;
   boriOrThelaMode: BoriThelaMode;
   bagCount: number;
-  bhartii: number;
-  dharanCount: number;
-  looseKg: number;
+  thelaCount?: number;
+  /** Computer weight in kg — primary weight input. */
+  compWeightKg: number;
   kaatKg?: number;
+  lowerKaatKg?: number;
   upperRatePerMaund: number;
   lowerRatePerMaund: number;
   kanta?: number;
@@ -125,22 +126,33 @@ function buildComputedLines(
 ): ComputedLine[] {
   return lines.map((line) => {
     const computed = computeSalePaunchRow(line, prefs);
+    if (!(line.compWeightKg > 0)) {
+      throw new AppError(400, 'Computer weight must be greater than zero on every line');
+    }
     if (computed.kaatKg > computed.totalWeightKg) {
-      throw new AppError(400, 'Kaat cannot exceed total weight on any row');
+      throw new AppError(400, 'Upper kaat cannot exceed computer weight on any row');
+    }
+    if (computed.lowerKaatKg > computed.totalWeightKg) {
+      throw new AppError(400, 'Lower kaat cannot exceed computer weight on any row');
     }
     if (!(computed.netUpperAmount > 0)) {
       throw new AppError(400, 'Each line must have a positive net upper amount after kanta');
     }
     if (!(computed.netWeightKg > 0)) {
-      throw new AppError(400, 'Each line must have positive net weight after kaat');
+      throw new AppError(400, 'Each line must have positive net weight after upper kaat');
+    }
+    if (!(computed.lowerNetWeightKg > 0)) {
+      throw new AppError(400, 'Each line must have positive net weight after lower kaat');
     }
     if (!(computed.lowerAmount > 0)) {
       throw new AppError(400, 'Each line must have a positive lower sale amount');
     }
-    if (!(line.bhartii > 0)) {
-      throw new AppError(400, 'Bhartii must be greater than zero on every line');
-    }
-    return { ...line, ...computed, dammiChecked: line.dammiChecked ?? false };
+    return {
+      ...line,
+      ...computed,
+      thelaCount: line.thelaCount ?? 0,
+      dammiChecked: line.dammiChecked ?? false,
+    };
   });
 }
 
@@ -391,12 +403,15 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
             qism: line.qism?.trim() || null,
             boriOrThelaMode: line.boriOrThelaMode,
             bagCount: line.bagCount,
-            bhartii: line.bhartii,
-            dharanCount: line.dharanCount,
-            looseKg: line.looseKg,
+            thelaCount: line.thelaCount ?? 0,
+            bhartii: 0,
+            dharanCount: 0,
+            looseKg: 0,
             totalWeightKg: line.totalWeightKg,
             kaatKg: line.kaatKg,
             netWeightKg: line.netWeightKg,
+            lowerKaatKg: line.lowerKaatKg,
+            lowerNetWeightKg: line.lowerNetWeightKg,
             upperRatePerMaund: line.upperRatePerMaund,
             upperAmount: line.upperAmount,
             kanta: line.kanta,

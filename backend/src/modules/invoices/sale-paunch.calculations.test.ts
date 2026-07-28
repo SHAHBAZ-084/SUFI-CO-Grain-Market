@@ -7,13 +7,12 @@ import {
 describe('sale-paunch.calculations', () => {
   const prefs = { daamiPercent: 1.6 };
 
-  it('computes row amounts with kanta deducted from Maal Khata credit only', () => {
+  it('computes row amounts from computer weight with kanta on upper only', () => {
     const row = computeSalePaunchRow(
       {
         bagCount: 10,
-        bhartii: 100,
-        dharanCount: 0,
-        looseKg: 0,
+        thelaCount: 0,
+        compWeightKg: 1000,
         upperRatePerMaund: 2000,
         lowerRatePerMaund: 2500,
         kanta: 400,
@@ -23,20 +22,21 @@ describe('sale-paunch.calculations', () => {
 
     expect(row.totalWeightKg).toBe(1000);
     expect(row.netWeightKg).toBe(1000);
+    expect(row.lowerNetWeightKg).toBe(1000);
     expect(row.upperAmount).toBe(50_000);
     expect(row.netUpperAmount).toBe(49_600);
     expect(row.lowerAmount).toBe(62_500);
     expect(row.rowRevenue).toBe(12_500);
   });
 
-  it('applies per-row kaat kg before both upper and lower rates', () => {
+  it('applies independent upper and lower kaat to the same computer weight', () => {
     const row = computeSalePaunchRow(
       {
         bagCount: 10,
-        bhartii: 100,
-        dharanCount: 0,
-        looseKg: 0,
+        thelaCount: 2,
+        compWeightKg: 1000,
         kaatKg: 50,
+        lowerKaatKg: 100,
         upperRatePerMaund: 2000,
         lowerRatePerMaund: 2500,
         kanta: 400,
@@ -49,17 +49,41 @@ describe('sale-paunch.calculations', () => {
     expect(row.netWeightKg).toBe(950);
     expect(row.upperAmount).toBe(47_500);
     expect(row.netUpperAmount).toBe(47_100);
-    expect(row.lowerAmount).toBe(59_375);
-    expect(row.rowRevenue).toBe(11_875);
+    expect(row.lowerKaatKg).toBe(100);
+    expect(row.lowerNetWeightKg).toBe(900);
+    expect(row.lowerAmount).toBe(56_250);
+    expect(row.rowRevenue).toBe(8_750);
+  });
+
+  it('ignores bagCount and thelaCount in weight and amount calculation', () => {
+    const withCounts = computeSalePaunchRow(
+      {
+        bagCount: 99,
+        thelaCount: 50,
+        compWeightKg: 800,
+        upperRatePerMaund: 1000,
+        lowerRatePerMaund: 1000,
+      },
+      prefs,
+    );
+    const withoutCounts = computeSalePaunchRow(
+      {
+        compWeightKg: 800,
+        upperRatePerMaund: 1000,
+        lowerRatePerMaund: 1000,
+      },
+      prefs,
+    );
+
+    expect(withCounts.totalWeightKg).toBe(withoutCounts.totalWeightKg);
+    expect(withCounts.upperAmount).toBe(withoutCounts.upperAmount);
+    expect(withCounts.lowerAmount).toBe(withoutCounts.lowerAmount);
   });
 
   it('computes invoice-level revenue plug from lower and upper net totals', () => {
     const row = computeSalePaunchRow(
       {
-        bagCount: 10,
-        bhartii: 100,
-        dharanCount: 0,
-        looseKg: 0,
+        compWeightKg: 1000,
         upperRatePerMaund: 2000,
         lowerRatePerMaund: 2500,
         kanta: 400,
@@ -75,14 +99,12 @@ describe('sale-paunch.calculations', () => {
     expect(totals.upperNetTotal + totals.paunchRevenueDifference).toBe(totals.lowerNetTotal);
   });
 
-  it('reduces both sides when kaat is entered per row', () => {
+  it('reduces each side independently when upper and lower kaat differ', () => {
     const row = computeSalePaunchRow(
       {
-        bagCount: 10,
-        bhartii: 100,
-        dharanCount: 0,
-        looseKg: 0,
+        compWeightKg: 1000,
         kaatKg: 50,
+        lowerKaatKg: 50,
         upperRatePerMaund: 2000,
         lowerRatePerMaund: 2500,
         kanta: 400,
@@ -93,6 +115,7 @@ describe('sale-paunch.calculations', () => {
     const totals = computeSalePaunchInvoiceTotals([row], {});
 
     expect(totals.totalKaatKg).toBe(50);
+    expect(totals.totalLowerKaatKg).toBe(50);
     expect(totals.upperNetTotal).toBe(47_853.6);
     expect(totals.lowerNetTotal).toBe(60_128.6);
     expect(totals.paunchRevenueDifference).toBe(12_275);
@@ -101,10 +124,7 @@ describe('sale-paunch.calculations', () => {
   it('adds misc to sale party debit like Kachi Maal (opposite of tax and bilty)', () => {
     const row = computeSalePaunchRow(
       {
-        bagCount: 10,
-        bhartii: 100,
-        dharanCount: 0,
-        looseKg: 0,
+        compWeightKg: 1000,
         upperRatePerMaund: 2000,
         lowerRatePerMaund: 2500,
         kanta: 400,

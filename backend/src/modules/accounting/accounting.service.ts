@@ -1,5 +1,6 @@
 import { AccountType, FinancialYearStatus, LedgerEntryType, Prisma, VoucherStatus, VoucherType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { logger } from '../../lib/logger';
 import { AppError } from '../../utils/helpers';
 import { PaginatedResult } from '../../utils/pagination';
 import { assertNotMaalKhataLinkedAccount, isMaalKhataCategoryName } from '../products/maal-khata';
@@ -308,40 +309,37 @@ async function recomputeLedgerRunningBalancesInTx(
   await tx.ledger.update({ where: { id: ledgerId }, data: { balance: running } });
 }
 
+/** Legacy names — no longer auto-created; cleaned up when empty/unused. */
 export const CUSTOMERS_CATEGORY_NAME = 'Customers';
-
-export function isCustomersCategoryName(name: string) {
-  return name.trim().toLowerCase() === CUSTOMERS_CATEGORY_NAME.toLowerCase();
-}
-
-export async function ensureCustomersCategory() {
-  const existing = await prisma.accountCategory.findFirst({
-    where: { isActive: true, name: { equals: CUSTOMERS_CATEGORY_NAME } },
-  });
-  if (existing) return existing;
-  return prisma.accountCategory.create({ data: { name: CUSTOMERS_CATEGORY_NAME } });
-}
-
 export const SUPPLIERS_CATEGORY_NAME = 'Suppliers';
-
 export const INCOME_CATEGORY_NAME = 'Income';
+export const INVENTORY_CATEGORY_NAME = 'Inventory';
+
 export const SALE_REVENUE_ACCOUNT_NAME = 'Sale Revenue';
 export const SERVICE_REVENUE_ACCOUNT_NAME = 'Service Revenue';
-export const INVENTORY_CATEGORY_NAME = 'Inventory';
 export const INVENTORY_ACCOUNT_NAME = 'Inventory';
 export const CASH_IN_HAND_ACCOUNT_NAME = 'Cash in Hand';
 
+/** Install-time categories only. Party/invoice categories are lazy-created elsewhere. */
 export const DEFAULT_CATEGORY_NAMES = [
   'Assets',
   'Cash',
   'Bank',
+  'Expenses',
+  'Capital',
+] as const;
+
+/** Removed from auto-generation; safe-cleaned when unused. */
+export const REMOVED_AUTO_CATEGORY_NAMES = [
   CUSTOMERS_CATEGORY_NAME,
   SUPPLIERS_CATEGORY_NAME,
   INVENTORY_CATEGORY_NAME,
   INCOME_CATEGORY_NAME,
-  'Expenses',
-  'Capital',
 ] as const;
+
+export function isCustomersCategoryName(name: string) {
+  return name.trim().toLowerCase() === CUSTOMERS_CATEGORY_NAME.toLowerCase();
+}
 
 export function isSuppliersCategoryName(name: string) {
   return name.trim().toLowerCase() === SUPPLIERS_CATEGORY_NAME.toLowerCase();
@@ -352,28 +350,7 @@ export function isInventoryCategoryName(name: string) {
 }
 
 export function isSystemAccountCategoryName(name: string) {
-  return (
-    isCustomersCategoryName(name)
-    || isSuppliersCategoryName(name)
-    || isInventoryCategoryName(name)
-    || isMaalKhataCategoryName(name)
-  );
-}
-
-export async function ensureSuppliersCategory() {
-  const existing = await prisma.accountCategory.findFirst({
-    where: { isActive: true, name: { equals: SUPPLIERS_CATEGORY_NAME } },
-  });
-  if (existing) return existing;
-  return prisma.accountCategory.create({ data: { name: SUPPLIERS_CATEGORY_NAME } });
-}
-
-export async function ensureInventoryCategory() {
-  const existing = await prisma.accountCategory.findFirst({
-    where: { isActive: true, name: { equals: INVENTORY_CATEGORY_NAME } },
-  });
-  if (existing) return existing;
-  return prisma.accountCategory.create({ data: { name: INVENTORY_CATEGORY_NAME } });
+  return isMaalKhataCategoryName(name);
 }
 
 export async function listAccountCategories() {
@@ -564,7 +541,7 @@ export async function createAccount(data: {
   if (isInventoryAccountName(trimmedName)) {
     throw new AppError(
       400,
-      'The Inventory account is managed automatically under the Inventory category',
+      'The name "Inventory" is reserved for legacy inventory accounts and cannot be reused',
     );
   }
 
@@ -576,7 +553,7 @@ export async function createAccount(data: {
   if (isCustomersCategoryName(category.name) || isSuppliersCategoryName(category.name)) {
     throw new AppError(
       400,
-      'Customer and supplier accounts are created from the Customers and Suppliers menus',
+      'Legacy Customers/Suppliers categories are retired — use Sale Party or Purchase Party accounts',
     );
   }
 
@@ -931,73 +908,45 @@ export async function listAccounts() {
   }));
 }
 
-async function ensureCustomersCategoryInTx(tx: Prisma.TransactionClient) {
-  const existing = await tx.accountCategory.findFirst({
-    where: { isActive: true, name: { equals: CUSTOMERS_CATEGORY_NAME } },
-  });
-  if (existing) return existing;
-  return tx.accountCategory.create({ data: { name: CUSTOMERS_CATEGORY_NAME } });
-}
-
 export async function ensureSaleRevenueAccount(tx: Prisma.TransactionClient) {
-  let category = await tx.accountCategory.findFirst({
+  const category = await tx.accountCategory.findFirst({
     where: { isActive: true, name: { equals: INCOME_CATEGORY_NAME } },
   });
-  if (!category) {
-    category = await tx.accountCategory.create({ data: { name: INCOME_CATEGORY_NAME } });
-  }
+  if (!category) return null;
 
   const existing = await tx.account.findFirst({
-    where: { isActive: true, categoryId: category.id,
+    where: {
+      isActive: true,
+      categoryId: category.id,
       name: { equals: SALE_REVENUE_ACCOUNT_NAME },
     },
     include: { ledger: true },
   });
-  if (existing?.ledger) return existing;
-
-  const account = await tx.account.create({
-    data: { categoryId: category.id,
-      name: SALE_REVENUE_ACCOUNT_NAME,
-      code: await generateNextAccountCodeInTx(tx),
-      type: AccountType.REVENUE,
-    },
-  });
-  await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
-  return tx.account.findUniqueOrThrow({ where: { id: account.id }, include: { ledger: true } });
+  return existing?.ledger ? existing : null;
 }
 
 export async function ensureServiceRevenueAccount(tx: Prisma.TransactionClient) {
-  let category = await tx.accountCategory.findFirst({
+  const category = await tx.accountCategory.findFirst({
     where: { isActive: true, name: { equals: INCOME_CATEGORY_NAME } },
   });
-  if (!category) {
-    category = await tx.accountCategory.create({ data: { name: INCOME_CATEGORY_NAME } });
-  }
+  if (!category) return null;
 
   const existing = await tx.account.findFirst({
-    where: { isActive: true, categoryId: category.id,
+    where: {
+      isActive: true,
+      categoryId: category.id,
       name: { equals: SERVICE_REVENUE_ACCOUNT_NAME },
     },
     include: { ledger: true },
   });
-  if (existing?.ledger) return existing;
-
-  const account = await tx.account.create({
-    data: { categoryId: category.id,
-      name: SERVICE_REVENUE_ACCOUNT_NAME,
-      code: await generateNextAccountCodeInTx(tx),
-      type: AccountType.REVENUE,
-    },
-  });
-  await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
-  return tx.account.findUniqueOrThrow({ where: { id: account.id }, include: { ledger: true } });
+  return existing?.ledger ? existing : null;
 }
 
 export async function ensureCustomerAccount(
   tx: Prisma.TransactionClient,
   customer: { id: number; name: string },
 ) {
-  const category = await ensureCustomersCategoryInTx(tx);
+  const category = await ensureCategoryInTx(tx, 'Sale Party');
   const code = `C${String(customer.id).padStart(4, '0')}`;
 
   const existing = await tx.account.findFirst({
@@ -1008,14 +957,21 @@ export async function ensureCustomerAccount(
     if (!existing.ledger) {
       await tx.ledger.create({ data: { accountId: existing.id, balance: 0 } });
     }
-    if (existing.name !== customer.name) {
-      await tx.account.update({ where: { id: existing.id }, data: { name: customer.name } });
+    const updates: Prisma.AccountUpdateInput = {};
+    if (existing.name !== customer.name) updates.name = customer.name;
+    if (existing.categoryId !== category.id) {
+      updates.category = { connect: { id: category.id } };
+      updates.type = AccountType.ASSET;
+    }
+    if (Object.keys(updates).length > 0) {
+      await tx.account.update({ where: { id: existing.id }, data: updates });
     }
     return tx.account.findUniqueOrThrow({ where: { id: existing.id }, include: { ledger: true } });
   }
 
   const account = await tx.account.create({
-    data: { categoryId: category.id,
+    data: {
+      categoryId: category.id,
       name: customer.name,
       code,
       type: AccountType.ASSET,
@@ -1025,19 +981,11 @@ export async function ensureCustomerAccount(
   return tx.account.findUniqueOrThrow({ where: { id: account.id }, include: { ledger: true } });
 }
 
-async function ensureSuppliersCategoryInTx(tx: Prisma.TransactionClient) {
-  const existing = await tx.accountCategory.findFirst({
-    where: { isActive: true, name: { equals: SUPPLIERS_CATEGORY_NAME } },
-  });
-  if (existing) return existing;
-  return tx.accountCategory.create({ data: { name: SUPPLIERS_CATEGORY_NAME } });
-}
-
 export async function ensureSupplierAccount(
   tx: Prisma.TransactionClient,
   supplier: { id: number; name: string },
 ) {
-  const category = await ensureSuppliersCategoryInTx(tx);
+  const category = await ensureCategoryInTx(tx, 'Ext. Purchase Party');
   const code = `S${String(supplier.id).padStart(4, '0')}`;
 
   const existing = await tx.account.findFirst({
@@ -1048,14 +996,21 @@ export async function ensureSupplierAccount(
     if (!existing.ledger) {
       await tx.ledger.create({ data: { accountId: existing.id, balance: 0 } });
     }
-    if (existing.name !== supplier.name) {
-      await tx.account.update({ where: { id: existing.id }, data: { name: supplier.name } });
+    const updates: Prisma.AccountUpdateInput = {};
+    if (existing.name !== supplier.name) updates.name = supplier.name;
+    if (existing.categoryId !== category.id) {
+      updates.category = { connect: { id: category.id } };
+      updates.type = AccountType.LIABILITY;
+    }
+    if (Object.keys(updates).length > 0) {
+      await tx.account.update({ where: { id: existing.id }, data: updates });
     }
     return tx.account.findUniqueOrThrow({ where: { id: existing.id }, include: { ledger: true } });
   }
 
   const account = await tx.account.create({
-    data: { categoryId: category.id,
+    data: {
+      categoryId: category.id,
       name: supplier.name,
       code,
       type: AccountType.LIABILITY,
@@ -1188,24 +1143,34 @@ export async function syncCustomerSupplierAccounts() {
   });
 }
 
+/**
+ * Find existing Inventory account if present. Does not create Inventory category/account.
+ */
 export async function ensureInventoryAccount(tx: Prisma.TransactionClient) {
-  const category = await ensureInventoryCategoryInTx(tx);
+  const category = await tx.accountCategory.findFirst({
+    where: { isActive: true, name: { equals: INVENTORY_CATEGORY_NAME } },
+  });
 
   const allNamed = await tx.account.findMany({
-    where: { isActive: true, name: { equals: INVENTORY_ACCOUNT_NAME },
-    },
+    where: { isActive: true, name: { equals: INVENTORY_ACCOUNT_NAME } },
     include: { ledger: true },
     orderBy: { id: 'asc' },
   });
 
+  if (allNamed.length === 0) return null;
+
   let canonical =
-    allNamed.find((a) => a.categoryId === category.id && a.ledger) ??
-    allNamed.find((a) => a.categoryId === category.id) ??
+    (category
+      ? allNamed.find((a) => a.categoryId === category.id && a.ledger) ??
+        allNamed.find((a) => a.categoryId === category.id)
+      : null) ??
     allNamed.find((a) => a.ledger) ??
     allNamed[0] ??
     null;
 
-  if (canonical && canonical.categoryId !== category.id) {
+  if (!canonical) return null;
+
+  if (category && canonical.categoryId !== category.id) {
     canonical = await tx.account.update({
       where: { id: canonical.id },
       data: { categoryId: category.id, type: AccountType.ASSET },
@@ -1213,24 +1178,12 @@ export async function ensureInventoryAccount(tx: Prisma.TransactionClient) {
     });
   }
 
-  if (canonical && !canonical.ledger) {
+  if (!canonical.ledger) {
     await tx.ledger.create({ data: { accountId: canonical.id, balance: 0 } });
     canonical = await tx.account.findUniqueOrThrow({
       where: { id: canonical.id },
       include: { ledger: true },
     });
-  }
-
-  if (!canonical) {
-    const account = await tx.account.create({
-      data: { categoryId: category.id,
-        name: INVENTORY_ACCOUNT_NAME,
-        code: await generateNextAccountCodeInTx(tx),
-        type: AccountType.ASSET,
-      },
-    });
-    await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
-    return tx.account.findUniqueOrThrow({ where: { id: account.id }, include: { ledger: true } });
   }
 
   return canonical;
@@ -1287,14 +1240,16 @@ async function mergeInventoryAccountIntoCanonical(
   });
 }
 
-/** Keep a single Inventory account under the Inventory category; merge/remove duplicates. */
+/** Merge duplicate Inventory accounts when they already exist — never creates Inventory. */
 export async function consolidateDuplicateInventoryAccounts(
   tx: Prisma.TransactionClient,
-  ) {
+) {
   const canonical = await ensureInventoryAccount(tx);
+  if (!canonical) return null;
 
   const duplicates = await tx.account.findMany({
-    where: { isActive: true,
+    where: {
+      isActive: true,
       id: { not: canonical.id },
       name: { equals: INVENTORY_ACCOUNT_NAME },
     },
@@ -1357,6 +1312,111 @@ async function ensureDefaultAccountInTx(
   return account;
 }
 
+async function accountHasLinkedUsage(
+  tx: Prisma.TransactionClient,
+  accountId: number,
+  ledgerId: number | null | undefined,
+) {
+  if (ledgerId) {
+    const entry = await tx.ledgerEntry.findFirst({
+      where: { ledgerId },
+      select: { id: true },
+    });
+    if (entry) return true;
+  }
+
+  const voucher = await tx.voucher.findFirst({
+    where: {
+      OR: [{ debitAccountId: accountId }, { creditAccountId: accountId }],
+    },
+    select: { id: true },
+  });
+  return Boolean(voucher);
+}
+
+/**
+ * Soft-remove retired auto categories (Customers, Suppliers, Inventory, Income).
+ * Customers/Suppliers accounts are moved to Sale Party / Ext. Purchase Party.
+ * Inventory/Income are removed only when unused; otherwise flagged for manual review.
+ */
+async function cleanupRemovedAutoCategories(tx: Prisma.TransactionClient) {
+  const partyTargets: Record<string, { category: string; type: AccountType }> = {
+    [CUSTOMERS_CATEGORY_NAME]: { category: 'Sale Party', type: AccountType.ASSET },
+    [SUPPLIERS_CATEGORY_NAME]: { category: 'Ext. Purchase Party', type: AccountType.LIABILITY },
+  };
+
+  for (const name of REMOVED_AUTO_CATEGORY_NAMES) {
+    const categories = await tx.accountCategory.findMany({
+      where: { isActive: true, name: { equals: name } },
+      include: {
+        accounts: {
+          where: { isActive: true },
+          include: { ledger: true },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    for (const category of categories) {
+      const partyTarget = partyTargets[name];
+
+      if (partyTarget) {
+        const target = await ensureCategoryInTx(tx, partyTarget.category);
+        for (const account of category.accounts) {
+          if (account.categoryId !== target.id) {
+            await tx.account.update({
+              where: { id: account.id },
+              data: { categoryId: target.id, type: partyTarget.type },
+            });
+          }
+        }
+        await tx.accountCategory.update({
+          where: { id: category.id },
+          data: { isActive: false },
+        });
+        logger.info(`Migrated "${name}" accounts to "${partyTarget.category}" and removed category`, {
+          categoryId: category.id,
+          accountCount: category.accounts.length,
+        });
+        continue;
+      }
+
+      const usedAccountNames: string[] = [];
+      const unusedAccounts = [];
+
+      for (const account of category.accounts) {
+        const used = await accountHasLinkedUsage(tx, account.id, account.ledger?.id);
+        if (used) usedAccountNames.push(account.name);
+        else unusedAccounts.push(account);
+      }
+
+      if (usedAccountNames.length > 0) {
+        logger.warn(
+          `Skipping removal of category "${name}" — has linked ledger entries or vouchers (manual review needed)`,
+          { categoryId: category.id, accounts: usedAccountNames },
+        );
+        continue;
+      }
+
+      for (const account of unusedAccounts) {
+        await tx.account.update({
+          where: { id: account.id },
+          data: { isActive: false },
+        });
+      }
+
+      await tx.accountCategory.update({
+        where: { id: category.id },
+        data: { isActive: false },
+      });
+      logger.info(`Removed unused auto-generated category "${name}"`, {
+        categoryId: category.id,
+        deactivatedAccounts: unusedAccounts.length,
+      });
+    }
+  }
+}
+
 async function consolidateDuplicateInventoryCategories(tx: Prisma.TransactionClient) {
   const categories = await tx.accountCategory.findMany({
     where: { isActive: true,
@@ -1388,30 +1448,21 @@ export async function bootstrapChartOfAccounts() {
       await ensureCategoryInTx(tx, name);
     }
 
-    await consolidateDuplicateInventoryCategories(tx);
-
     const cashCategory = await ensureCategoryInTx(tx, 'Cash');
     await ensureDefaultAccountInTx(
-  tx,
+      tx,
       cashCategory.id,
       CASH_IN_HAND_ACCOUNT_NAME,
       AccountType.ASSET,
       '1',
     );
 
-    await ensureInventoryAccount(tx);
-    await ensureSaleRevenueAccount(tx);
-    await ensureServiceRevenueAccount(tx);
+    // Only consolidate Inventory if it already exists — never create it.
+    await consolidateDuplicateInventoryCategories(tx);
     await consolidateDuplicateInventoryAccounts(tx);
-  });
-}
 
-async function ensureInventoryCategoryInTx(tx: Prisma.TransactionClient) {
-  const existing = await tx.accountCategory.findFirst({
-    where: { isActive: true, name: { equals: INVENTORY_CATEGORY_NAME } },
+    await cleanupRemovedAutoCategories(tx);
   });
-  if (existing) return existing;
-  return tx.accountCategory.create({ data: { name: INVENTORY_CATEGORY_NAME } });
 }
 
 export async function createVoucherInTx(

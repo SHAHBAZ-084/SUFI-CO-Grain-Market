@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronRight, LayoutDashboard, Users } from 'lucide-react';
 import { SIDEBAR_NAV, type NavItem } from '../../config/navigation';
-import { voucherTypeColorClass } from '../../lib/format';
 import type { LucideIcon } from 'lucide-react';
 
 function linkMatchesPath(pathname: string, to: string) {
@@ -19,13 +18,6 @@ function sectionHasActive(pathname: string, items: NavItem[]) {
   return false;
 }
 
-function voucherNavClass(label: string) {
-  if (label.startsWith('Payment')) return voucherTypeColorClass('PAYMENT');
-  if (label.startsWith('Receipt')) return voucherTypeColorClass('RECEIPT');
-  if (label.startsWith('Journal')) return voucherTypeColorClass('JOURNAL');
-  return '';
-}
-
 function SidebarLink({ to, label, nested = false }: { to: string; label: string; nested?: boolean }) {
   const location = useLocation();
   const active = linkMatchesPath(location.pathname, to);
@@ -33,7 +25,7 @@ function SidebarLink({ to, label, nested = false }: { to: string; label: string;
   return (
     <Link
       to={to}
-      className={`app-sidebar-link ${nested ? 'app-sidebar-link-nested' : ''} ${active ? 'is-active' : ''} ${voucherNavClass(label)}`}
+      className={`app-sidebar-link ${nested ? 'app-sidebar-link-nested' : ''} ${active ? 'is-active' : ''}`}
     >
       {label}
     </Link>

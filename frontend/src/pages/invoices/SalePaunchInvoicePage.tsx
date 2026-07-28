@@ -31,9 +31,8 @@ type GridRow = {
   maalKhataName: string;
   boriOrThelaMode: BoriThelaMode;
   bagCount: number;
-  bhartii: number;
-  dharanCount: number;
-  looseKg: number;
+  thelaCount: number;
+  compWeightKg: number;
   kaatKg: number;
   totalWeightKg: number;
   netWeightKg: number;
@@ -176,11 +175,10 @@ export function SalePaunchInvoicePage() {
   const [tafseel, setTafseel] = useState('');
 
   const [maalKhataAccountId, setMaalKhataAccountId] = useState('');
-  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>('BORI');
+  const [boriOrThelaMode, setBoriOrThelaMode] = useState<BoriThelaMode>('BORI');
   const [bagCount, setBagCount] = useState('');
-  const [dharanCount, setDharanCount] = useState('');
-  const [looseKg, setLooseKg] = useState('');
-  const [bhartii, setBhartii] = useState('');
+  const [thelaCount, setThelaCount] = useState('');
+  const [compWeightKg, setCompWeightKg] = useState('');
   const [kaatKg, setKaatKg] = useState('');
   const [kanta, setKanta] = useState('');
   const [upperRatePerMaund, setUpperRatePerMaund] = useState('');
@@ -190,6 +188,7 @@ export function SalePaunchInvoicePage() {
 
   const [salePartyAccountId, setSalePartyAccountId] = useState('');
   const [lowerRatePerMaund, setLowerRatePerMaund] = useState('');
+  const [lowerKaatKg, setLowerKaatKg] = useState('');
   const [taxAmount, setTaxAmount] = useState('');
   const [miscAmount, setMiscAmount] = useState('');
   const [biltyKirayaAmount, setBiltyKirayaAmount] = useState('');
@@ -221,9 +220,8 @@ export function SalePaunchInvoicePage() {
   const entryPreview = useMemo(() => {
     const input = {
       bagCount: parseNum(bagCount),
-      bhartii: parseNum(bhartii),
-      dharanCount: parseNum(dharanCount),
-      looseKg: parseNum(looseKg),
+      thelaCount: parseNum(thelaCount),
+      compWeightKg: parseNum(compWeightKg),
       kaatKg: kaatKg.trim() ? parseNum(kaatKg) : 0,
       upperRatePerMaund: parseNum(upperRatePerMaund),
       kanta: kanta.trim() ? parseNum(kanta) : 0,
@@ -234,9 +232,8 @@ export function SalePaunchInvoicePage() {
     return computeSalePaunchRow(input, prefRates);
   }, [
     bagCount,
-    bhartii,
-    dharanCount,
-    looseKg,
+    thelaCount,
+    compWeightKg,
     kaatKg,
     upperRatePerMaund,
     kanta,
@@ -246,18 +243,45 @@ export function SalePaunchInvoicePage() {
     prefRates,
   ]);
 
-  const invoiceTotals = useMemo(
-    () =>
-      computeSalePaunchInvoiceTotals(gridRows, {
-        lowerRatePerMaund: lowerRatePerMaund.trim() ? parseNum(lowerRatePerMaund) : 0,
-        taxAmount: taxAmount.trim() ? parseNum(taxAmount) : 0,
-        miscAmount: miscAmount.trim() ? parseNum(miscAmount) : 0,
-        biltyKirayaAmount: biltyKirayaAmount.trim() ? parseNum(biltyKirayaAmount) : 0,
-        lowerBardanaQty: lowerBardanaQty.trim() ? parseNum(lowerBardanaQty) : null,
-        lowerBardanaRate: lowerBardanaRate.trim() ? parseNum(lowerBardanaRate) : null,
-      }),
-    [gridRows, lowerRatePerMaund, taxAmount, miscAmount, biltyKirayaAmount, lowerBardanaQty, lowerBardanaRate],
-  );
+  const invoiceTotals = useMemo(() => {
+    const lowerRate = lowerRatePerMaund.trim() ? parseNum(lowerRatePerMaund) : 0;
+    const lowerKaat = lowerKaatKg.trim() ? parseNum(lowerKaatKg) : 0;
+    const computedRows = gridRows.map((row) =>
+      computeSalePaunchRow(
+        {
+          bagCount: row.bagCount,
+          thelaCount: row.thelaCount,
+          compWeightKg: row.compWeightKg,
+          kaatKg: row.kaatKg,
+          lowerKaatKg: lowerKaat,
+          upperRatePerMaund: row.upperRatePerMaund,
+          lowerRatePerMaund: lowerRate,
+          kanta: row.kanta,
+          bardanaQty: row.bardanaQty,
+          bardanaRate: row.bardanaRate,
+          dammiChecked: row.dammiChecked,
+        },
+        prefRates,
+      ),
+    );
+    return computeSalePaunchInvoiceTotals(computedRows, {
+      taxAmount: taxAmount.trim() ? parseNum(taxAmount) : 0,
+      miscAmount: miscAmount.trim() ? parseNum(miscAmount) : 0,
+      biltyKirayaAmount: biltyKirayaAmount.trim() ? parseNum(biltyKirayaAmount) : 0,
+      lowerBardanaQty: lowerBardanaQty.trim() ? parseNum(lowerBardanaQty) : null,
+      lowerBardanaRate: lowerBardanaRate.trim() ? parseNum(lowerBardanaRate) : null,
+    });
+  }, [
+    gridRows,
+    lowerRatePerMaund,
+    lowerKaatKg,
+    taxAmount,
+    miscAmount,
+    biltyKirayaAmount,
+    lowerBardanaQty,
+    lowerBardanaRate,
+    prefRates,
+  ]);
 
   function addRow() {
     setError('');
@@ -265,10 +289,10 @@ export function SalePaunchInvoicePage() {
       setError('Select a Maal Khata account before adding a row');
       return;
     }
-    const bh = parseNum(bhartii);
+    const weight = parseNum(compWeightKg);
     const upperRate = parseNum(upperRatePerMaund);
-    if (!(bh > 0)) {
-      setError('Bhartii must be greater than zero');
+    if (!(weight > 0)) {
+      setError('Computer weight must be greater than zero');
       return;
     }
     if (!(upperRate > 0)) {
@@ -276,8 +300,8 @@ export function SalePaunchInvoicePage() {
       return;
     }
     const kaat = kaatKg.trim() ? parseNum(kaatKg) : 0;
-    if (kaat > entryPreview.totalWeightKg) {
-      setError('Kaat cannot exceed total weight');
+    if (kaat > weight) {
+      setError('Upper kaat cannot exceed computer weight');
       return;
     }
     if (!(entryPreview.netWeightKg > 0)) {
@@ -294,11 +318,10 @@ export function SalePaunchInvoicePage() {
       clientId: `${Date.now()}-${Math.random()}`,
       maalKhataAccountId: Number(maalKhataAccountId),
       maalKhataName: maalKhata?.name ?? '',
-      boriOrThelaMode: boriThelaMode,
+      boriOrThelaMode,
       bagCount: parseNum(bagCount),
-      bhartii: bh,
-      dharanCount: parseNum(dharanCount),
-      looseKg: parseNum(looseKg),
+      thelaCount: parseNum(thelaCount),
+      compWeightKg: weight,
       kaatKg: kaat,
       upperRatePerMaund: upperRate,
       dammiChecked,
@@ -315,8 +338,8 @@ export function SalePaunchInvoicePage() {
     };
     setGridRows((prev) => [...prev, row]);
     setBagCount('');
-    setDharanCount('');
-    setLooseKg('');
+    setThelaCount('');
+    setCompWeightKg('');
     setKaatKg('');
     setKanta('');
     setUpperRatePerMaund('');
@@ -346,8 +369,18 @@ export function SalePaunchInvoicePage() {
       setError('Lower rate must be greater than zero');
       return;
     }
+    const lowerKaat = lowerKaatKg.trim() ? parseNum(lowerKaatKg) : 0;
+    const overweight = gridRows.find((row) => lowerKaat > row.compWeightKg);
+    if (overweight) {
+      setError('Lower kaat cannot exceed computer weight on any row');
+      return;
+    }
     if (!(invoiceTotals.totalLowerAmount > 0)) {
       setError('Lower amount must be greater than zero');
+      return;
+    }
+    if (invoiceTotals.totalLowerNetWeightKg <= 0) {
+      setError('Lower net weight after kaat must be greater than zero');
       return;
     }
     if (invoiceTotals.lowerBardanaAmount != null && invoiceTotals.lowerBardanaAmount > 0 && !lowerBoriThela) {
@@ -376,10 +409,10 @@ export function SalePaunchInvoicePage() {
           maalKhataAccountId: row.maalKhataAccountId,
           boriOrThelaMode: row.boriOrThelaMode,
           bagCount: row.bagCount,
-          bhartii: row.bhartii,
-          dharanCount: row.dharanCount,
-          looseKg: row.looseKg,
+          thelaCount: row.thelaCount,
+          compWeightKg: row.compWeightKg,
           kaatKg: row.kaatKg,
+          lowerKaatKg: lowerKaat,
           upperRatePerMaund: row.upperRatePerMaund,
           lowerRatePerMaund: lowerRate,
           kanta: row.kanta,
@@ -397,6 +430,7 @@ export function SalePaunchInvoicePage() {
       setLowerBardanaQty('');
       setLowerBardanaRate('');
       setLowerRatePerMaund('');
+      setLowerKaatKg('');
       const refRow = await api.getNextSalePaunchReference();
       setPredictedRef(refRow.reference);
     } catch (err) {
@@ -453,31 +487,16 @@ export function SalePaunchInvoicePage() {
                     />
                   </Field>
                   <Field>
-                    <FieldLabel>Bori / Thela</FieldLabel>
-                    <SegmentedControl
-                      value={boriThelaMode}
-                      onChange={(v) => setBoriThelaMode(v as BoriThelaMode)}
-                      options={[
-                        { value: 'BORI', label: 'Bori' },
-                        { value: 'THELA', label: 'Thela' },
-                      ]}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>{boriThelaMode === 'BORI' ? 'Bori count' : 'Thela count'}</FieldLabel>
+                    <FieldLabel>Bori (count)</FieldLabel>
                     <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
                   </Field>
                   <Field>
-                    <FieldLabel>Dharan</FieldLabel>
-                    <TextInput value={dharanCount} onChange={(e) => setDharanCount(e.target.value)} inputMode="decimal" />
+                    <FieldLabel>Thela (count)</FieldLabel>
+                    <TextInput value={thelaCount} onChange={(e) => setThelaCount(e.target.value)} inputMode="decimal" />
                   </Field>
                   <Field>
-                    <FieldLabel>Kilo</FieldLabel>
-                    <TextInput value={looseKg} onChange={(e) => setLooseKg(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Bhartii</FieldLabel>
-                    <TextInput value={bhartii} onChange={(e) => setBhartii(e.target.value)} inputMode="decimal" />
+                    <FieldLabel>Computer Weight (kg)</FieldLabel>
+                    <TextInput value={compWeightKg} onChange={(e) => setCompWeightKg(e.target.value)} inputMode="decimal" />
                   </Field>
                   <Field>
                     <FieldLabel>Kaat (kg)</FieldLabel>
@@ -490,6 +509,17 @@ export function SalePaunchInvoicePage() {
                   <Field>
                     <FieldLabel>Upper rate / Maund</FieldLabel>
                     <TextInput value={upperRatePerMaund} onChange={(e) => setUpperRatePerMaund(e.target.value)} inputMode="decimal" />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Row bardana type</FieldLabel>
+                    <SegmentedControl
+                      value={boriOrThelaMode}
+                      onChange={(v) => setBoriOrThelaMode(v as BoriThelaMode)}
+                      options={[
+                        { value: 'BORI', label: 'Bori' },
+                        { value: 'THELA', label: 'Thela' },
+                      ]}
+                    />
                   </Field>
                 </div>
                 <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
@@ -532,8 +562,9 @@ export function SalePaunchInvoicePage() {
                   <thead className="sticky top-0 z-10 bg-surface2">
                     <tr className="border-b border-border text-xs uppercase tracking-wide text-textMuted">
                       <th className="px-3 py-2.5">Maal Khata</th>
-                      <th className="px-3 py-2.5">Dheri</th>
-                      <th className="px-3 py-2.5 text-right">Weight</th>
+                      <th className="px-3 py-2.5 text-right">Bori</th>
+                      <th className="px-3 py-2.5 text-right">Thela</th>
+                      <th className="px-3 py-2.5 text-right">Comp wt</th>
                       <th className="px-3 py-2.5 text-right">Kaat</th>
                       <th className="px-3 py-2.5 text-right">Net wt</th>
                       <th className="px-3 py-2.5 text-right">Upper rate</th>
@@ -547,8 +578,9 @@ export function SalePaunchInvoicePage() {
                     {gridRows.map((row) => (
                       <tr key={row.clientId} className="border-b border-border/40">
                         <td className="px-3 py-2">{row.maalKhataName}</td>
-                        <td className="px-3 py-2 tabular-nums">{row.bagCount}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{row.totalWeightKg.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.bagCount}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.thelaCount}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.compWeightKg.toFixed(2)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.kaatKg.toFixed(2)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.netWeightKg.toFixed(2)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatLedgerAmount(row.upperRatePerMaund)}</td>
@@ -564,7 +596,7 @@ export function SalePaunchInvoicePage() {
                         </td>
                       </tr>
                     ))}
-                    <InvoiceGridPlaceholderRows columnCount={10} dataRowCount={gridRows.length} />
+                    <InvoiceGridPlaceholderRows columnCount={11} dataRowCount={gridRows.length} />
                   </tbody>
                 </table>
               </InvoicePreviewGridShell>
@@ -588,7 +620,10 @@ export function SalePaunchInvoicePage() {
                     <ReadOnlyAmount label="Net upper total" value={invoiceTotals.totalNetUpperAmount} />
                     <ReadOnlyAmount label="Dammi total" value={invoiceTotals.totalDammiAmount} />
                     {invoiceTotals.totalKaatKg > 0 ? (
-                      <ReadOnlyAmount label="Total kaat (kg)" value={invoiceTotals.totalKaatKg} />
+                      <ReadOnlyAmount label="Total upper kaat (kg)" value={invoiceTotals.totalKaatKg} />
+                    ) : null}
+                    {invoiceTotals.totalLowerKaatKg > 0 ? (
+                      <ReadOnlyAmount label="Total lower kaat (kg)" value={invoiceTotals.totalLowerKaatKg} />
                     ) : null}
                     {invoiceTotals.paunchRevenueDifference !== 0 ? (
                       <ReadOnlyAmount label="Paunch revenue" value={invoiceTotals.paunchRevenueDifference} />
@@ -597,9 +632,14 @@ export function SalePaunchInvoicePage() {
                 </div>
                 <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 xl:items-end">
                   <Field>
+                    <FieldLabel>Lower Kaat (kg)</FieldLabel>
+                    <TextInput value={lowerKaatKg} onChange={(e) => setLowerKaatKg(e.target.value)} inputMode="decimal" />
+                  </Field>
+                  <Field>
                     <FieldLabel>Lower rate / Maund</FieldLabel>
                     <TextInput value={lowerRatePerMaund} onChange={(e) => setLowerRatePerMaund(e.target.value)} inputMode="decimal" />
                   </Field>
+                  <ReadOnlyAmount label="Lower net wt (kg)" value={invoiceTotals.totalLowerNetWeightKg} />
                   <ReadOnlyAmount label="Lower amount" value={invoiceTotals.totalLowerAmount} />
                   <ReadOnlyAmount label="Row revenue" value={invoiceTotals.totalRowRevenue} />
                   <Field>
