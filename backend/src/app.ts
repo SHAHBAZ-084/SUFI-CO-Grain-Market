@@ -12,6 +12,8 @@ import { productsRouter } from './modules/products/products.routes';
 import { invoicesRouter } from './modules/invoices/invoices.routes';
 import { inventoryRouter } from './modules/inventory/inventory.routes';
 import { preferencesRouter } from './modules/preferences/preferences.routes';
+import { createSystemHealthHandler, systemRouter } from './modules/system/system.routes';
+import type { StartupStatus } from './lib/startup';
 
 declare module 'express-session' {
   interface SessionData {
@@ -19,7 +21,7 @@ declare module 'express-session' {
   }
 }
 
-export function createApp() {
+export function createApp(getStartupStatus?: () => StartupStatus | null) {
   const app = express();
 
   app.use(
@@ -47,9 +49,7 @@ export function createApp() {
     }),
   );
 
-  app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, app: 'grain-market-pos' });
-  });
+  app.get('/api/health', createSystemHealthHandler(getStartupStatus));
 
   app.use('/api/auth', authRouter);
   app.use('/api/accounting', accountingRouter);
@@ -58,6 +58,7 @@ export function createApp() {
   app.use('/api/invoices', invoicesRouter);
   app.use('/api/inventory', inventoryRouter);
   app.use('/api/preferences', preferencesRouter);
+  app.use('/api/system', systemRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, '../../frontend/dist');

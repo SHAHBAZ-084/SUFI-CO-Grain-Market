@@ -1,3 +1,10 @@
+export type Paginated<T> = {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type User = {
   id: number;
   username: string;
@@ -235,9 +242,13 @@ export const api = {
     return request<Party>(`/api/parties/purchase-parties/${id}`, { method: 'DELETE' });
   },
 
-  listInvoices(type?: string) {
-    const query = type ? `?type=${type}` : '';
-    return request<Invoice[]>(`/api/invoices${query}`);
+  listInvoices(type?: string, pagination?: { limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (type) query.set('type', type);
+    if (pagination?.limit != null) query.set('limit', String(pagination.limit));
+    if (pagination?.offset != null) query.set('offset', String(pagination.offset));
+    const suffix = query.toString() ? `?${query}` : '';
+    return request<Paginated<Invoice>>(`/api/invoices${suffix}`);
   },
 
   getInvoiceByReference(reference: string) {
@@ -372,13 +383,33 @@ export const api = {
     });
   },
 
-  listVouchers(params?: { fromDate?: string; toDate?: string; type?: string }) {
+  listVouchers(params?: {
+    fromDate?: string;
+    toDate?: string;
+    type?: string;
+    limit?: number;
+    offset?: number;
+  }) {
     const query = new URLSearchParams();
     if (params?.fromDate) query.set('fromDate', params.fromDate);
     if (params?.toDate) query.set('toDate', params.toDate);
     if (params?.type) query.set('type', params.type);
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
     const suffix = query.toString() ? `?${query}` : '';
-    return request<Voucher[]>(`/api/accounting/vouchers${suffix}`);
+    return request<Paginated<Voucher>>(`/api/accounting/vouchers${suffix}`);
+  },
+
+  verifyDatabaseIntegrity() {
+    return request<{ ok: boolean; results: string[] }>('/api/system/verify-database', {
+      method: 'POST',
+    });
+  },
+
+  backupDatabase() {
+    return request<{ ok: boolean; path: string | null }>('/api/system/backup-database', {
+      method: 'POST',
+    });
   },
 
   getDashboardSummary() {

@@ -1,6 +1,7 @@
 import { AccountType, FinancialYearStatus, LedgerEntryType, Prisma, VoucherStatus, VoucherType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import { PaginatedResult } from '../../utils/pagination';
 import { assertNotMaalKhataLinkedAccount, isMaalKhataCategoryName } from '../products/maal-khata';
 import {
   compareLedgerEntries,
@@ -1871,11 +1872,14 @@ async function batchOpeningBalanceSnapshots(
   return balances;
 }
 
-export async function listVouchers(filters?: {
-  fromDate?: string;
-  toDate?: string;
-  type?: VoucherType;
-}) {
+export async function listVouchers(
+  filters?: {
+    fromDate?: string;
+    toDate?: string;
+    type?: VoucherType;
+  },
+  pagination?: { limit: number; offset: number },
+): Promise<PaginatedResult<Awaited<ReturnType<typeof fetchVoucherListPage>>[number]>> {
   let financialYearId: number | undefined;
   try {
     financialYearId = await getActiveFinancialYearId(prisma);
@@ -1901,10 +1905,28 @@ export async function listVouchers(filters?: {
     where.type = filters.type;
   }
 
+  const limit = pagination?.limit ?? 200;
+  const offset = pagination?.offset ?? 0;
+
+  const [items, total] = await Promise.all([
+    fetchVoucherListPage(where, limit, offset),
+    prisma.voucher.count({ where }),
+  ]);
+
+  return { items, total, limit, offset };
+}
+
+function fetchVoucherListPage(
+  where: Prisma.VoucherWhereInput,
+  limit: number,
+  offset: number,
+) {
   return prisma.voucher.findMany({
     where,
     include: voucherInclude,
     orderBy: [{ date: 'desc' }, { number: 'desc' }],
+    take: limit,
+    skip: offset,
   });
 }
 

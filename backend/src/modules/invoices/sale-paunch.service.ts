@@ -102,6 +102,23 @@ async function assertSalePartyAccount(tx: Prisma.TransactionClient, accountId: n
 
 type ComputedLine = SalePaunchLineInput & ReturnType<typeof computeSalePaunchRow>;
 
+function toVoucherLine(line: ComputedLine) {
+  return {
+    totalWeightKg: line.totalWeightKg,
+    ratePerMaund: line.upperRatePerMaund,
+    kanta: line.kanta,
+    upperRatePerMaund: line.upperRatePerMaund,
+    lowerRatePerMaund: line.lowerRatePerMaund,
+  };
+}
+
+function toVoucherLines(lines: ComputedLine[]) {
+  return lines.map((line) => ({
+    totalWeightKg: line.totalWeightKg,
+    ratePerMaund: line.upperRatePerMaund,
+  }));
+}
+
 function buildComputedLines(
   lines: SalePaunchLineInput[],
   prefs: { daamiPercent: number },
@@ -171,7 +188,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.commission.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.totalDammiAmount,
-      description: blendedLegDescription(allLines, header),
+      description: blendedLegDescription(toVoucherLines(allLines), header),
     });
   }
 
@@ -182,13 +199,13 @@ function buildLedgerLegs(
           accountId: salePartyAccountId,
           type: LedgerEntryType.DEBIT,
           amount: line.bardanaAmount,
-          description: salePaunchRowLegDescription(line, header),
+          description: salePaunchRowLegDescription(toVoucherLine(line), header),
         },
         {
           accountId: bardanaAccountId(line.boriOrThelaMode, systemAccounts),
           type: LedgerEntryType.CREDIT,
           amount: line.bardanaAmount,
-          description: salePaunchRowLegDescription(line, header),
+          description: salePaunchRowLegDescription(toVoucherLine(line), header),
         },
       );
     }
@@ -203,13 +220,13 @@ function buildLedgerLegs(
         accountId: bardanaAccountId(lowerBardanaMode, systemAccounts),
         type: LedgerEntryType.DEBIT,
         amount: totals.lowerBardanaAmount,
-        description: blendedLegDescription(allLines, header),
+        description: blendedLegDescription(toVoucherLines(allLines), header),
       },
       {
         accountId: salePartyAccountId,
         type: LedgerEntryType.CREDIT,
         amount: totals.lowerBardanaAmount,
-        description: blendedLegDescription(allLines, header),
+        description: blendedLegDescription(toVoucherLines(allLines), header),
       },
     );
   }
@@ -262,7 +279,7 @@ function buildLedgerLegs(
       accountId: salePartyAccountId,
       type: LedgerEntryType.DEBIT,
       amount: totals.lowerNetTotal,
-      description: blendedLegDescription(allLines, header),
+      description: blendedLegDescription(toVoucherLines(allLines), header),
     });
   }
 

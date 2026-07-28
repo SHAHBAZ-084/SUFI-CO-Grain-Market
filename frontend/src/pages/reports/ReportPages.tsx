@@ -546,6 +546,7 @@ export function VouchersReportPage() {
   const [toDate, setToDate] = useState(monthEndInputValue);
   const [voucherType, setVoucherType] = useState<VoucherTypeFilter>('all');
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [listTotal, setListTotal] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -579,12 +580,15 @@ export function VouchersReportPage() {
     setLoading(true);
     setSelected(null);
     try {
-      const rows = await api.listVouchers({
+      const page = await api.listVouchers({
         fromDate,
         toDate,
         type: voucherType === 'all' ? undefined : voucherType,
+        limit: 500,
+        offset: 0,
       });
-      setVouchers(rows);
+      setVouchers(page.items);
+      setListTotal(page.total);
       setLoaded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load vouchers');
@@ -680,6 +684,12 @@ export function VouchersReportPage() {
         </div>
 
         {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
+        {loaded && listTotal > vouchers.length ? (
+          <p className="mb-4 text-sm text-amber-700 dark:text-amber-400">
+            Showing first {vouchers.length} of {listTotal} vouchers in this period. Narrow the date
+            range for complete totals.
+          </p>
+        ) : null}
 
         {!loaded ? (
           <p className="text-sm text-textSecondary">Set filters and click View</p>

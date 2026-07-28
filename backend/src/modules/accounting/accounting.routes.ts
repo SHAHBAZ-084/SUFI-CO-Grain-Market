@@ -3,6 +3,7 @@ import { AccountType, VoucherType } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
 import { asyncHandler, param, validateBody } from '../../utils/helpers';
+import { parsePagination } from '../../utils/pagination';
 import * as accountingService from './accounting.service';
 
 export const accountingRouter = Router();
@@ -89,7 +90,10 @@ accountingRouter.get(
         ? (typeParam as VoucherType)
         : undefined;
 
-    const vouchers = await accountingService.listVouchers({ fromDate, toDate, type });
+    const vouchers = await accountingService.listVouchers(
+      { fromDate, toDate, type },
+      parsePagination(req.query, { limit: 500, max: 500 }),
+    );
     res.json(vouchers);
   }),
 );

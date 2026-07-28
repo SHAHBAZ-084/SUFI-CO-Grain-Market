@@ -1,6 +1,7 @@
 import { InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import { PaginatedResult } from '../../utils/pagination';
 import { getActiveFinancialYearId } from '../accounting/accounting.service';
 import { buildInvoiceReference, INVOICE_TYPE_PREFIX } from './invoice-reference';
 
@@ -14,12 +15,33 @@ async function nextReference(tx: Prisma.TransactionClient, type: InvoiceType) {
   return `${prefix}-${String(count + 1).padStart(5, '0')}`;
 }
 
-export async function listInvoices(filters?: { type?: InvoiceType; status?: InvoiceStatus }) {
+export async function listInvoices(
+  filters?: { type?: InvoiceType; status?: InvoiceStatus },
+  pagination?: { limit: number; offset: number },
+): Promise<PaginatedResult<Awaited<ReturnType<typeof fetchInvoiceListPage>>[number]>> {
+  const where = {
+    ...(filters?.type && { type: filters.type }),
+    ...(filters?.status && { status: filters.status }),
+  };
+
+  const limit = pagination?.limit ?? 200;
+  const offset = pagination?.offset ?? 0;
+
+  const [items, total] = await Promise.all([
+    fetchInvoiceListPage(where, limit, offset),
+    prisma.invoice.count({ where }),
+  ]);
+
+  return { items, total, limit, offset };
+}
+
+function fetchInvoiceListPage(
+  where: Prisma.InvoiceWhereInput,
+  limit: number,
+  offset: number,
+) {
   return prisma.invoice.findMany({
-    where: {
-      ...(filters?.type && { type: filters.type }),
-      ...(filters?.status && { status: filters.status }),
-    },
+    where,
     include: {
       customer: true,
       supplier: true,
@@ -27,6 +49,8 @@ export async function listInvoices(filters?: { type?: InvoiceType; status?: Invo
       createdBy: { select: { id: true, displayName: true, username: true } },
     },
     orderBy: { createdAt: 'desc' },
+    take: limit,
+    skip: offset,
   });
 }
 

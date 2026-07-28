@@ -3,6 +3,7 @@ import { InvoiceType } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
 import { asyncHandler, param, validateBody } from '../../utils/helpers';
+import { parsePagination } from '../../utils/pagination';
 import * as invoicesService from './invoices.service';
 import { registerKachiMaalRoutes } from './kachi-maal.routes';
 import { registerPurchaseMaalRoutes } from './purchase-maal.routes';
@@ -45,7 +46,10 @@ invoicesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
     const type = req.query.type as InvoiceType | undefined;
-    res.json(await invoicesService.listInvoices(type ? { type } : undefined));
+    const pagination = parsePagination(req.query);
+    res.json(
+      await invoicesService.listInvoices(type ? { type } : undefined, pagination),
+    );
   }),
 );
 

@@ -662,6 +662,8 @@ export function VoucherDetailCard({
 
 export function VoucherListPage() {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [searchType, setSearchType] = useState('');
@@ -675,11 +677,14 @@ export function VoucherListPage() {
     setLoading(true);
     setLoadError('');
     api
-      .listVouchers()
-      .then(setVouchers)
+      .listVouchers({ limit: 200, offset })
+      .then((page) => {
+        setVouchers(page.items);
+        setTotal(page.total);
+      })
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load vouchers'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [offset]);
 
   useEffect(() => {
     loadVouchers();

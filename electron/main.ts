@@ -1,5 +1,6 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import path from 'path';
+import { autoUpdater } from 'electron-updater';
 
 const isDev = process.env.NODE_ENV === 'development';
 const BACKEND_PORT = process.env.PORT ?? '3847';
@@ -8,7 +9,6 @@ let mainWindow: BrowserWindow | null = null;
 
 async function startBackend(): Promise<void> {
   if (isDev) {
-    // Backend runs as a separate dev process via concurrently.
     return;
   }
 
@@ -61,14 +61,72 @@ function createWindow(): void {
   });
 }
 
+async function showStartupError(message: string): Promise<void> {
+  await dialog.showMessageBox({
+    type: 'error',
+    title: 'Grain Market POS — Startup failed',
+    message: 'The application could not start safely.',
+    detail: message,
+  });
+  app.quit();
+}
+
+function configureAutoUpdater(): void {
+  if (isDev) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-downloaded', () => {
+    const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    dialog
+      .showMessageBox(win ?? undefined, {
+        type: 'info',
+        title: 'Update ready',
+        message: 'A new version has been downloaded.',
+        detail: 'Restart the app to apply the update.',
+        buttons: ['Restart now', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) autoUpdater.quitAndInstall();
+      });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.warn('Auto-update check failed:', err.message);
+  });
+
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.warn('Could not check for updates:', err);
+  });
+}
+
 app.whenReady().then(async () => {
-  await startBackend();
+  try {
+    await startBackend();
 
-  if (!isDev) {
-    await waitForBackend();
+    if (!isDev) {
+      const health = await waitForBackendHealth();
+      if (!health.ok) {
+        const detail =
+          health.database?.error ??
+          (health.database && !health.database.integrityOk
+            ? 'Database integrity check failed.'
+            : 'Backend health check failed.');
+        await showStartupError(detail);
+        return;
+      }
+    }
+
+    createWindow();
+    configureAutoUpdater();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await showStartupError(message);
+    return;
   }
-
-  createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -83,13 +141,25 @@ app.on('window-all-closed', () => {
   }
 });
 
-async function waitForBackend(maxAttempts = 30): Promise<void> {
+type HealthResponse = {
+  ok: boolean;
+  database?: {
+    exists: boolean;
+    migrationsApplied: boolean;
+    integrityOk: boolean;
+    error: string | null;
+  };
+};
+
+async function waitForBackendHealth(maxAttempts = 40): Promise<HealthResponse> {
   const url = `http://127.0.0.1:${BACKEND_PORT}/api/health`;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       const response = await fetch(url);
-      if (response.ok) return;
+      if (response.ok) {
+        return (await response.json()) as HealthResponse;
+      }
     } catch {
       // Server not ready yet.
     }
