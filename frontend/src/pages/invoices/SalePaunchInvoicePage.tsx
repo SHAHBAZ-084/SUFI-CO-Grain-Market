@@ -1,9 +1,11 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FieldLabel,
   FinancialButton,
   PageShell,
   Panel,
+  SecondaryButton,
   TextInput,
 } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -156,6 +158,7 @@ function ToggleField({
 }
 
 export function SalePaunchInvoicePage() {
+  const navigate = useNavigate();
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -441,7 +444,7 @@ export function SalePaunchInvoicePage() {
   }
 
   return (
-    <PageShell title="Sale on Paunch" subtitle="Multi–Maal Khata upper-side rows; lower rate and settlement on the debit side">
+    <PageShell centerTitle title="Sale on Paunch">
       <Panel className="mx-auto w-full overflow-visible !p-6 sm:!p-8">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
@@ -685,12 +688,15 @@ export function SalePaunchInvoicePage() {
                     {formatLedgerAmount(invoiceTotals.lowerNetTotal)}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-wrap items-center gap-3">
                   {error ? <p className="text-sm text-danger">{error}</p> : null}
                   {message ? <p className="text-sm text-success">{message}</p> : null}
                   <FinancialButton type="submit" disabled={saving} className="px-6 py-2.5">
                     {saving ? 'Saving…' : 'Save invoice'}
                   </FinancialButton>
+                  <SecondaryButton type="button" className="px-6 py-2.5" onClick={() => navigate('/')}>
+                    Close
+                  </SecondaryButton>
                 </div>
               </div>
             </FormSection>

@@ -19,12 +19,12 @@ export function PageShell({
 }: PageShellProps) {
   if (centerTitle) {
     return (
-      <div className="app-page">
-        <div className="mb-4 flex flex-col items-center gap-3 border-b border-border bg-surface2 px-4 py-4">
+      <div className="app-page app-page--centered-title">
+        <div className="app-page-title-band">
           <h1
             ref={titleRef}
             tabIndex={-1}
-            className="app-brand-serif text-center text-xl text-textPrimary outline-none"
+            className="app-page-title outline-none"
           >
             {title}
           </h1>

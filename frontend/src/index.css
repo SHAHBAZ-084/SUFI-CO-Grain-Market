@@ -494,6 +494,16 @@
 
 
 
+  .app-content-header-main {
+
+    flex: 1;
+
+    min-width: 0;
+
+  }
+
+
+
   .app-content-title {
 
     margin: 0;
@@ -877,6 +887,56 @@
   .app-page {
 
     padding: 1rem 1.25rem 1.5rem;
+
+  }
+
+
+
+  .app-page--centered-title {
+
+    padding-top: 0;
+
+  }
+
+
+
+  .app-page-title-band {
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 0.75rem;
+
+    margin: 0 -1.25rem 1rem;
+
+    border-bottom: 1px solid var(--border);
+
+    background: var(--surface-2);
+
+    padding: 1.25rem 1.25rem 1rem;
+
+  }
+
+
+
+  .app-page-title {
+
+    margin: 0;
+
+    color: var(--text-primary);
+
+    font-family: Georgia, 'Times New Roman', Times, serif;
+
+    font-size: 1.5rem;
+
+    font-weight: 700;
+
+    line-height: 1.25;
+
+    text-align: center;
 
   }
 

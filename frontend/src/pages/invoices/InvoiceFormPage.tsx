@@ -1,5 +1,6 @@
+import { useNavigate } from 'react-router-dom';
 import { INVOICE_TYPE_LABELS } from '../../config/navigation';
-import { PageShell, Panel } from '../../components/ui/PageShell';
+import { PageShell, Panel, SecondaryButton } from '../../components/ui/PageShell';
 import { KachiMaalInvoicePage } from './KachiMaalInvoicePage';
 import { PurchaseMaalInvoicePage } from './PurchaseMaalInvoicePage';
 import { SalePaunchInvoicePage } from './SalePaunchInvoicePage';
@@ -12,6 +13,8 @@ const ROUTE_TO_TYPE: Record<string, string> = {
 };
 
 export function InvoiceFormPage({ slug }: { slug: string }) {
+  const navigate = useNavigate();
+
   if (slug === 'kachi-maal') {
     return <KachiMaalInvoicePage />;
   }
@@ -26,10 +29,7 @@ export function InvoiceFormPage({ slug }: { slug: string }) {
   const title = INVOICE_TYPE_LABELS[typeKey] ?? 'Invoice';
 
   return (
-    <PageShell
-      title={title}
-      subtitle="Form shell ready — posting will use createVoucherInTx() with balanced debit + credit in one transaction"
-    >
+    <PageShell centerTitle title={title}>
       <Panel>
         <p className="text-sm leading-6 text-textSecondary">
           This is the dedicated form for <strong>{title}</strong>. Field layout and grain-specific
@@ -44,6 +44,11 @@ export function InvoiceFormPage({ slug }: { slug: string }) {
           <code className="text-xs">SearchSelect</code> combobox (keyboard Tab/Enter/arrow support)
           — same component as vouchers, not a separate dropdown implementation.
         </p>
+        <div className="mt-6 flex gap-3 border-t border-border pt-5">
+          <SecondaryButton type="button" className="px-6 py-2.5" onClick={() => navigate('/')}>
+            Close
+          </SecondaryButton>
+        </div>
       </Panel>
     </PageShell>
   );

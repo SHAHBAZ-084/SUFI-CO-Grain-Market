@@ -1,12 +1,24 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import { getPageTitle } from '../../config/navigation';
+
+/** Invoice forms render their own centered PageShell title (same pattern as vouchers). */
+function isInvoiceFormPath(pathname: string) {
+  return (
+    pathname.startsWith('/invoices/sale-commission')
+    || pathname.startsWith('/invoices/sale-paunch')
+    || pathname.startsWith('/invoices/purchase-maal')
+    || pathname.startsWith('/invoices/kachi-maal')
+  );
+}
 
 export function ContentHeader() {
   const location = useLocation();
-  const { user } = useAuth();
   const title = getPageTitle(location.pathname);
   const isDashboard = location.pathname === '/';
+
+  if (isInvoiceFormPath(location.pathname)) {
+    return null;
+  }
 
   return (
     <header className="app-content-header">
@@ -21,12 +33,6 @@ export function ContentHeader() {
           </p>
         ) : null}
         <h1 className="app-content-title">{title}</h1>
-      </div>
-      <div className="app-content-header-user">
-        <span className="app-content-user-label">Logged in as</span>
-        <Link to="/user" className="app-content-user-name">
-          {user?.displayName ?? user?.username ?? 'User'}
-        </Link>
       </div>
     </header>
   );
