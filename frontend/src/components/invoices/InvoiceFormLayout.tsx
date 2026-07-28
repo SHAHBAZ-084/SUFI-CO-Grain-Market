@@ -126,7 +126,7 @@ export function InvoiceToggleField({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <InvoiceField>
+    <InvoiceField className="inv-field--toggle">
       <span className="app-field-label" aria-hidden="true">
         &nbsp;
       </span>
@@ -137,7 +137,7 @@ export function InvoiceToggleField({
           onChange={(e) => onChange(e.target.checked)}
           className="h-4 w-4 shrink-0 rounded border-border text-financial"
         />
-        <span className="text-sm font-medium text-textPrimary">{label}</span>
+        <span className="truncate text-sm font-medium text-textPrimary">{label}</span>
       </label>
     </InvoiceField>
   );

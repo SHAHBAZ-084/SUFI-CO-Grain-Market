@@ -392,7 +392,7 @@ export function SalePaunchInvoicePage() {
 
   return (
     <PageShell centerTitle invoiceTitleBand title="Sale on Paunch">
-      <Panel className="mx-auto w-full overflow-visible !p-6 sm:!p-8">
+      <Panel className="inv-form-panel mx-auto w-full overflow-visible">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <InvoiceFormSection>

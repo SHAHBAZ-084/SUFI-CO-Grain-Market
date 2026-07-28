@@ -12,7 +12,7 @@ export function SaleCommissionInvoicePage() {
 
   return (
     <PageShell centerTitle invoiceTitleBand title="Sale on Commission">
-      <Panel className="mx-auto w-full overflow-visible !p-6 sm:!p-8">
+      <Panel className="inv-form-panel mx-auto w-full overflow-visible">
         <InvoiceFormSection>
           <p className="text-sm text-textMuted">
             Header fields (date, invoice #, bill, gari, tafseel) will be added when commission sale
