@@ -10,11 +10,7 @@ export function SegmentedControl<T extends string>({
   ariaLabel?: string;
 }) {
   return (
-    <div
-      role="group"
-      aria-label={ariaLabel}
-      className="inline-flex w-full rounded-lg border border-border bg-surface1 p-0.5 sm:w-auto"
-    >
+    <div role="group" aria-label={ariaLabel} className="app-seg-control">
       {options.map((option) => {
         const selected = value === option.value;
         return (
@@ -23,11 +19,7 @@ export function SegmentedControl<T extends string>({
             type="button"
             aria-pressed={selected}
             onClick={() => onChange(option.value)}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition sm:flex-none ${
-              selected
-                ? 'bg-surface2 text-textPrimary shadow-sm'
-                : 'text-textSecondary hover:text-textPrimary'
-            }`}
+            className={`app-seg-control__btn${selected ? ' is-selected' : ''}`}
           >
             {option.label}
           </button>

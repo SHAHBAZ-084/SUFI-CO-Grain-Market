@@ -1,13 +1,16 @@
 import { Link, useLocation } from 'react-router-dom';
 import { getPageTitle } from '../../config/navigation';
 
-/** Invoice forms render their own centered PageShell title (same pattern as vouchers). */
-function isInvoiceFormPath(pathname: string) {
+/** Invoice / voucher forms render their own centered PageShell title. */
+function hidesContentHeaderTitle(pathname: string) {
   return (
     pathname.startsWith('/invoices/sale-commission')
     || pathname.startsWith('/invoices/sale-paunch')
     || pathname.startsWith('/invoices/purchase-maal')
     || pathname.startsWith('/invoices/kachi-maal')
+    || pathname.startsWith('/vouchers/payment')
+    || pathname.startsWith('/vouchers/journal')
+    || pathname.startsWith('/vouchers/receipt')
   );
 }
 
@@ -16,7 +19,7 @@ export function ContentHeader() {
   const title = getPageTitle(location.pathname);
   const isDashboard = location.pathname === '/';
 
-  if (isInvoiceFormPath(location.pathname)) {
+  if (hidesContentHeaderTitle(location.pathname)) {
     return null;
   }
 

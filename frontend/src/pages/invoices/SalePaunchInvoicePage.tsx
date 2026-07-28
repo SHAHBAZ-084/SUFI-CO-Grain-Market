@@ -90,10 +90,10 @@ function FlatAccountSelect({
 }) {
   const options = flatAccountOptions(categories, accounts, categoryNames);
   return (
-    <div>
+    <>
       <FieldLabel>{label}</FieldLabel>
       <SearchSelect value={value} onChange={onChange} options={options} placeholder={placeholder} />
-    </div>
+    </>
   );
 }
 
@@ -119,16 +119,14 @@ function FormSection({
 }
 
 function Field({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`min-w-0 ${className}`}>{children}</div>;
+  return <div className={`app-field ${className}`.trim()}>{children}</div>;
 }
 
-function ReadOnlyAmount({ label, value }: { label: string; value: number }) {
+function ReadOnlyAmount({ label, value, className = '' }: { label: string; value: number; className?: string }) {
   return (
-    <Field>
+    <Field className={className}>
       <FieldLabel>{label}</FieldLabel>
-      <div className="rounded-lg border border-border/60 bg-surface3/70 px-3 py-2 text-sm tabular-nums text-textSecondary">
-        {formatLedgerAmount(value)}
-      </div>
+      <div className="app-input-static tabular-nums">{formatLedgerAmount(value)}</div>
     </Field>
   );
 }
@@ -144,12 +142,15 @@ function ToggleField({
 }) {
   return (
     <Field>
-      <label className="flex cursor-pointer items-center gap-2 pt-6">
+      <span className="app-field-label" aria-hidden="true">
+        &nbsp;
+      </span>
+      <label className="app-input-static cursor-pointer gap-2">
         <input
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-border text-financial"
+          className="h-4 w-4 shrink-0 rounded border-border text-financial"
         />
         <span className="text-sm font-medium text-textPrimary">{label}</span>
       </label>
@@ -444,21 +445,19 @@ export function SalePaunchInvoicePage() {
   }
 
   return (
-    <PageShell centerTitle title="Sale on Paunch">
+    <PageShell centerTitle invoiceTitleBand title="Sale on Paunch">
       <Panel className="mx-auto w-full overflow-visible !p-6 sm:!p-8">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <FormSection>
-              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 <Field>
                   <FieldLabel>Date</FieldLabel>
                   <TextInput ref={dateRef} type="date" required value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                 </Field>
                 <Field>
                   <FieldLabel>Invoice #</FieldLabel>
-                  <div className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <span className="text-xl font-bold tabular-nums text-financial">{predictedRef || '…'}</span>
-                  </div>
+                  <div className="app-input-static app-input-static--emphasis tabular-nums">{predictedRef || '…'}</div>
                 </Field>
                 <Field>
                   <FieldLabel>Bill #</FieldLabel>
@@ -477,7 +476,7 @@ export function SalePaunchInvoicePage() {
 
             <FormSection label="Add dheri row">
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 xl:items-end">
+                <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 items-start">
                   <Field className="sm:col-span-2 xl:col-span-2">
                     <FlatAccountSelect
                       label="Maal Khata"
@@ -525,7 +524,7 @@ export function SalePaunchInvoicePage() {
                     />
                   </Field>
                 </div>
-                <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
+                <div className="flex flex-wrap items-start gap-x-5 gap-y-4">
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                     <FieldLabel>Bardana qty</FieldLabel>
                     <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
@@ -539,19 +538,28 @@ export function SalePaunchInvoicePage() {
                     checked={dammiChecked}
                     onChange={setDammiChecked}
                   />
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Net weight (kg)" value={entryPreview.netWeightKg} />
-                  </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Upper net" value={entryPreview.netUpperAmount} />
-                  </Field>
+                  <ReadOnlyAmount
+                    className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
+                    label="Net weight (kg)"
+                    value={entryPreview.netWeightKg}
+                  />
+                  <ReadOnlyAmount
+                    className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
+                    label="Upper net"
+                    value={entryPreview.netUpperAmount}
+                  />
                   {dammiChecked ? (
-                    <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                      <ReadOnlyAmount label="Dammi amount" value={entryPreview.dammiAmount} />
-                    </Field>
+                    <ReadOnlyAmount
+                      className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
+                      label="Dammi amount"
+                      value={entryPreview.dammiAmount}
+                    />
                   ) : null}
-                  <div className="ml-auto shrink-0 pb-0.5">
-                    <FinancialButton type="button" className="px-6 py-2.5" onClick={addRow}>
+                  <div className="app-field-action">
+                    <span className="app-field-label" aria-hidden="true">
+                      &nbsp;
+                    </span>
+                    <FinancialButton type="button" className="px-6" onClick={addRow}>
                       Add to grid
                     </FinancialButton>
                   </div>
@@ -619,7 +627,7 @@ export function SalePaunchInvoicePage() {
                       placeholder="Search sale party…"
                     />
                   </Field>
-                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     <ReadOnlyAmount label="Net upper total" value={invoiceTotals.totalNetUpperAmount} />
                     <ReadOnlyAmount label="Dammi total" value={invoiceTotals.totalDammiAmount} />
                     {invoiceTotals.totalKaatKg > 0 ? (
@@ -633,7 +641,7 @@ export function SalePaunchInvoicePage() {
                     ) : null}
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 xl:items-end">
+                <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 items-start">
                   <Field>
                     <FieldLabel>Lower Kaat (kg)</FieldLabel>
                     <TextInput value={lowerKaatKg} onChange={(e) => setLowerKaatKg(e.target.value)} inputMode="decimal" />

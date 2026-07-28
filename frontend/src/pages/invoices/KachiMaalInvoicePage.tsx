@@ -88,7 +88,7 @@ function FlatAccountSelect({
 }) {
   const options = flatAccountOptions(categories, accounts, categoryNames);
   return (
-    <div>
+    <>
       <FieldLabel>{label}</FieldLabel>
       <SearchSelect
         value={value}
@@ -96,7 +96,7 @@ function FlatAccountSelect({
         options={options}
         placeholder={placeholder}
       />
-    </div>
+    </>
   );
 }
 
@@ -125,16 +125,14 @@ function FormSection({
 
 /** Consistent field cell — prevents grid squeeze and label crowding. */
 function Field({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`min-w-0 ${className}`}>{children}</div>;
+  return <div className={`app-field ${className}`.trim()}>{children}</div>;
 }
 
-function ReadOnlyAmount({ label, value }: { label: string; value: number }) {
+function ReadOnlyAmount({ label, value, className = '' }: { label: string; value: number; className?: string }) {
   return (
-    <Field>
+    <Field className={className}>
       <FieldLabel>{label}</FieldLabel>
-      <div className="rounded-lg border border-border/60 bg-surface3/70 px-3 py-2 text-sm tabular-nums text-textSecondary">
-        {formatLedgerAmount(value)}
-      </div>
+      <div className="app-input-static tabular-nums">{formatLedgerAmount(value)}</div>
     </Field>
   );
 }
@@ -359,12 +357,12 @@ export function KachiMaalInvoicePage() {
   }
 
   return (
-    <PageShell centerTitle title="Kachi Maal">
+    <PageShell centerTitle invoiceTitleBand title="Kachi Maal">
       <Panel className="mx-auto w-full overflow-visible !p-6 sm:!p-8">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <FormSection>
-              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <Field>
                   <FieldLabel>Date</FieldLabel>
                   <TextInput
@@ -377,10 +375,8 @@ export function KachiMaalInvoicePage() {
                 </Field>
                 <Field>
                   <FieldLabel>Invoice #</FieldLabel>
-                  <div className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <span className="text-xl font-bold tabular-nums text-financial">
-                      {predictedRef || '…'}
-                    </span>
+                  <div className="app-input-static app-input-static--emphasis tabular-nums">
+                    {predictedRef || '…'}
                   </div>
                 </Field>
                 <Field>
@@ -409,7 +405,7 @@ export function KachiMaalInvoicePage() {
 
             <FormSection label="Add dheri row">
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 xl:items-end">
+                <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 items-start">
                   <Field className="sm:col-span-2 xl:col-span-2">
                     <FlatAccountSelect
                       label="Party"
@@ -453,7 +449,7 @@ export function KachiMaalInvoicePage() {
                     <TextInput value={ratePerMaund} onChange={(e) => setRatePerMaund(e.target.value)} inputMode="decimal" />
                   </Field>
                 </div>
-                <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
+                <div className="flex flex-wrap items-start gap-x-5 gap-y-4">
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                     <FieldLabel>Bardana qty</FieldLabel>
                     <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
@@ -462,14 +458,21 @@ export function KachiMaalInvoicePage() {
                     <FieldLabel>Bardana rate</FieldLabel>
                     <TextInput value={rowBardanaRate} onChange={(e) => setRowBardanaRate(e.target.value)} inputMode="decimal" />
                   </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Amount" value={entryPreview.amount} />
-                  </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Net to party" value={entryPreview.netCreditToParty} />
-                  </Field>
-                  <div className="ml-auto shrink-0 pb-0.5">
-                    <FinancialButton type="button" className="px-6 py-2.5" onClick={addRow}>
+                  <ReadOnlyAmount
+                    className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
+                    label="Amount"
+                    value={entryPreview.amount}
+                  />
+                  <ReadOnlyAmount
+                    className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
+                    label="Net to party"
+                    value={entryPreview.netCreditToParty}
+                  />
+                  <div className="app-field-action">
+                    <span className="app-field-label" aria-hidden="true">
+                      &nbsp;
+                    </span>
+                    <FinancialButton type="button" className="px-6" onClick={addRow}>
                       Add to grid
                     </FinancialButton>
                   </div>
@@ -528,7 +531,7 @@ export function KachiMaalInvoicePage() {
             {/* Settlement — debit + totals in structured rows */}
             <FormSection label="Settlement (debit side)">
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,280px)_1fr] lg:items-start">
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,280px)_1fr] items-start">
                   <Field>
                     <FlatAccountSelect
                       label="Debit account"
@@ -539,7 +542,7 @@ export function KachiMaalInvoicePage() {
                       onChange={setDebitAccountId}
                     />
                   </Field>
-                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                     <ReadOnlyAmount label="Goods total" value={invoiceTotals.totalGoodsAmount} />
                     <ReadOnlyAmount label={`Pale Dari (${prefRates.paleDariPercent}%)`} value={invoiceTotals.totalPaleDari} />
                     <ReadOnlyAmount label={`Brokery (${prefRates.brokeryPercent}%)`} value={invoiceTotals.totalBrokery} />
@@ -550,7 +553,7 @@ export function KachiMaalInvoicePage() {
                     <ReadOnlyAmount label={`Daami (${prefRates.daamiPercent}%)`} value={invoiceTotals.profitAmount} />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 xl:items-end">
+                <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 items-start">
                   <Field>
                     <FieldLabel>Misc (optional)</FieldLabel>
                     <TextInput value={miscAmount} onChange={(e) => setMiscAmount(e.target.value)} inputMode="decimal" />

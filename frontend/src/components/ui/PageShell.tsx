@@ -6,6 +6,8 @@ type PageShellProps = {
   children?: ReactNode;
   actions?: ReactNode;
   centerTitle?: boolean;
+  /** Soft white↔navy title-band gradient (invoice + voucher forms). */
+  invoiceTitleBand?: boolean;
   titleRef?: RefObject<HTMLHeadingElement | null>;
 };
 
@@ -15,12 +17,15 @@ export function PageShell({
   children,
   actions,
   centerTitle = false,
+  invoiceTitleBand = false,
   titleRef,
 }: PageShellProps) {
   if (centerTitle) {
     return (
       <div className="app-page app-page--centered-title">
-        <div className="app-page-title-band">
+        <div
+          className={`app-page-title-band${invoiceTitleBand ? ' app-page-title-band--invoice' : ''}`}
+        >
           <h1
             ref={titleRef}
             tabIndex={-1}
@@ -77,11 +82,7 @@ export function LegacyTable({
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
-  return (
-    <label className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-textSecondary">
-      {children}
-    </label>
-  );
+  return <label className="app-field-label">{children}</label>;
 }
 
 export function FormRow({ label, children }: { label: ReactNode; children: ReactNode }) {
@@ -95,13 +96,8 @@ export function FormRow({ label, children }: { label: ReactNode; children: React
 
 export const TextInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   function TextInput(props, ref) {
-    return (
-      <input
-        ref={ref}
-        {...props}
-        className={`w-full rounded-sm border border-border bg-surface2 px-2.5 py-1.5 text-sm text-textPrimary outline-none focus:border-borderStrong ${props.className ?? ''}`}
-      />
-    );
+    const { className = '', ...rest } = props;
+    return <input ref={ref} {...rest} className={`app-input ${className}`.trim()} />;
   },
 );
 

@@ -197,7 +197,7 @@ export function SearchSelect({
         }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none ring-accent focus:ring-2 disabled:cursor-not-allowed disabled:bg-surface1"
+        className="app-input disabled:cursor-not-allowed disabled:bg-surface1"
       />
       {open ? (
         <div

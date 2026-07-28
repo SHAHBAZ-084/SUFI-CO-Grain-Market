@@ -88,10 +88,10 @@ function FlatAccountSelect({
 }) {
   const options = flatAccountOptions(categories, accounts, categoryNames);
   return (
-    <div>
+    <>
       <FieldLabel>{label}</FieldLabel>
       <SearchSelect value={value} onChange={onChange} options={options} placeholder={placeholder} />
-    </div>
+    </>
   );
 }
 
@@ -117,16 +117,14 @@ function FormSection({
 }
 
 function Field({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`min-w-0 ${className}`}>{children}</div>;
+  return <div className={`app-field ${className}`.trim()}>{children}</div>;
 }
 
-function ReadOnlyAmount({ label, value }: { label: string; value: number }) {
+function ReadOnlyAmount({ label, value, className = '' }: { label: string; value: number; className?: string }) {
   return (
-    <Field>
+    <Field className={className}>
       <FieldLabel>{label}</FieldLabel>
-      <div className="rounded-lg border border-border/60 bg-surface3/70 px-3 py-2 text-sm tabular-nums text-textSecondary">
-        {formatLedgerAmount(value)}
-      </div>
+      <div className="app-input-static tabular-nums">{formatLedgerAmount(value)}</div>
     </Field>
   );
 }
@@ -142,12 +140,15 @@ function ToggleField({
 }) {
   return (
     <Field>
-      <label className="flex cursor-pointer items-center gap-2 pt-6">
+      <span className="app-field-label" aria-hidden="true">
+        &nbsp;
+      </span>
+      <label className="app-input-static cursor-pointer gap-2">
         <input
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-border text-financial"
+          className="h-4 w-4 shrink-0 rounded border-border text-financial"
         />
         <span className="text-sm font-medium text-textPrimary">{label}</span>
       </label>
@@ -396,21 +397,19 @@ export function PurchaseMaalInvoicePage() {
   }
 
   return (
-    <PageShell centerTitle title="Purchase to Maal">
+    <PageShell centerTitle invoiceTitleBand title="Purchase to Maal">
       <Panel className="mx-auto w-full overflow-visible !p-6 sm:!p-8">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <FormSection>
-              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <Field>
                   <FieldLabel>Date</FieldLabel>
                   <TextInput ref={dateRef} type="date" required value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                 </Field>
                 <Field>
                   <FieldLabel>Invoice #</FieldLabel>
-                  <div className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <span className="text-xl font-bold tabular-nums text-financial">{predictedRef || '…'}</span>
-                  </div>
+                  <div className="app-input-static app-input-static--emphasis tabular-nums">{predictedRef || '…'}</div>
                 </Field>
                 <Field>
                   <FieldLabel>Jins</FieldLabel>
@@ -433,7 +432,7 @@ export function PurchaseMaalInvoicePage() {
 
             <FormSection label="Add dheri row">
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 xl:items-end">
+                <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 items-start">
                   <Field className="sm:col-span-2 xl:col-span-2">
                     <FlatAccountSelect
                       label="Party"
@@ -477,7 +476,7 @@ export function PurchaseMaalInvoicePage() {
                     <TextInput value={ratePerMaund} onChange={(e) => setRatePerMaund(e.target.value)} inputMode="decimal" />
                   </Field>
                 </div>
-                <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
+                <div className="flex flex-wrap items-start gap-x-5 gap-y-4">
                   <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
                     <FieldLabel>Bardana qty</FieldLabel>
                     <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
@@ -491,19 +490,28 @@ export function PurchaseMaalInvoicePage() {
                     checked={dammiChecked}
                     onChange={setDammiChecked}
                   />
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Amount" value={entryPreview.amount} />
-                  </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <ReadOnlyAmount label="Net to party" value={entryPreview.netCreditToParty} />
-                  </Field>
+                  <ReadOnlyAmount
+                    className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
+                    label="Amount"
+                    value={entryPreview.amount}
+                  />
+                  <ReadOnlyAmount
+                    className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
+                    label="Net to party"
+                    value={entryPreview.netCreditToParty}
+                  />
                   {dammiChecked ? (
-                    <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                      <ReadOnlyAmount label="Dammi amount" value={entryPreview.dammiAmount} />
-                    </Field>
+                    <ReadOnlyAmount
+                      className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
+                      label="Dammi amount"
+                      value={entryPreview.dammiAmount}
+                    />
                   ) : null}
-                  <div className="ml-auto shrink-0 pb-0.5">
-                    <FinancialButton type="button" className="px-6 py-2.5" onClick={addRow}>
+                  <div className="app-field-action">
+                    <span className="app-field-label" aria-hidden="true">
+                      &nbsp;
+                    </span>
+                    <FinancialButton type="button" className="px-6" onClick={addRow}>
                       Add to grid
                     </FinancialButton>
                   </div>
@@ -557,46 +565,42 @@ export function PurchaseMaalInvoicePage() {
                   <Field>
                     <FieldLabel>Debit account</FieldLabel>
                     {!productId ? (
-                      <div className="rounded-lg border border-border/60 bg-surface3/70 px-3 py-2 text-sm text-textMuted">
-                        Select Jins first
-                      </div>
+                      <div className="app-input-static text-textMuted">Select Jins first</div>
                     ) : maalKhataMissing ? (
-                      <div className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-sm text-danger">
+                      <div className="app-input-static border-danger text-danger">
                         No Maal Khata ledger linked to this product
                       </div>
                     ) : (
-                      <div className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm font-medium text-textPrimary">
+                      <div className="app-input-static font-medium text-textPrimary">
                         {maalKhataAccount?.name ?? '—'}
                         {maalKhataAccount?.code ? (
-                          <span className="ml-2 text-textMuted">({maalKhataAccount.code})</span>
+                          <span className="ml-2 font-normal text-textMuted">({maalKhataAccount.code})</span>
                         ) : null}
                       </div>
                     )}
                   </Field>
-                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                  <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
                     <ReadOnlyAmount label="Goods total" value={invoiceTotals.totalGoodsAmount} />
                     <ReadOnlyAmount label="Dammi total" value={invoiceTotals.totalDammiAmount} />
-                    <div className="flex flex-wrap items-end gap-x-3 gap-y-4 sm:col-span-2">
+                    <div className="flex flex-wrap items-start gap-x-3 gap-y-4 sm:col-span-2">
                       <ToggleField label="Apply Market Fee" checked={marketFeeEnabled} onChange={setMarketFeeEnabled} />
-                      <Field className="min-w-[7rem] flex-1">
-                        <ReadOnlyAmount
-                          label={`Market fee (${invoiceTotals.totalCalculatedBags.toFixed(2)} bags)`}
-                          value={invoiceTotals.marketFeeAmount}
-                        />
-                      </Field>
+                      <ReadOnlyAmount
+                        className="min-w-[7rem] flex-1"
+                        label={`Market fee (${invoiceTotals.totalCalculatedBags.toFixed(2)} bags)`}
+                        value={invoiceTotals.marketFeeAmount}
+                      />
                     </div>
-                    <div className="flex flex-wrap items-end gap-x-3 gap-y-4 sm:col-span-2">
+                    <div className="flex flex-wrap items-start gap-x-3 gap-y-4 sm:col-span-2">
                       <ToggleField label="Apply Mazduri" checked={mazduriEnabled} onChange={setMazduriEnabled} />
-                      <Field className="min-w-[7rem] flex-1">
-                        <ReadOnlyAmount
-                          label={`Mazduri (${prefRates.mazduriPercent}%)`}
-                          value={invoiceTotals.mazduriAmount}
-                        />
-                      </Field>
+                      <ReadOnlyAmount
+                        className="min-w-[7rem] flex-1"
+                        label={`Mazduri (${prefRates.mazduriPercent}%)`}
+                        value={invoiceTotals.mazduriAmount}
+                      />
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 xl:items-end">
+                <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 items-start">
                   <Field>
                     <FieldLabel>Lower bardana</FieldLabel>
                     <SegmentedControl

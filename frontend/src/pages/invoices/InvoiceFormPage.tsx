@@ -29,7 +29,7 @@ export function InvoiceFormPage({ slug }: { slug: string }) {
   const title = INVOICE_TYPE_LABELS[typeKey] ?? 'Invoice';
 
   return (
-    <PageShell centerTitle title={title}>
+    <PageShell centerTitle invoiceTitleBand title={title}>
       <Panel>
         <p className="text-sm leading-6 text-textSecondary">
           This is the dedicated form for <strong>{title}</strong>. Field layout and grain-specific

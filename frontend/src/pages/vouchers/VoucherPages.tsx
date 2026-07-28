@@ -12,21 +12,11 @@ const VOUCHER_TYPES: Record<string, string> = {
   receipt: 'RECEIPT',
 };
 
-const VOUCHER_KIND_LABELS: Record<string, string> = {
-  payment: 'Payment',
-  journal: 'Journal',
-  receipt: 'Receipt',
+const VOUCHER_PAGE_TITLES: Record<string, string> = {
+  payment: 'Payment Voucher',
+  journal: 'Journal Voucher',
+  receipt: 'Receipt Voucher',
 };
-
-function VoucherPageTitle({ kind }: { kind: keyof typeof VOUCHER_TYPES }) {
-  const label = VOUCHER_KIND_LABELS[kind];
-  return (
-    <>
-      <span className={voucherTypeColorClass(VOUCHER_TYPES[kind])}>{label}</span>
-      <span className="text-textPrimary"> Voucher</span>
-    </>
-  );
-}
 
 function todayInputValue() {
   const d = new Date();
@@ -305,7 +295,12 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
     predictedNumber != null ? formatVoucherNumber(predictedNumber) : '';
 
   return (
-    <PageShell centerTitle titleRef={titleRef} title={<VoucherPageTitle kind={kind} />}>
+    <PageShell
+      centerTitle
+      invoiceTitleBand
+      titleRef={titleRef}
+      title={VOUCHER_PAGE_TITLES[kind] ?? 'Voucher'}
+    >
       <div className="mx-auto w-full max-w-[980px] overflow-visible px-2">
         <div ref={trapRef} className="overflow-visible">
           <form ref={formRef} className="space-y-8 overflow-visible" onSubmit={onSubmit}>
