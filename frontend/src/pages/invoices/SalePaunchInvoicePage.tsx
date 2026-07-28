@@ -1,11 +1,21 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  InvoiceAddRowAction,
+  InvoiceField,
+  InvoiceFieldGroup,
+  InvoiceFieldRow,
+  InvoiceFieldStack,
+  InvoiceFormFooter,
+  InvoiceFormSection,
+  InvoiceHeaderRow,
+  InvoiceReadOnlyField,
+  InvoiceToggleField,
+} from '../../components/invoices/InvoiceFormLayout';
+import {
   FieldLabel,
-  FinancialButton,
   PageShell,
   Panel,
-  SecondaryButton,
   TextInput,
 } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -13,10 +23,7 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { api, Account, AccountCategory, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
-import {
-  InvoiceGridPlaceholderRows,
-  InvoicePreviewGridShell,
-} from './InvoicePreviewGrid';
+import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
 import {
   computeSalePaunchInvoiceTotals,
   computeSalePaunchRow,
@@ -94,67 +101,6 @@ function FlatAccountSelect({
       <FieldLabel>{label}</FieldLabel>
       <SearchSelect value={value} onChange={onChange} options={options} placeholder={placeholder} />
     </>
-  );
-}
-
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-semibold uppercase tracking-wide text-textMuted">{children}</p>;
-}
-
-function FormSection({
-  label,
-  children,
-  className = '',
-}: {
-  label?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`border-t border-border pt-6 first:border-t-0 first:pt-0 ${className}`}>
-      {label ? <SectionHeading>{label}</SectionHeading> : null}
-      <div className={label ? 'mt-4' : undefined}>{children}</div>
-    </div>
-  );
-}
-
-function Field({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`app-field ${className}`.trim()}>{children}</div>;
-}
-
-function ReadOnlyAmount({ label, value, className = '' }: { label: string; value: number; className?: string }) {
-  return (
-    <Field className={className}>
-      <FieldLabel>{label}</FieldLabel>
-      <div className="app-input-static tabular-nums">{formatLedgerAmount(value)}</div>
-    </Field>
-  );
-}
-
-function ToggleField({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <Field>
-      <span className="app-field-label" aria-hidden="true">
-        &nbsp;
-      </span>
-      <label className="app-input-static cursor-pointer gap-2">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 shrink-0 rounded border-border text-financial"
-        />
-        <span className="text-sm font-medium text-textPrimary">{label}</span>
-      </label>
-    </Field>
   );
 }
 
@@ -449,126 +395,127 @@ export function SalePaunchInvoicePage() {
       <Panel className="mx-auto w-full overflow-visible !p-6 sm:!p-8">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
-            <FormSection>
-              <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                <Field>
+            <InvoiceFormSection>
+              <InvoiceHeaderRow>
+                <InvoiceField>
                   <FieldLabel>Date</FieldLabel>
                   <TextInput ref={dateRef} type="date" required value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
-                </Field>
-                <Field>
+                </InvoiceField>
+                <InvoiceField>
                   <FieldLabel>Invoice #</FieldLabel>
                   <div className="app-input-static app-input-static--emphasis tabular-nums">{predictedRef || '…'}</div>
-                </Field>
-                <Field>
+                </InvoiceField>
+                <InvoiceField>
                   <FieldLabel>Bill #</FieldLabel>
                   <TextInput value={billNo} onChange={(e) => setBillNo(e.target.value)} />
-                </Field>
-                <Field>
+                </InvoiceField>
+                <InvoiceField>
                   <FieldLabel>Gari #</FieldLabel>
                   <TextInput value={gariNo} onChange={(e) => setGariNo(e.target.value)} />
-                </Field>
-                <Field>
+                </InvoiceField>
+                <InvoiceField>
                   <FieldLabel>Tafseel</FieldLabel>
                   <TextInput value={tafseel} onChange={(e) => setTafseel(e.target.value)} />
-                </Field>
-              </div>
-            </FormSection>
+                </InvoiceField>
+              </InvoiceHeaderRow>
+            </InvoiceFormSection>
 
-            <FormSection label="Add dheri row">
-              <div className="space-y-5">
-                <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 items-start">
-                  <Field className="sm:col-span-2 xl:col-span-2">
-                    <FlatAccountSelect
-                      label="Maal Khata"
-                      categoryNames={MAAL_KHATA_CATEGORIES}
-                      categories={categories}
-                      accounts={accounts}
-                      value={maalKhataAccountId}
-                      onChange={setMaalKhataAccountId}
-                      placeholder="Search Maal Khata…"
+            <InvoiceFormSection label="Add dheri row">
+              <InvoiceFieldStack>
+                <InvoiceFieldGroup label="Identity">
+                  <InvoiceFieldRow cols={3}>
+                    <InvoiceField wide>
+                      <FlatAccountSelect
+                        label="Maal Khata"
+                        categoryNames={MAAL_KHATA_CATEGORIES}
+                        categories={categories}
+                        accounts={accounts}
+                        value={maalKhataAccountId}
+                        onChange={setMaalKhataAccountId}
+                        placeholder="Search Maal Khata…"
+                      />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Bori (count)</FieldLabel>
+                      <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Thela (count)</FieldLabel>
+                      <TextInput value={thelaCount} onChange={(e) => setThelaCount(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                  </InvoiceFieldRow>
+                </InvoiceFieldGroup>
+
+                <InvoiceFieldGroup label="Weight">
+                  <InvoiceFieldRow cols={3}>
+                    <InvoiceField>
+                      <FieldLabel>Computer Weight (kg)</FieldLabel>
+                      <TextInput value={compWeightKg} onChange={(e) => setCompWeightKg(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Kaat (kg)</FieldLabel>
+                      <TextInput value={kaatKg} onChange={(e) => setKaatKg(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceReadOnlyField label="Net weight (kg)" value={entryPreview.netWeightKg} format="number" />
+                  </InvoiceFieldRow>
+                </InvoiceFieldGroup>
+
+                <InvoiceFieldGroup label="Pricing">
+                  <InvoiceFieldRow cols={3}>
+                    <InvoiceField>
+                      <FieldLabel>Upper rate / Maund</FieldLabel>
+                      <TextInput value={upperRatePerMaund} onChange={(e) => setUpperRatePerMaund(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Kanta</FieldLabel>
+                      <TextInput value={kanta} onChange={(e) => setKanta(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceReadOnlyField label="Upper net" value={entryPreview.netUpperAmount} />
+                  </InvoiceFieldRow>
+                </InvoiceFieldGroup>
+
+                <InvoiceFieldGroup label="Bardana">
+                  <InvoiceFieldRow cols={4}>
+                    <InvoiceField>
+                      <FieldLabel>Row bardana type</FieldLabel>
+                      <SegmentedControl
+                        value={boriOrThelaMode}
+                        onChange={(v) => setBoriOrThelaMode(v as BoriThelaMode)}
+                        options={[
+                          { value: 'BORI', label: 'Bori' },
+                          { value: 'THELA', label: 'Thela' },
+                        ]}
+                      />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Bardana qty</FieldLabel>
+                      <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Bardana rate</FieldLabel>
+                      <TextInput value={rowBardanaRate} onChange={(e) => setRowBardanaRate(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceToggleField
+                      label={`Dammi (${prefRates.daamiPercent}%)`}
+                      checked={dammiChecked}
+                      onChange={setDammiChecked}
                     />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Bori (count)</FieldLabel>
-                    <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Thela (count)</FieldLabel>
-                    <TextInput value={thelaCount} onChange={(e) => setThelaCount(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Computer Weight (kg)</FieldLabel>
-                    <TextInput value={compWeightKg} onChange={(e) => setCompWeightKg(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Kaat (kg)</FieldLabel>
-                    <TextInput value={kaatKg} onChange={(e) => setKaatKg(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Kanta</FieldLabel>
-                    <TextInput value={kanta} onChange={(e) => setKanta(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Upper rate / Maund</FieldLabel>
-                    <TextInput value={upperRatePerMaund} onChange={(e) => setUpperRatePerMaund(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Row bardana type</FieldLabel>
-                    <SegmentedControl
-                      value={boriOrThelaMode}
-                      onChange={(v) => setBoriOrThelaMode(v as BoriThelaMode)}
-                      options={[
-                        { value: 'BORI', label: 'Bori' },
-                        { value: 'THELA', label: 'Thela' },
-                      ]}
-                    />
-                  </Field>
-                </div>
-                <div className="flex flex-wrap items-start gap-x-5 gap-y-4">
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <FieldLabel>Bardana qty</FieldLabel>
-                    <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]">
-                    <FieldLabel>Bardana rate</FieldLabel>
-                    <TextInput value={rowBardanaRate} onChange={(e) => setRowBardanaRate(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <ToggleField
-                    label={`Dammi (${prefRates.daamiPercent}%)`}
-                    checked={dammiChecked}
-                    onChange={setDammiChecked}
-                  />
-                  <ReadOnlyAmount
-                    className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
-                    label="Net weight (kg)"
-                    value={entryPreview.netWeightKg}
-                  />
-                  <ReadOnlyAmount
-                    className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
-                    label="Upper net"
-                    value={entryPreview.netUpperAmount}
-                  />
+                  </InvoiceFieldRow>
                   {dammiChecked ? (
-                    <ReadOnlyAmount
-                      className="w-full min-w-[7rem] flex-1 sm:max-w-[10rem]"
-                      label="Dammi amount"
-                      value={entryPreview.dammiAmount}
-                    />
+                    <div className="mt-4">
+                      <InvoiceFieldRow cols={3}>
+                        <InvoiceReadOnlyField label="Dammi amount" value={entryPreview.dammiAmount} />
+                      </InvoiceFieldRow>
+                    </div>
                   ) : null}
-                  <div className="app-field-action">
-                    <span className="app-field-label" aria-hidden="true">
-                      &nbsp;
-                    </span>
-                    <FinancialButton type="button" className="px-6" onClick={addRow}>
-                      Add to grid
-                    </FinancialButton>
-                  </div>
-                </div>
-              </div>
-            </FormSection>
+                </InvoiceFieldGroup>
 
-            <FormSection label="Preview grid">
-              <InvoicePreviewGridShell>
+                <InvoiceAddRowAction onClick={addRow} />
+              </InvoiceFieldStack>
+            </InvoiceFormSection>
+
+            <InvoiceFormSection label="Preview grid">
+              <InvoicePreviewGridShell isEmpty={gridRows.length === 0}>
                 <table className="w-full min-w-[900px] text-left text-sm">
                   <thead className="sticky top-0 z-10 bg-surface2">
                     <tr className="border-b border-border text-xs uppercase tracking-wide text-textMuted">
@@ -607,107 +554,104 @@ export function SalePaunchInvoicePage() {
                         </td>
                       </tr>
                     ))}
-                    <InvoiceGridPlaceholderRows columnCount={11} dataRowCount={gridRows.length} />
                   </tbody>
                 </table>
               </InvoicePreviewGridShell>
-            </FormSection>
+            </InvoiceFormSection>
 
-            <FormSection label="Settlement (Sale Party debit)">
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(220px,320px)_1fr] lg:items-start">
-                  <Field>
-                    <FlatAccountSelect
-                      label="Sale Party"
-                      categoryNames={SALE_PARTY_CATEGORIES}
-                      categories={categories}
-                      accounts={accounts}
-                      value={salePartyAccountId}
-                      onChange={setSalePartyAccountId}
-                      placeholder="Search sale party…"
-                    />
-                  </Field>
-                  <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    <ReadOnlyAmount label="Net upper total" value={invoiceTotals.totalNetUpperAmount} />
-                    <ReadOnlyAmount label="Dammi total" value={invoiceTotals.totalDammiAmount} />
+            <InvoiceFormSection label="Settlement (Sale Party debit)">
+              <InvoiceFieldStack>
+                <InvoiceFieldGroup label="Sale Party & totals">
+                  <InvoiceFieldRow cols={4}>
+                    <InvoiceField wide>
+                      <FlatAccountSelect
+                        label="Sale Party"
+                        categoryNames={SALE_PARTY_CATEGORIES}
+                        categories={categories}
+                        accounts={accounts}
+                        value={salePartyAccountId}
+                        onChange={setSalePartyAccountId}
+                        placeholder="Search sale party…"
+                      />
+                    </InvoiceField>
+                    <InvoiceReadOnlyField label="Net upper total" value={invoiceTotals.totalNetUpperAmount} />
+                    <InvoiceReadOnlyField label="Dammi total" value={invoiceTotals.totalDammiAmount} />
                     {invoiceTotals.totalKaatKg > 0 ? (
-                      <ReadOnlyAmount label="Total upper kaat (kg)" value={invoiceTotals.totalKaatKg} />
+                      <InvoiceReadOnlyField label="Total upper kaat (kg)" value={invoiceTotals.totalKaatKg} format="number" />
                     ) : null}
                     {invoiceTotals.totalLowerKaatKg > 0 ? (
-                      <ReadOnlyAmount label="Total lower kaat (kg)" value={invoiceTotals.totalLowerKaatKg} />
+                      <InvoiceReadOnlyField label="Total lower kaat (kg)" value={invoiceTotals.totalLowerKaatKg} format="number" />
                     ) : null}
                     {invoiceTotals.paunchRevenueDifference !== 0 ? (
-                      <ReadOnlyAmount label="Paunch revenue" value={invoiceTotals.paunchRevenueDifference} />
+                      <InvoiceReadOnlyField label="Paunch revenue" value={invoiceTotals.paunchRevenueDifference} />
                     ) : null}
-                  </div>
-                </div>
-                <div className="grid app-field-grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 items-start">
-                  <Field>
-                    <FieldLabel>Lower Kaat (kg)</FieldLabel>
-                    <TextInput value={lowerKaatKg} onChange={(e) => setLowerKaatKg(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Lower rate / Maund</FieldLabel>
-                    <TextInput value={lowerRatePerMaund} onChange={(e) => setLowerRatePerMaund(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <ReadOnlyAmount label="Lower net wt (kg)" value={invoiceTotals.totalLowerNetWeightKg} />
-                  <ReadOnlyAmount label="Lower amount" value={invoiceTotals.totalLowerAmount} />
-                  <ReadOnlyAmount label="Row revenue" value={invoiceTotals.totalRowRevenue} />
-                  <Field>
-                    <FieldLabel>Tax</FieldLabel>
-                    <TextInput value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Misc</FieldLabel>
-                    <TextInput value={miscAmount} onChange={(e) => setMiscAmount(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Bilty Kiraya</FieldLabel>
-                    <TextInput value={biltyKirayaAmount} onChange={(e) => setBiltyKirayaAmount(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Lower bardana</FieldLabel>
-                    <SegmentedControl
-                      value={lowerBoriThela}
-                      onChange={(v) => setLowerBoriThela(v as BoriThelaMode)}
-                      options={[
-                        { value: 'BORI', label: 'Bori' },
-                        { value: 'THELA', label: 'Thela' },
-                      ]}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Lower bardana qty</FieldLabel>
-                    <TextInput value={lowerBardanaQty} onChange={(e) => setLowerBardanaQty(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Lower bardana rate</FieldLabel>
-                    <TextInput value={lowerBardanaRate} onChange={(e) => setLowerBardanaRate(e.target.value)} inputMode="decimal" />
-                  </Field>
-                  {invoiceTotals.lowerBardanaAmount != null ? (
-                    <ReadOnlyAmount label="Lower bardana amount" value={invoiceTotals.lowerBardanaAmount} />
-                  ) : null}
-                </div>
-              </div>
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5">
-                <div className="flex items-baseline gap-4">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-textMuted">Sale Party total debit</span>
-                  <span className="text-2xl font-bold tabular-nums text-financial">
-                    {formatLedgerAmount(invoiceTotals.lowerNetTotal)}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  {error ? <p className="text-sm text-danger">{error}</p> : null}
-                  {message ? <p className="text-sm text-success">{message}</p> : null}
-                  <FinancialButton type="submit" disabled={saving} className="px-6 py-2.5">
-                    {saving ? 'Saving…' : 'Save invoice'}
-                  </FinancialButton>
-                  <SecondaryButton type="button" className="px-6 py-2.5" onClick={() => navigate('/')}>
-                    Close
-                  </SecondaryButton>
-                </div>
-              </div>
-            </FormSection>
+                  </InvoiceFieldRow>
+                </InvoiceFieldGroup>
+
+                <InvoiceFieldGroup label="Lower weight & rate">
+                  <InvoiceFieldRow cols={4}>
+                    <InvoiceField>
+                      <FieldLabel>Lower Kaat (kg)</FieldLabel>
+                      <TextInput value={lowerKaatKg} onChange={(e) => setLowerKaatKg(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Lower rate / Maund</FieldLabel>
+                      <TextInput value={lowerRatePerMaund} onChange={(e) => setLowerRatePerMaund(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceReadOnlyField label="Lower net wt (kg)" value={invoiceTotals.totalLowerNetWeightKg} format="number" />
+                    <InvoiceReadOnlyField label="Lower amount" value={invoiceTotals.totalLowerAmount} />
+                    <InvoiceReadOnlyField label="Row revenue" value={invoiceTotals.totalRowRevenue} />
+                  </InvoiceFieldRow>
+                </InvoiceFieldGroup>
+
+                <InvoiceFieldGroup label="Charges & lower bardana">
+                  <InvoiceFieldRow cols={4}>
+                    <InvoiceField>
+                      <FieldLabel>Tax</FieldLabel>
+                      <TextInput value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Misc</FieldLabel>
+                      <TextInput value={miscAmount} onChange={(e) => setMiscAmount(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Bilty Kiraya</FieldLabel>
+                      <TextInput value={biltyKirayaAmount} onChange={(e) => setBiltyKirayaAmount(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Lower bardana</FieldLabel>
+                      <SegmentedControl
+                        value={lowerBoriThela}
+                        onChange={(v) => setLowerBoriThela(v as BoriThelaMode)}
+                        options={[
+                          { value: 'BORI', label: 'Bori' },
+                          { value: 'THELA', label: 'Thela' },
+                        ]}
+                      />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Lower bardana qty</FieldLabel>
+                      <TextInput value={lowerBardanaQty} onChange={(e) => setLowerBardanaQty(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Lower bardana rate</FieldLabel>
+                      <TextInput value={lowerBardanaRate} onChange={(e) => setLowerBardanaRate(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    {invoiceTotals.lowerBardanaAmount != null ? (
+                      <InvoiceReadOnlyField label="Lower bardana amount" value={invoiceTotals.lowerBardanaAmount} />
+                    ) : null}
+                  </InvoiceFieldRow>
+                </InvoiceFieldGroup>
+              </InvoiceFieldStack>
+              <InvoiceFormFooter
+                totalLabel="Sale Party total debit"
+                totalValue={invoiceTotals.lowerNetTotal}
+                error={error}
+                message={message}
+                saving={saving}
+                onClose={() => navigate('/')}
+              />
+            </InvoiceFormSection>
           </form>
         </div>
       </Panel>

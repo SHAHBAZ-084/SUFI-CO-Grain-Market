@@ -2,7 +2,8 @@ import { FormEvent, useCallback, useEffect, useRef, useState, type RefObject } f
 import { useNavigate } from 'react-router-dom';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../../lib/format';
 import { api, Account, AccountCategory, Voucher, VoucherAccount, VoucherUser } from '../../lib/api';
-import { DangerButton, FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
+import { DangerButton, FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
+import { FormActionFooter } from '../../components/ui/FormActionFooter';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -294,12 +295,18 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
   const voucherNumberDisplay =
     predictedNumber != null ? formatVoucherNumber(predictedNumber) : '';
 
+  const titleText = VOUCHER_PAGE_TITLES[kind] ?? 'Voucher';
+  const titleColorClass =
+    kind === 'payment' || kind === 'receipt'
+      ? voucherTypeColorClass(VOUCHER_TYPES[kind])
+      : undefined;
+
   return (
     <PageShell
       centerTitle
       invoiceTitleBand
       titleRef={titleRef}
-      title={VOUCHER_PAGE_TITLES[kind] ?? 'Voucher'}
+      title={titleColorClass ? <span className={titleColorClass}>{titleText}</span> : titleText}
     >
       <div className="mx-auto w-full max-w-[980px] overflow-visible px-2">
         <div ref={trapRef} className="overflow-visible">
@@ -405,17 +412,16 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
             />
           </div>
 
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
-          {message ? <p className="text-sm text-success">{message}</p> : null}
-
-          <div className="flex gap-3">
-            <FinancialButton ref={saveRef} type="submit" tabIndex={9} disabled={saving}>
-              {saving ? 'Saving…' : 'Save & Post'}
-            </FinancialButton>
-            <SecondaryButton type="button" tabIndex={10} onClick={() => navigate('/')}>
-              Close
-            </SecondaryButton>
-          </div>
+          <FormActionFooter
+            error={error || undefined}
+            message={message || undefined}
+            primaryLabel="Save & Post"
+            saving={saving}
+            primaryRef={saveRef}
+            primaryTabIndex={9}
+            closeTabIndex={10}
+            onClose={() => navigate('/')}
+          />
         </form>
         </div>
       </div>

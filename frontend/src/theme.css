@@ -47,8 +47,6 @@
   --card-purchase-maal-accent: #0A2E5C;
   --card-kachi-maal-bg: #FFFFFF;
   --card-kachi-maal-accent: #0A2E5C;
-  --card-invoice-history-bg: #FFFFFF;
-  --card-invoice-history-accent: #0A2E5C;
 
   /* Dashboard quick-link accents */
   --ql-payment: #8B2942;
@@ -135,8 +133,6 @@
   --card-purchase-maal-accent: #C8D4E4;
   --card-kachi-maal-bg: #222D3D;
   --card-kachi-maal-accent: #C8D4E4;
-  --card-invoice-history-bg: #222D3D;
-  --card-invoice-history-accent: #C8D4E4;
 
   --ql-payment: #C87070;
   --ql-payment-hover: #2A1E22;

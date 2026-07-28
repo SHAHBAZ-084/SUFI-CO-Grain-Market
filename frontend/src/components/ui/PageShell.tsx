@@ -82,7 +82,11 @@ export function LegacyTable({
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
-  return <label className="app-field-label">{children}</label>;
+  return (
+    <label className="app-field-label">
+      <span className="app-field-label-text">{children}</span>
+    </label>
+  );
 }
 
 export function FormRow({ label, children }: { label: ReactNode; children: ReactNode }) {

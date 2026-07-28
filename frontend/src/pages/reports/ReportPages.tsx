@@ -319,7 +319,7 @@ export function SalePurchaseReportsPage() {
     <PageShell title="Sale/Purchase Reports" subtitle="Combined invoice reporting">
       <Panel>
         <p className="text-sm text-textSecondary">
-          Use <strong>View Previous Bill</strong> under Sale/Purchase Invoice for the unified history.
+          Use <strong>View Invoice</strong> under Invoices to look up any posted bill by type and number.
           Detailed sale/purchase analytics will be added with invoice posting rules.
         </p>
       </Panel>

@@ -10,7 +10,6 @@ import { PurchasePartiesPage, SalePartiesPage } from './pages/accounts/PartiesPa
 import { ProductAddPage, ProductRemovePage } from './pages/accounts/ProductManagePage';
 import { BardanaPage } from './pages/inventory/BardanaPage';
 import { InvoiceFormPage } from './pages/invoices/InvoiceFormPage';
-import { InvoiceHistoryPage } from './pages/invoices/InvoiceHistoryPage';
 import { ViewInvoicePage } from './pages/invoices/ViewInvoicePage';
 import { LoginPage } from './pages/LoginPage';
 import { PosHomePage } from './pages/PosHomePage';
@@ -47,7 +46,6 @@ export default function App() {
               <Route path="/invoices/purchase-maal" element={<InvoiceFormPage slug="purchase-maal" />} />
               <Route path="/invoices/kachi-maal" element={<InvoiceFormPage slug="kachi-maal" />} />
               <Route path="/invoices/view-invoice" element={<ViewInvoicePage />} />
-              <Route path="/invoices/history" element={<InvoiceHistoryPage />} />
 
               <Route path="/inventory/bardana" element={<BardanaPage />} />
 

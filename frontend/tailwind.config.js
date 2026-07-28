@@ -50,8 +50,6 @@ export default {
         cardPurchaseMaalAccent: 'var(--card-purchase-maal-accent)',
         cardKachiMaalBg: 'var(--card-kachi-maal-bg)',
         cardKachiMaalAccent: 'var(--card-kachi-maal-accent)',
-        cardInvoiceHistoryBg: 'var(--card-invoice-history-bg)',
-        cardInvoiceHistoryAccent: 'var(--card-invoice-history-accent)',
       },
     },
   },

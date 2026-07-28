@@ -47,7 +47,6 @@ export const SIDEBAR_NAV: SidebarSection[] = [
       { kind: 'link', label: 'Purchase to Maal', to: '/invoices/purchase-maal' },
       { kind: 'link', label: 'Kachi Maal', to: '/invoices/kachi-maal' },
       { kind: 'link', label: 'View Invoice', to: '/invoices/view-invoice' },
-      { kind: 'link', label: 'View Previous Bill', to: '/invoices/history' },
     ],
   },
   {

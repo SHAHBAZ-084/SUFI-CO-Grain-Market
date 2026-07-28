@@ -8,7 +8,6 @@ import {
   BookOpen,
   Eye,
   FileText,
-  History,
   Package,
   Receipt,
   Scale,
@@ -45,7 +44,6 @@ const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideI
   '/invoices/purchase-maal': { variant: 'purchase-maal', icon: ShoppingCart },
   '/invoices/kachi-maal': { variant: 'kachi-maal', icon: Wheat },
   '/invoices/view-invoice': { variant: 'view', icon: Eye },
-  '/invoices/history': { variant: 'view', icon: History },
   '/reports/accounts': { variant: 'report', icon: ScrollText },
   '/reports/account-balance': { variant: 'report', icon: Wallet },
   '/reports/vouchers': { variant: 'report', icon: Receipt },
@@ -139,7 +137,9 @@ export function PosHomePage() {
               to={link.to}
               title={link.label}
               description={
-                link.to === '/invoices/history' ? 'All invoice types in one list' : 'Open invoice form'
+                link.to === '/invoices/view-invoice'
+                  ? 'Look up a posted invoice by type and number'
+                  : 'Open invoice form'
               }
             />
           ))}
