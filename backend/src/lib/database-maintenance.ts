@@ -7,10 +7,11 @@ import { logger } from './logger';
 const DEFAULT_BACKUP_RETENTION_DAYS = 30;
 
 export async function configureSqlitePragmas(db: PrismaClient): Promise<void> {
-  await db.$executeRawUnsafe('PRAGMA journal_mode = WAL;');
-  await db.$executeRawUnsafe('PRAGMA synchronous = NORMAL;');
-  await db.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
-  await db.$executeRawUnsafe('PRAGMA busy_timeout = 5000;');
+  // PRAGMA statements return rows in SQLite — use $queryRaw, not $executeRaw.
+  await db.$queryRawUnsafe('PRAGMA journal_mode = WAL;');
+  await db.$queryRawUnsafe('PRAGMA synchronous = NORMAL;');
+  await db.$queryRawUnsafe('PRAGMA foreign_keys = ON;');
+  await db.$queryRawUnsafe('PRAGMA busy_timeout = 5000;');
   logger.info('SQLite pragmas applied (WAL, synchronous=NORMAL, foreign_keys=ON, busy_timeout=5000)');
 }
 

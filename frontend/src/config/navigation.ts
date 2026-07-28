@@ -1,3 +1,13 @@
+import type { LucideIcon } from 'lucide-react';
+import {
+  BarChart3,
+  FileText,
+  Package,
+  Receipt,
+  Settings,
+  Wallet,
+} from 'lucide-react';
+
 export type NavLink = {
   label: string;
   to: string;
@@ -8,16 +18,43 @@ export type NavItem =
   | ({ kind: 'link' } & NavLink)
   | { kind: 'submenu'; label: string; children: NavLink[] };
 
-export type NavGroup = {
+export type SidebarSection = {
+  id: string;
   label: string;
-  children?: NavItem[];
-  to?: string;
+  icon: LucideIcon;
+  items: NavItem[];
 };
 
-export const TOP_NAV: NavGroup[] = [
+export const SIDEBAR_NAV: SidebarSection[] = [
   {
+    id: 'vouchers',
+    label: 'Vouchers',
+    icon: Receipt,
+    items: [
+      { kind: 'link', label: 'Payment Voucher', to: '/vouchers/payment' },
+      { kind: 'link', label: 'Journal Voucher', to: '/vouchers/journal' },
+      { kind: 'link', label: 'Receipt Voucher', to: '/vouchers/receipt' },
+      { kind: 'link', label: 'View Voucher', to: '/vouchers/view' },
+    ],
+  },
+  {
+    id: 'invoices',
+    label: 'Invoices',
+    icon: FileText,
+    items: [
+      { kind: 'link', label: 'Sale on Commission', to: '/invoices/sale-commission' },
+      { kind: 'link', label: 'Sale on Paunch', to: '/invoices/sale-paunch' },
+      { kind: 'link', label: 'Purchase to Maal', to: '/invoices/purchase-maal' },
+      { kind: 'link', label: 'Kachi Maal', to: '/invoices/kachi-maal' },
+      { kind: 'link', label: 'View Invoice', to: '/invoices/view-invoice' },
+      { kind: 'link', label: 'View Previous Bill', to: '/invoices/history' },
+    ],
+  },
+  {
+    id: 'accounts',
     label: 'Accounts',
-    children: [
+    icon: Wallet,
+    items: [
       {
         kind: 'submenu',
         label: 'Category',
@@ -36,45 +73,25 @@ export const TOP_NAV: NavGroup[] = [
           { label: 'Remove Account', to: '/accounts/manage/remove' },
         ],
       },
-      {
-        kind: 'submenu',
-        label: 'Product',
-        children: [
-          { label: 'Add Product', to: '/accounts/products/add', description: 'Auto-creates Maal Khata inventory ledger' },
-          { label: 'Remove Product', to: '/accounts/products/remove' },
-        ],
-      },
       { kind: 'link', label: 'Sale Party', to: '/accounts/sale-parties' },
       { kind: 'link', label: 'Purchase Party', to: '/accounts/purchase-parties' },
     ],
   },
   {
-    label: 'Sale/Purchase Invoice',
-    children: [
-      { kind: 'link', label: 'Sale on Commission', to: '/invoices/sale-commission' },
-      { kind: 'link', label: 'Sale on Paunch', to: '/invoices/sale-paunch' },
-      { kind: 'link', label: 'Purchase to Maal', to: '/invoices/purchase-maal' },
-      { kind: 'link', label: 'Kachi Maal', to: '/invoices/kachi-maal' },
-      { kind: 'link', label: 'View Invoice', to: '/invoices/view-invoice' },
-      { kind: 'link', label: 'View Previous Bill', to: '/invoices/history' },
+    id: 'products',
+    label: 'Products',
+    icon: Package,
+    items: [
+      { kind: 'link', label: 'Add Product', to: '/accounts/products/add' },
+      { kind: 'link', label: 'Remove Product', to: '/accounts/products/remove' },
+      { kind: 'link', label: 'Bardana Stock', to: '/inventory/bardana' },
     ],
   },
   {
-    label: 'Inventory Stock',
-    children: [{ kind: 'link', label: 'Bardana', to: '/inventory/bardana' }],
-  },
-  {
-    label: 'Voucher',
-    children: [
-      { kind: 'link', label: 'Payment Voucher', to: '/vouchers/payment' },
-      { kind: 'link', label: 'Journal Voucher', to: '/vouchers/journal' },
-      { kind: 'link', label: 'Receipt Voucher', to: '/vouchers/receipt' },
-      { kind: 'link', label: 'View Voucher', to: '/vouchers/view' },
-    ],
-  },
-  {
+    id: 'reports',
     label: 'Reports',
-    children: [
+    icon: BarChart3,
+    items: [
       {
         kind: 'submenu',
         label: 'Account Reports',
@@ -89,14 +106,58 @@ export const TOP_NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'system',
     label: 'System',
-    children: [{ kind: 'link', label: 'System Preference', to: '/system/preferences' }],
-  },
-  {
-    label: 'User',
-    to: '/user',
+    icon: Settings,
+    items: [{ kind: 'link', label: 'System Preference', to: '/system/preferences' }],
   },
 ];
+
+/** Flat links for dashboard invoice shortcuts. */
+export const INVOICE_QUICK_LINKS: NavLink[] = (
+  SIDEBAR_NAV.find((section) => section.id === 'invoices')?.items ?? []
+).flatMap((item) => (item.kind === 'link' ? [item] : []));
+
+export const VOUCHER_QUICK_LINKS: NavLink[] = (
+  SIDEBAR_NAV.find((section) => section.id === 'vouchers')?.items ?? []
+).flatMap((item) => (item.kind === 'link' && item.to !== '/vouchers/view' ? [item] : []));
+
+/** Flat links for dashboard report shortcuts (includes nested account reports). */
+export const REPORT_QUICK_LINKS: NavLink[] = (
+  SIDEBAR_NAV.find((section) => section.id === 'reports')?.items ?? []
+).flatMap((item) =>
+  item.kind === 'link' ? [item] : item.children.map((child) => ({ ...child })),
+);
+
+const ROUTE_TITLES: Record<string, string> = {
+  '/': 'Dashboard',
+  '/user': 'User Information',
+};
+
+function collectRouteTitles(items: NavItem[], titles: Record<string, string>) {
+  for (const item of items) {
+    if (item.kind === 'link') {
+      titles[item.to] = item.label;
+    } else {
+      for (const child of item.children) {
+        titles[child.to] = child.label;
+      }
+    }
+  }
+}
+
+for (const section of SIDEBAR_NAV) {
+  collectRouteTitles(section.items, ROUTE_TITLES);
+}
+
+export function getPageTitle(pathname: string): string {
+  if (ROUTE_TITLES[pathname]) return ROUTE_TITLES[pathname];
+  const match = Object.entries(ROUTE_TITLES)
+    .filter(([path]) => path !== '/')
+    .sort(([a], [b]) => b.length - a.length)
+    .find(([path]) => pathname.startsWith(path));
+  return match?.[1] ?? 'Grain Market POS';
+}
 
 export const INVOICE_TYPE_LABELS: Record<string, string> = {
   SALE_COMMISSION: 'Sale on Commission',
@@ -104,3 +165,15 @@ export const INVOICE_TYPE_LABELS: Record<string, string> = {
   PURCHASE_MAAL: 'Purchase to Maal',
   KACHI_MAAL: 'Kachi Maal',
 };
+
+/** @deprecated Use SIDEBAR_NAV — kept for any legacy imports */
+export type NavGroup = {
+  label: string;
+  children?: NavItem[];
+  to?: string;
+};
+
+export const TOP_NAV: NavGroup[] = SIDEBAR_NAV.map((section) => ({
+  label: section.label,
+  children: section.items,
+}));

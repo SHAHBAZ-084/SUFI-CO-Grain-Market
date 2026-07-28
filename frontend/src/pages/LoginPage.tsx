@@ -29,18 +29,17 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface3 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-surface2 p-8 shadow-xl">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full app-topnav text-2xl text-white">
-            G
-          </div>
-          <h1 className="text-2xl font-semibold text-textPrimary">Grain Market POS</h1>
-          <p className="mt-2 text-sm text-textMuted">Sign in to continue</p>
+      <div className="w-full max-w-md border border-border bg-surface2">
+        <div className="border-b border-border bg-financial px-6 py-5 text-center text-onFinancial">
+          <img src="/sufi-co-logo.png" alt="Sufi & Co" className="login-brand-logo mx-auto" />
+          <p className="mt-2 text-xs uppercase tracking-widest opacity-90">Grain Market POS</p>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4 p-6" onSubmit={handleSubmit}>
+          <p className="text-sm text-textSecondary">Sign in to continue</p>
+
           <div>
-            <label htmlFor="username" className="mb-1 block text-sm font-medium text-textSecondary">
+            <label htmlFor="username" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-textSecondary">
               Username
             </label>
             <input
@@ -49,13 +48,13 @@ export function LoginPage() {
               autoComplete="username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 outline-none ring-accent focus:ring-2"
+              className="w-full rounded-sm border border-border px-2.5 py-2 text-sm outline-none focus:border-borderStrong"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium text-textSecondary">
+            <label htmlFor="password" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-textSecondary">
               Password
             </label>
             <input
@@ -64,21 +63,19 @@ export function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 outline-none ring-accent focus:ring-2"
+              className="w-full rounded-sm border border-border px-2.5 py-2 text-sm outline-none focus:border-borderStrong"
               required
             />
           </div>
 
-          {error ? (
-            <p className="rounded-lg bg-surface1 px-3 py-2 text-sm text-danger">{error}</p>
-          ) : null}
+          {error ? <p className="border border-danger bg-bgDanger px-3 py-2 text-sm text-danger">{error}</p> : null}
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-full btn-primary py-2.5 font-medium disabled:cursor-not-allowed"
+            className="w-full btn-primary py-2.5 font-semibold disabled:cursor-not-allowed"
           >
-            {submitting ? 'Signing in...' : 'Sign in'}
+            {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </div>

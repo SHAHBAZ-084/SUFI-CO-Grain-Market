@@ -23,8 +23,8 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-surface0 p-6">
-          <div className="max-w-lg rounded-xl border border-border bg-surface1 p-6 shadow-sm">
+        <div className="flex min-h-screen items-center justify-center bg-surface3 p-6">
+          <div className="max-w-lg border border-border bg-surface2 p-6">
             <h1 className="text-lg font-semibold text-textPrimary">
               {this.props.title ?? 'Something went wrong'}
             </h1>

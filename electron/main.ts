@@ -4,6 +4,7 @@ import { autoUpdater } from 'electron-updater';
 
 const isDev = process.env.NODE_ENV === 'development';
 const BACKEND_PORT = process.env.PORT ?? '3847';
+const APP_ICON = path.join(__dirname, '../build/icon.png');
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -26,6 +27,7 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 700,
     title: 'Grain Market POS',
+    icon: APP_ICON,
     show: false,
     backgroundColor: '#f4f5f7',
     webPreferences: {
@@ -79,27 +81,27 @@ function configureAutoUpdater(): void {
 
   autoUpdater.on('update-downloaded', () => {
     const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
-    dialog
-      .showMessageBox(win ?? undefined, {
-        type: 'info',
-        title: 'Update ready',
-        message: 'A new version has been downloaded.',
-        detail: 'Restart the app to apply the update.',
-        buttons: ['Restart now', 'Later'],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      .then(({ response }) => {
-        if (response === 0) autoUpdater.quitAndInstall();
-      });
+    const options = {
+      type: 'info' as const,
+      title: 'Update ready',
+      message: 'A new version has been downloaded.',
+      detail: 'Restart the app to apply the update.',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+    };
+    const promise = win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options);
+    promise.then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
   });
 
-  autoUpdater.on('error', (err) => {
+  autoUpdater.on('error', (err: Error) => {
     console.warn('Auto-update check failed:', err.message);
   });
 
-  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-    console.warn('Could not check for updates:', err);
+  autoUpdater.checkForUpdatesAndNotify().catch((err: unknown) => {
+    console.warn('Could not check for updates:', err instanceof Error ? err.message : err);
   });
 }
 

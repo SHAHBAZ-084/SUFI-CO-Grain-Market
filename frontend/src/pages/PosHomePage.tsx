@@ -1,133 +1,88 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  BarChart3,
+  BookOpen,
+  Eye,
+  FileText,
+  History,
+  Package,
   Receipt,
+  Scale,
+  ScrollText,
+  ShoppingCart,
+  TrendingUp,
   Wallet,
-  type LucideIcon,
+  Wheat,
 } from 'lucide-react';
-import { TOP_NAV } from '../config/navigation';
-import { PageShell, Tile } from '../components/ui/PageShell';
+import { INVOICE_QUICK_LINKS, REPORT_QUICK_LINKS, VOUCHER_QUICK_LINKS } from '../config/navigation';
+import { LegacyTable, PageShell, Tile } from '../components/ui/PageShell';
 import { api } from '../lib/api';
 import { formatLedgerAmount, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../lib/format';
 
 type DashboardSummary = Awaited<ReturnType<typeof api.getDashboardSummary>>;
 
-type MetricTone = 'cash' | 'receivables' | 'payables' | 'vouchers';
+type QuickLinkVariant =
+  | 'payment'
+  | 'receipt'
+  | 'journal'
+  | 'sale-commission'
+  | 'sale-paunch'
+  | 'purchase-maal'
+  | 'kachi-maal'
+  | 'view'
+  | 'report';
 
-const METRIC_STYLES: Record<
-  MetricTone,
-  { card: string; value: string; badge: string; icon: LucideIcon }
-> = {
-  cash: {
-    card: 'border-l-4 border-metricCashAccent bg-metricCashBg',
-    value: 'text-metricCashAccent',
-    badge: 'bg-[color-mix(in_srgb,var(--metric-cash-accent)_14%,var(--surface-2))] text-metricCashAccent',
-    icon: Wallet,
-  },
-  receivables: {
-    card: 'border-l-4 border-metricReceivablesAccent bg-metricReceivablesBg',
-    value: 'text-metricReceivablesAccent',
-    badge:
-      'bg-[color-mix(in_srgb,var(--metric-receivables-accent)_14%,var(--surface-2))] text-metricReceivablesAccent',
-    icon: ArrowDownCircle,
-  },
-  payables: {
-    card: 'border-l-4 border-metricPayablesAccent bg-metricPayablesBg',
-    value: 'text-metricPayablesAccent',
-    badge: 'bg-[color-mix(in_srgb,var(--metric-payables-accent)_14%,var(--surface-2))] text-metricPayablesAccent',
-    icon: ArrowUpCircle,
-  },
-  vouchers: {
-    card: 'border-l-4 border-metricVouchersAccent bg-metricVouchersBg',
-    value: 'text-metricVouchersAccent',
-    badge:
-      'bg-[color-mix(in_srgb,var(--metric-vouchers-accent)_14%,var(--surface-2))] text-metricVouchersAccent',
-    icon: Receipt,
-  },
+const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideIcon }> = {
+  '/vouchers/payment': { variant: 'payment', icon: ArrowUpCircle },
+  '/vouchers/receipt': { variant: 'receipt', icon: ArrowDownCircle },
+  '/vouchers/journal': { variant: 'journal', icon: BookOpen },
+  '/invoices/sale-commission': { variant: 'sale-commission', icon: FileText },
+  '/invoices/sale-paunch': { variant: 'sale-paunch', icon: Scale },
+  '/invoices/purchase-maal': { variant: 'purchase-maal', icon: ShoppingCart },
+  '/invoices/kachi-maal': { variant: 'kachi-maal', icon: Wheat },
+  '/invoices/view-invoice': { variant: 'view', icon: Eye },
+  '/invoices/history': { variant: 'view', icon: History },
+  '/reports/accounts': { variant: 'report', icon: ScrollText },
+  '/reports/account-balance': { variant: 'report', icon: Wallet },
+  '/reports/vouchers': { variant: 'report', icon: Receipt },
+  '/reports/trial-balance': { variant: 'report', icon: BarChart3 },
+  '/reports/sale-purchase': { variant: 'report', icon: TrendingUp },
 };
 
-const INVOICE_CARD_STYLES: Record<string, { card: string; title: string }> = {
-  '/invoices/sale-commission': {
-    card: 'border-l-4 border-cardSaleCommissionAccent bg-cardSaleCommissionBg hover:border-cardSaleCommissionAccent',
-    title: 'text-cardSaleCommissionAccent',
-  },
-  '/invoices/sale-paunch': {
-    card: 'border-l-4 border-cardSalePaunchAccent bg-cardSalePaunchBg hover:border-cardSalePaunchAccent',
-    title: 'text-cardSalePaunchAccent',
-  },
-  '/invoices/purchase-maal': {
-    card: 'border-l-4 border-cardPurchaseMaalAccent bg-cardPurchaseMaalBg hover:border-cardPurchaseMaalAccent',
-    title: 'text-cardPurchaseMaalAccent',
-  },
-  '/invoices/kachi-maal': {
-    card: 'border-l-4 border-cardKachiMaalAccent bg-cardKachiMaalBg hover:border-cardKachiMaalAccent',
-    title: 'text-cardKachiMaalAccent',
-  },
-  '/invoices/history': {
-    card: 'border-l-4 border-cardInvoiceHistoryAccent bg-cardInvoiceHistoryBg hover:border-cardInvoiceHistoryAccent',
-    title: 'text-cardInvoiceHistoryAccent',
-  },
-};
-
-const VOUCHER_ACTIONS = [
-  { label: 'Payment Voucher', to: '/vouchers/payment', card: 'border-l-4 border-voucherPayment bg-bgDanger hover:border-voucherPayment', title: 'text-voucherPayment' },
-  { label: 'Receipt Voucher', to: '/vouchers/receipt', card: 'border-l-4 border-voucherReceipt bg-bgSuccess hover:border-voucherReceipt', title: 'text-voucherReceipt' },
-  { label: 'Journal Voucher', to: '/vouchers/journal', card: 'border-l-4 border-voucherJournal bg-bgAccent hover:border-voucherJournal', title: 'text-voucherJournal' },
-] as const;
-
-function MetricCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: MetricTone;
-}) {
-  const style = METRIC_STYLES[tone];
-  const Icon = style.icon;
+function StatBox({ label, value }: { label: string; value: string }) {
   return (
-    <Tile
-      className={`relative flex min-h-[7rem] flex-col justify-end !p-5 transition-shadow duration-200 ease-out hover:shadow-md ${style.card}`}
-    >
-      <div
-        className={`absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full ${style.badge}`}
-        aria-hidden="true"
-      >
-        <Icon className="h-5 w-5" strokeWidth={2} />
-      </div>
-      <div className="pr-11">
-        <p className="text-xs font-medium text-textSecondary">{label}</p>
-        <p className={`mt-1.5 text-2xl font-semibold tabular-nums leading-none ${style.value}`}>
-          {value}
-        </p>
-      </div>
+    <Tile className="min-h-[4.5rem]">
+      <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-textMuted">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums text-financial">{value}</p>
     </Tile>
   );
 }
 
-function ActionCard({
+function QuickLink({
   to,
   title,
   description,
-  cardClassName,
-  titleClassName,
 }: {
   to: string;
   title: string;
   description: string;
-  cardClassName: string;
-  titleClassName: string;
 }) {
+  const meta = QUICK_LINK_META[to] ?? { variant: 'view' as const, icon: Package };
+  const Icon = meta.icon;
+
   return (
-    <Link
-      to={to}
-      className={`rounded-lg border border-border p-3 shadow-sm transition ${cardClassName}`}
-    >
-      <h3 className={`text-sm font-semibold ${titleClassName}`}>{title}</h3>
-      <p className="mt-1 text-xs text-textSecondary">{description}</p>
+    <Link to={to} className={`quick-link-card quick-link-card--${meta.variant}`}>
+      <div className="quick-link-card-inner">
+        <Icon className="quick-link-icon h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-financial">{title}</h3>
+          <p className="mt-0.5 text-xs text-textSecondary">{description}</p>
+        </div>
+      </div>
     </Link>
   );
 }
@@ -135,10 +90,6 @@ function ActionCard({
 export function PosHomePage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loadError, setLoadError] = useState('');
-
-  const invoiceLinks = (
-    TOP_NAV.find((g) => g.label === 'Sale/Purchase Invoice')?.children ?? []
-  ).filter((item): item is { kind: 'link'; label: string; to: string; description?: string } => item.kind === 'link');
 
   useEffect(() => {
     api
@@ -148,105 +99,101 @@ export function PosHomePage() {
   }, []);
 
   return (
-    <PageShell title="Dashboard" subtitle="Today at a glance">
-      {loadError ? <p className="mb-4 text-sm text-danger">{loadError}</p> : null}
+    <PageShell subtitle="Today at a glance">
+      {loadError ? <p className="text-sm text-danger">{loadError}</p> : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatBox
           label="Cash Balance"
           value={summary ? formatLedgerAmount(summary.cashBalance) : '—'}
-          tone="cash"
         />
-        <MetricCard
+        <StatBox
           label="Receivables"
           value={summary ? formatLedgerAmount(summary.receivables) : '—'}
-          tone="receivables"
         />
-        <MetricCard
+        <StatBox
           label="Payables"
           value={summary ? formatLedgerAmount(summary.payables) : '—'}
-          tone="payables"
         />
-        <MetricCard
+        <StatBox
           label="Vouchers Today"
           value={summary ? String(summary.vouchersToday) : '—'}
-          tone="vouchers"
         />
       </div>
 
-      <div className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">New voucher</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {VOUCHER_ACTIONS.map((action) => (
-            <ActionCard
-              key={action.to}
-              to={action.to}
-              title={action.label}
-              description="Open voucher form"
-              cardClassName={action.card}
-              titleClassName={action.title}
+      <div>
+        <h2 className="legacy-section-title">New Voucher</h2>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {VOUCHER_QUICK_LINKS.map((link) => (
+            <QuickLink key={link.to} to={link.to} title={link.label} description="Open voucher form" />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="legacy-section-title">Invoices</h2>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {INVOICE_QUICK_LINKS.map((link) => (
+            <QuickLink
+              key={link.to}
+              to={link.to}
+              title={link.label}
+              description={
+                link.to === '/invoices/history' ? 'All invoice types in one list' : 'Open invoice form'
+              }
             />
           ))}
         </div>
       </div>
 
-      <div className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textMuted">Invoices</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {invoiceLinks.map((link) => {
-            const style = INVOICE_CARD_STYLES[link.to] ?? INVOICE_CARD_STYLES['/invoices/history'];
-            return (
-              <ActionCard
-                key={link.to}
-                to={link.to}
-                title={link.label}
-                description={link.to === '/invoices/history' ? 'All invoice types in one list' : 'Open invoice form'}
-                cardClassName={style.card}
-                titleClassName={style.title}
-              />
-            );
-          })}
+      <div>
+        <h2 className="legacy-section-title">Reports</h2>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {REPORT_QUICK_LINKS.map((link) => (
+            <QuickLink key={link.to} to={link.to} title={link.label} description="Open report" />
+          ))}
         </div>
       </div>
 
-      <Tile className="mt-6">
-        <h2 className="mb-3 text-base font-semibold text-textPrimary">Recent vouchers</h2>
-
-        {!summary ? (
-          <p className="text-sm text-textMuted">Loading…</p>
-        ) : summary.recentVouchers.length === 0 ? (
-          <p className="text-sm text-textMuted">No vouchers posted yet this year.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-border text-textMuted">
-                  <th className="py-2 pr-3 font-medium">#</th>
-                  <th className="py-2 pr-3 font-medium">Account</th>
-                  <th className="py-2 pr-3 font-medium">Type</th>
-                  <th className="py-2 text-right font-medium">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.recentVouchers.map((v) => (
-                  <tr key={v.id} className="border-b border-border last:border-0">
-                    <td className="py-2 pr-3 font-mono text-xs font-semibold text-financial">
-                      {formatVoucherNumber(v.number, v.type)}
-                    </td>
-                    <td className="py-2 pr-3 text-textSecondary">{v.accountLabel}</td>
-                    <td className={`py-2 pr-3 font-medium ${voucherTypeColorClass(v.type)}`}>
-                      {formatVoucherTypeLabel(v.type)}
-                    </td>
-                    <td className="py-2 text-right font-medium text-textPrimary">
-                      {formatLedgerAmount(v.amount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Tile>
+      <PanelSection summary={summary} />
     </PageShell>
+  );
+}
+
+function PanelSection({ summary }: { summary: DashboardSummary | null }) {
+  return (
+    <div>
+      <h2 className="legacy-section-title">Recent Vouchers</h2>
+      {!summary ? (
+        <p className="text-sm text-textMuted">Loading…</p>
+      ) : summary.recentVouchers.length === 0 ? (
+        <p className="text-sm text-textMuted">No vouchers posted yet this year.</p>
+      ) : (
+        <LegacyTable>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Account</th>
+              <th>Type</th>
+              <th className="text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.recentVouchers.map((v) => (
+              <tr key={v.id}>
+                <td className="font-mono text-xs font-semibold text-financial">
+                  {formatVoucherNumber(v.number, v.type)}
+                </td>
+                <td>{v.accountLabel}</td>
+                <td className={`font-medium ${voucherTypeColorClass(v.type)}`}>
+                  {formatVoucherTypeLabel(v.type)}
+                </td>
+                <td className="text-right font-medium tabular-nums">{formatLedgerAmount(v.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </LegacyTable>
+      )}
+    </div>
   );
 }

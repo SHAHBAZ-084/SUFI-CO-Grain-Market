@@ -28,6 +28,7 @@ export default {
         dropdownBg: 'var(--dropdown-bg)',
         financial: 'var(--fill-financial)',
         onFinancial: 'var(--on-financial)',
+        borderStrong: 'var(--border-strong)',
         textFinancial: 'var(--text-financial)',
         voucherPayment: 'var(--voucher-payment)',
         voucherReceipt: 'var(--voucher-receipt)',

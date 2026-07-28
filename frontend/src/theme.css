@@ -1,93 +1,110 @@
 :root,
 [data-theme='light'] {
-  /* Two surfaces only: canvas + card */
-  --surface-1: #F4F5F7;
+  /* Legacy business palette — navy + white */
+  --surface-1: #F5F6F8;
   --surface-2: #FFFFFF;
-  --surface-3: #F4F5F7;
+  --surface-3: #F5F6F8;
 
-  /* Typography — slate grey for secondary/borders, never as fills */
-  --text-primary: #1C2838;
-  --text-secondary: #5B6B7C;
-  --text-muted: #7A8794;
-  --border: #D8DCE1;
-  --border-strong: #5B6B7C;
+  --text-primary: #0A2E5C;
+  --text-secondary: #3D4F63;
+  --text-muted: #5B6B7C;
+  --border: #C5CCD4;
+  --border-strong: #1B3A6B;
 
-  /* Informational accent only (links, filters, focus — not money actions) */
-  --fill-accent: #378ADD;
+  --fill-accent: #1B3A6B;
   --on-accent: #FFFFFF;
-  --bg-accent: #E6F1FB;
-  --text-accent: #0C447C;
+  --bg-accent: #E8EDF4;
+  --text-accent: #0A2E5C;
 
-  /* Financial / structural navy — nav bar + voucher/invoice Save & Post */
-  --fill-financial: #0C2340;
+  --fill-financial: #0A2E5C;
   --on-financial: #FFFFFF;
-  --text-financial: #0C2340;
+  --text-financial: #0A2E5C;
 
-  /* Dr / Cr — unchanged */
   --text-success: #1E5C4A;
   --text-danger: #A32D2D;
-  --bg-success: #E8F4EF;
-  --bg-danger: #FBEAEA;
+  --bg-success: #EEF6F2;
+  --bg-danger: #FBEFEF;
 
-  /* Voucher type labels */
   --voucher-payment: #A32D2D;
   --voucher-receipt: #1E5C4A;
-  --voucher-journal: #378ADD;
+  --voucher-journal: #1B3A6B;
   --voucher-kachi: #7D5A00;
 
-  /* Dashboard metric cards — subtle tint + left accent */
-  --metric-cash-bg: #E8F4EF;
-  --metric-cash-accent: #1E5C4A;
-  --metric-receivables-bg: #E6F1FB;
-  --metric-receivables-accent: #378ADD;
-  --metric-payables-bg: #FBEAEA;
-  --metric-payables-accent: #A32D2D;
-  --metric-vouchers-bg: #E8EDF4;
-  --metric-vouchers-accent: #0C2340;
+  --metric-cash-bg: #FFFFFF;
+  --metric-cash-accent: #0A2E5C;
+  --metric-receivables-bg: #FFFFFF;
+  --metric-receivables-accent: #0A2E5C;
+  --metric-payables-bg: #FFFFFF;
+  --metric-payables-accent: #0A2E5C;
+  --metric-vouchers-bg: #FFFFFF;
+  --metric-vouchers-accent: #0A2E5C;
 
-  /* Dashboard invoice / action cards */
-  --card-sale-commission-bg: #E8F4EF;
-  --card-sale-commission-accent: #1E5C4A;
-  --card-sale-paunch-bg: #E3F4F1;
-  --card-sale-paunch-accent: #1A6B5C;
-  --card-purchase-maal-bg: #FDF3E6;
-  --card-purchase-maal-accent: #B86E00;
-  --card-kachi-maal-bg: #F0EAF8;
-  --card-kachi-maal-accent: #5E3D99;
-  --card-invoice-history-bg: #E8EDF4;
-  --card-invoice-history-accent: #0C2340;
+  --card-sale-commission-bg: #FFFFFF;
+  --card-sale-commission-accent: #0A2E5C;
+  --card-sale-paunch-bg: #FFFFFF;
+  --card-sale-paunch-accent: #0A2E5C;
+  --card-purchase-maal-bg: #FFFFFF;
+  --card-purchase-maal-accent: #0A2E5C;
+  --card-kachi-maal-bg: #FFFFFF;
+  --card-kachi-maal-accent: #0A2E5C;
+  --card-invoice-history-bg: #FFFFFF;
+  --card-invoice-history-accent: #0A2E5C;
 
-  /* Dropdowns — solid white card on canvas */
+  /* Dashboard quick-link accents */
+  --ql-payment: #8B2942;
+  --ql-payment-hover: #FBF2F4;
+  --ql-receipt: #1E5C4A;
+  --ql-receipt-hover: #EEF6F2;
+  --ql-journal: #4A5568;
+  --ql-journal-hover: #F0F2F5;
+  --ql-sale-commission: #1A6B7A;
+  --ql-sale-commission-hover: #ECF5F7;
+  --ql-sale-paunch: #B86E00;
+  --ql-sale-paunch-hover: #FDF6EC;
+  --ql-purchase-maal: #5E3D99;
+  --ql-purchase-maal-hover: #F4F0FA;
+  --ql-kachi-maal: #9A7B1A;
+  --ql-kachi-maal-hover: #FBF6E8;
+  --ql-view: #1B3A6B;
+  --ql-view-hover: #EEF2F8;
+  --ql-report: #2E5984;
+  --ql-report-hover: #ECF1F7;
+
   --dropdown-bg: #FFFFFF;
-  --dropdown-border: #5B6B7C;
-  --dropdown-shadow: 0 12px 32px rgba(12, 35, 64, 0.18);
+  --dropdown-border: #1B3A6B;
+  --dropdown-shadow: none;
 
-  /* Top navigation */
-  --nav-bg: #0C2340;
-  --nav-border: #071829;
-  --nav-text: #E8EDF4;
+  --sidebar-width: 240px;
+  --nav-bg: #0A2E5C;
+  --nav-bg-light: #1B3A6B;
+  --nav-border: #071E3D;
+  --nav-text: #D8E2EE;
   --nav-text-hover: #FFFFFF;
-  --nav-hover-bg: rgba(255, 255, 255, 0.12);
-  --nav-active-bg: rgba(255, 255, 255, 0.18);
+  --nav-hover-bg: rgba(255, 255, 255, 0.08);
+  --nav-active-bg: rgba(255, 255, 255, 0.14);
+  --nav-active-border: #FFFFFF;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
 }
 
 [data-theme='dark'] {
-  --surface-1: #1E2128;
-  --surface-2: #282C34;
-  --surface-3: #1E2128;
+  --surface-1: #1A2433;
+  --surface-2: #222D3D;
+  --surface-3: #141C28;
 
-  --text-primary: #F0F2F5;
-  --text-secondary: #9AA5B4;
-  --text-muted: #7A8794;
-  --border: #3D4450;
-  --border-strong: #9AA5B4;
+  --text-primary: #E8EDF4;
+  --text-secondary: #B8C4D4;
+  --text-muted: #8A98A8;
+  --border: #3D4F63;
+  --border-strong: #6B7F96;
 
-  --fill-accent: #5BA3E8;
+  --fill-accent: #3D5F8F;
   --on-accent: #FFFFFF;
   --bg-accent: #1A3050;
-  --text-accent: #9ECBF5;
+  --text-accent: #C8D4E4;
 
-  --fill-financial: #0C2340;
+  --fill-financial: #1B3A6B;
   --on-financial: #FFFFFF;
   --text-financial: #C8D4E4;
 
@@ -98,37 +115,58 @@
 
   --voucher-payment: #E88888;
   --voucher-receipt: #6BC4A8;
-  --voucher-journal: #5BA3E8;
+  --voucher-journal: #8BB4E8;
   --voucher-kachi: #D4A843;
 
-  --metric-cash-bg: #1A2E28;
-  --metric-cash-accent: #6BC4A8;
-  --metric-receivables-bg: #1A3050;
-  --metric-receivables-accent: #5BA3E8;
-  --metric-payables-bg: #3A2020;
-  --metric-payables-accent: #E88888;
-  --metric-vouchers-bg: #1A2433;
+  --metric-cash-bg: #222D3D;
+  --metric-cash-accent: #C8D4E4;
+  --metric-receivables-bg: #222D3D;
+  --metric-receivables-accent: #C8D4E4;
+  --metric-payables-bg: #222D3D;
+  --metric-payables-accent: #C8D4E4;
+  --metric-vouchers-bg: #222D3D;
   --metric-vouchers-accent: #C8D4E4;
 
-  --card-sale-commission-bg: #1A2E28;
-  --card-sale-commission-accent: #6BC4A8;
-  --card-sale-paunch-bg: #1A2E30;
-  --card-sale-paunch-accent: #5BC4B0;
-  --card-purchase-maal-bg: #3A2E1A;
-  --card-purchase-maal-accent: #E8A855;
-  --card-kachi-maal-bg: #2A2238;
-  --card-kachi-maal-accent: #B89AE8;
-  --card-invoice-history-bg: #1A2433;
+  --card-sale-commission-bg: #222D3D;
+  --card-sale-commission-accent: #C8D4E4;
+  --card-sale-paunch-bg: #222D3D;
+  --card-sale-paunch-accent: #C8D4E4;
+  --card-purchase-maal-bg: #222D3D;
+  --card-purchase-maal-accent: #C8D4E4;
+  --card-kachi-maal-bg: #222D3D;
+  --card-kachi-maal-accent: #C8D4E4;
+  --card-invoice-history-bg: #222D3D;
   --card-invoice-history-accent: #C8D4E4;
 
-  --dropdown-bg: #282C34;
-  --dropdown-border: #9AA5B4;
-  --dropdown-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --ql-payment: #C87070;
+  --ql-payment-hover: #2A1E22;
+  --ql-receipt: #6BC4A8;
+  --ql-receipt-hover: #1A2A24;
+  --ql-journal: #8A96A8;
+  --ql-journal-hover: #1E2430;
+  --ql-sale-commission: #5BC4D4;
+  --ql-sale-commission-hover: #1A2A30;
+  --ql-sale-paunch: #E8A855;
+  --ql-sale-paunch-hover: #2A2218;
+  --ql-purchase-maal: #B89AE8;
+  --ql-purchase-maal-hover: #241E30;
+  --ql-kachi-maal: #D4A843;
+  --ql-kachi-maal-hover: #2A2418;
+  --ql-view: #8BB4E8;
+  --ql-view-hover: #1A2433;
+  --ql-report: #7BA3C9;
+  --ql-report-hover: #1A2430;
 
-  --nav-bg: #071828;
+  --dropdown-bg: #222D3D;
+  --dropdown-border: #6B7F96;
+  --dropdown-shadow: none;
+
+  --nav-bg: #071E3D;
+  --nav-bg-light: #0A2E5C;
   --nav-border: #051220;
   --nav-text: #C8D4E4;
   --nav-text-hover: #FFFFFF;
-  --nav-hover-bg: rgba(255, 255, 255, 0.1);
-  --nav-active-bg: rgba(255, 255, 255, 0.15);
+  --nav-hover-bg: rgba(255, 255, 255, 0.08);
+  --nav-active-bg: rgba(255, 255, 255, 0.12);
+  --nav-active-border: #FFFFFF;
 }

@@ -1,13 +1,17 @@
 import { Outlet } from 'react-router-dom';
-import { TopBar } from './TopBar';
+import { ContentHeader } from './ContentHeader';
+import { Sidebar } from './Sidebar';
 
 export function AppShell() {
   return (
-    <div className="min-h-screen bg-surface3">
-      <TopBar />
-      <main className="relative z-0">
-        <Outlet />
-      </main>
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-main">
+        <ContentHeader />
+        <main className="app-main-scroll">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

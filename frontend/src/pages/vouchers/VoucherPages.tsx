@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState, type RefObject } f
 import { useNavigate } from 'react-router-dom';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../../lib/format';
 import { api, Account, AccountCategory, Voucher, VoucherAccount, VoucherUser } from '../../lib/api';
-import { DangerButton, FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput, Tile } from '../../components/ui/PageShell';
+import { DangerButton, FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -49,8 +49,8 @@ function AccountSideFields({
   categoryInputRef,
   accountInputRef,
   accountNextFocusRef,
-  panelClassName = VOUCHER_SIDE_PANEL,
-  labelClassName = VOUCHER_SIDE_LABEL,
+  panelClassName = '',
+  labelClassName = 'text-textPrimary',
 }: {
   label: string;
   categoryId: string;
@@ -71,8 +71,8 @@ function AccountSideFields({
   const selected = accounts.find((a) => String(a.id) === accountId);
 
   return (
-    <div className={`${panelClassName} overflow-visible`}>
-      <p className={`mb-3 text-xs font-semibold uppercase tracking-wider ${labelClassName}`}>{label}</p>
+    <div className={`min-w-0 overflow-visible ${panelClassName}`.trim()}>
+      <p className={`mb-3 text-xs font-bold uppercase tracking-wider ${labelClassName}`}>{label}</p>
       <div className="space-y-3">
         <div>
           <FieldLabel>Category</FieldLabel>
@@ -111,9 +111,6 @@ function AccountSideFields({
     </div>
   );
 }
-
-const VOUCHER_SIDE_PANEL = 'rounded-lg border border-border bg-surface2 p-4';
-const VOUCHER_SIDE_LABEL = 'text-textSecondary';
 
 function isBankOrCashCategory(name: string) {
   const n = name.trim().toLowerCase();
@@ -309,10 +306,10 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
 
   return (
     <PageShell centerTitle titleRef={titleRef} title={<VoucherPageTitle kind={kind} />}>
-      <Panel className="mx-auto max-w-4xl overflow-visible">
+      <div className="mx-auto w-full max-w-[980px] overflow-visible px-2">
         <div ref={trapRef} className="overflow-visible">
-          <form ref={formRef} className="space-y-6 overflow-visible" onSubmit={onSubmit}>
-          <Tile className="grid gap-4 sm:grid-cols-2">
+          <form ref={formRef} className="space-y-8 overflow-visible" onSubmit={onSubmit}>
+          <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <FieldLabel>Date</FieldLabel>
               <TextInput
@@ -325,18 +322,18 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
               />
             </div>
             <div>
-              <p className="mb-1 block text-sm font-medium text-textSecondary">Voucher #</p>
-              <div
-                className={`rounded-lg border border-border bg-surface2 px-3 py-2 ${numberMismatch ? 'ring-2 ring-accent' : ''}`}
-              >
-                <span className="text-2xl font-bold tabular-nums text-financial">
-                  {voucherNumberDisplay || '…'}
-                </span>
-              </div>
+              <FieldLabel>Voucher #</FieldLabel>
+              <TextInput
+                readOnly
+                tabIndex={-1}
+                value={voucherNumberDisplay || '…'}
+                className={`font-bold tabular-nums text-financial ${numberMismatch ? 'border-accent ring-1 ring-accent' : ''}`}
+                aria-live="polite"
+              />
             </div>
-          </Tile>
+          </div>
 
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-8 sm:grid-cols-2">
             <AccountSideFields
               label={leftLabel}
               categoryId={leftCategoryId}
@@ -350,8 +347,6 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
               categoryInputRef={leftCategoryRef}
               accountInputRef={leftAccountRef}
               accountNextFocusRef={rightCategoryRef}
-              panelClassName={VOUCHER_SIDE_PANEL}
-              labelClassName={VOUCHER_SIDE_LABEL}
             />
             <AccountSideFields
               label={rightLabel}
@@ -366,12 +361,10 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
               categoryInputRef={rightCategoryRef}
               accountInputRef={rightAccountRef}
               accountNextFocusRef={amountRef}
-              panelClassName={VOUCHER_SIDE_PANEL}
-              labelClassName={VOUCHER_SIDE_LABEL}
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <FieldLabel>Amount</FieldLabel>
               <TextInput
@@ -430,7 +423,7 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
           </div>
         </form>
         </div>
-      </Panel>
+      </div>
     </PageShell>
   );
 }
@@ -663,7 +656,6 @@ export function VoucherDetailCard({
 export function VoucherListPage() {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [searchType, setSearchType] = useState('');
@@ -677,14 +669,14 @@ export function VoucherListPage() {
     setLoading(true);
     setLoadError('');
     api
-      .listVouchers({ limit: 200, offset })
+      .listVouchers({ limit: 200, offset: 0 })
       .then((page) => {
         setVouchers(page.items);
         setTotal(page.total);
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load vouchers'))
       .finally(() => setLoading(false));
-  }, [offset]);
+  }, []);
 
   useEffect(() => {
     loadVouchers();
@@ -735,7 +727,7 @@ export function VoucherListPage() {
   const voucher = result && result !== 'notfound' ? result : null;
 
   return (
-    <PageShell title="View Voucher" subtitle="Search a voucher by type and number">
+    <PageShell subtitle={total > vouchers.length ? `Loaded ${vouchers.length} of ${total} vouchers for lookup` : 'Search a voucher by type and number'}>
       <Panel>
         {loadError ? (
           <p className="text-sm text-danger">{loadError}</p>

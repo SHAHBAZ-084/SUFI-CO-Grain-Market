@@ -1,7 +1,7 @@
 import { forwardRef, ReactNode, RefObject } from 'react';
 
 type PageShellProps = {
-  title: ReactNode;
+  title?: ReactNode;
   subtitle?: string;
   children?: ReactNode;
   actions?: ReactNode;
@@ -19,56 +19,78 @@ export function PageShell({
 }: PageShellProps) {
   if (centerTitle) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-6 flex flex-col items-center gap-4">
+      <div className="app-page">
+        <div className="mb-4 flex flex-col items-center gap-3 border-b border-border bg-surface2 px-4 py-4">
           <h1
             ref={titleRef}
             tabIndex={-1}
-            className="rounded-sm text-center text-2xl font-semibold text-textPrimary outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface3"
+            className="app-brand-serif text-center text-xl text-textPrimary outline-none"
           >
             {title}
           </h1>
           {actions ? <div className="flex flex-wrap justify-center gap-2">{actions}</div> : null}
         </div>
-        {children}
+        <div className="app-page-body">{children}</div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-textPrimary">{title}</h1>
-          {subtitle ? <p className="mt-1 text-sm text-textSecondary">{subtitle}</p> : null}
+    <div className="app-page">
+      {subtitle || actions ? (
+        <div className="app-page-toolbar">
+          <div>
+            {subtitle ? <p className="text-sm text-textSecondary">{subtitle}</p> : null}
+          </div>
+          {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
-      </div>
-      {children}
+      ) : null}
+      <div className="app-page-body">{children}</div>
     </div>
   );
 }
 
-/** Metric / grouped summary tile (dashboard style). */
+/** Flat bordered summary block. */
 export function Tile({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg border border-border bg-surface2 p-3 shadow-sm ${className}`}>
-      {children}
-    </div>
+    <div className={`border border-border bg-surface2 p-3 ${className}`}>{children}</div>
   );
 }
 
-/** Raised form card. */
+/** Form / content panel — white, sharp corners. */
 export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`border border-border bg-surface2 p-4 ${className}`}>{children}</div>;
+}
+
+export function LegacyTable({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={`rounded-xl border border-border bg-surface2 p-5 shadow-sm ${className}`}>
-      {children}
+    <div className={`overflow-x-auto border border-border ${className}`}>
+      <table className="legacy-table">{children}</table>
     </div>
   );
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
-  return <label className="mb-1 block text-sm font-medium text-textSecondary">{children}</label>;
+  return (
+    <label className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-textSecondary">
+      {children}
+    </label>
+  );
+}
+
+export function FormRow({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 items-center gap-1 border-b border-border py-2 sm:grid-cols-[140px_1fr] sm:gap-4">
+      <div className="text-sm font-medium text-textPrimary">{label}</div>
+      <div>{children}</div>
+    </div>
+  );
 }
 
 export const TextInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
@@ -77,7 +99,7 @@ export const TextInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<
       <input
         ref={ref}
         {...props}
-        className={`w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm text-textPrimary outline-none ring-accent focus:ring-2 ${props.className ?? ''}`}
+        className={`w-full rounded-sm border border-border bg-surface2 px-2.5 py-1.5 text-sm text-textPrimary outline-none focus:border-borderStrong ${props.className ?? ''}`}
       />
     );
   },
@@ -125,7 +147,7 @@ export function GhostButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>
     <button
       type="button"
       {...props}
-      className={`rounded-lg px-3 py-2 text-sm font-medium text-textSecondary transition hover:bg-surface1 hover:text-textPrimary disabled:cursor-not-allowed disabled:opacity-60 ${props.className ?? ''}`}
+      className={`rounded-sm px-2.5 py-1.5 text-sm font-medium text-textSecondary hover:bg-surface1 hover:text-textPrimary disabled:cursor-not-allowed disabled:opacity-60 ${props.className ?? ''}`}
     />
   );
 }
@@ -135,7 +157,7 @@ export function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement
     <button
       type="button"
       {...props}
-      className={`rounded-lg border border-border bg-surface1 px-4 py-2 text-sm font-medium text-danger transition hover:bg-bgDanger disabled:cursor-not-allowed disabled:opacity-60 ${props.className ?? ''}`}
+      className={`rounded-sm border border-danger bg-surface2 px-3 py-1.5 text-sm font-semibold text-danger hover:bg-bgDanger disabled:cursor-not-allowed disabled:opacity-60 ${props.className ?? ''}`}
     />
   );
 }

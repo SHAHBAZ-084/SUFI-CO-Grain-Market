@@ -155,7 +155,7 @@ export function KachiMaalInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState(todayInputValue);
   const [productId, setProductId] = useState('');
   const [jins, setJins] = useState('');
-  const [qism, setQism] = useState('');
+  const [qism] = useState('');
   const [billNo, setBillNo] = useState('');
   const [gariNo, setGariNo] = useState('');
   const [tafseel, setTafseel] = useState('');
