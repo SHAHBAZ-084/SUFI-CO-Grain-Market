@@ -15,6 +15,7 @@ import {
   trialBalanceFromSignedBalance,
 } from './ledger-utils';
 import { isBardanaLedgerNote } from '../invoices/invoice-voucher-descriptions';
+import { getProductStockBalances } from '../stock/stock.service';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -1805,14 +1806,6 @@ const voucherInclude = {
   deletedBy: { select: { id: true, displayName: true, username: true } },
 } as const;
 
-function customerAccountCode(id: number) {
-  return `C${String(id).padStart(4, '0')}`;
-}
-
-function supplierAccountCode(id: number) {
-  return `S${String(id).padStart(4, '0')}`;
-}
-
 function voucherDashboardAccountLabel(voucher: {
   type: VoucherType;
   description?: string | null;
@@ -1855,44 +1848,10 @@ export async function getDashboardSummary() {
     }
   }
 
-  const [customers, suppliers] = await Promise.all([
-    prisma.customer.findMany({ where: { isActive: true }, select: { id: true } }),
-    prisma.supplier.findMany({ where: { isActive: true }, select: { id: true } }),
-  ]);
-
-  const partyCodes = [
-    ...customers.map((c) => customerAccountCode(c.id)),
-    ...suppliers.map((s) => supplierAccountCode(s.id)),
-  ];
-
-  const partyAccounts =
-    partyCodes.length > 0
-      ? await prisma.account.findMany({
-          where: { code: { in: partyCodes }, isActive: true },
-          include: { ledger: true },
-        })
-      : [];
-
-  const partyAccountByCode = new Map(partyAccounts.map((a) => [a.code, a]));
-
-  let receivables = 0;
-  for (const customer of customers) {
-    const account = partyAccountByCode.get(customerAccountCode(customer.id));
-    const balance = account?.ledger ? Number(account.ledger.balance) : 0;
-    if (balance > 0) receivables += balance;
-  }
-
-  let payables = 0;
-  for (const supplier of suppliers) {
-    const account = partyAccountByCode.get(supplierAccountCode(supplier.id));
-    const balance = account?.ledger ? Number(account.ledger.balance) : 0;
-    if (balance < 0) payables += Math.abs(balance);
-  }
-
   const todayStart = startOfDay(new Date());
   const todayEnd = endOfDay(new Date());
 
-  const [vouchersToday, recentRows] = financialYearId
+  const [vouchersToday, recentRows, productStock] = financialYearId
     ? await Promise.all([
         prisma.voucher.count({
           where: {
@@ -1906,13 +1865,13 @@ export async function getDashboardSummary() {
           orderBy: [{ date: 'desc' }, { number: 'desc' }],
           take: 10,
         }),
+        getProductStockBalances(),
       ])
-    : [0, []];
+    : [0, [], await getProductStockBalances()];
 
   return {
     cashBalance,
-    receivables,
-    payables,
+    productStock,
     vouchersToday,
     recentVouchers: recentRows.map((v) => ({
       id: v.id,

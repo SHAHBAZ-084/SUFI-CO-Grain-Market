@@ -54,18 +54,18 @@ export function BardanaPage() {
   return (
     <PageShell
       title="Empty Bardana"
-      subtitle="Physical empty bag inventory — manual add, auto-reduced from Purchase to Maal (no bardana) and Sale on Paunch"
+      subtitle="Physical empty bag inventory — manual add, auto-reduced on Sale on Paunch"
     >
       <Panel className="mb-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-sm text-textSecondary">Bori balance</p>
+            <p className="text-sm text-textSecondary">Bori count</p>
             <p className={`mt-1 text-3xl font-semibold tabular-nums ${bori < 0 ? 'text-danger' : 'text-textPrimary'}`}>
               {bori}
             </p>
           </div>
           <div>
-            <p className="text-sm text-textSecondary">Thela balance</p>
+            <p className="text-sm text-textSecondary">Thela count</p>
             <p className={`mt-1 text-3xl font-semibold tabular-nums ${thela < 0 ? 'text-danger' : 'text-textPrimary'}`}>
               {thela}
             </p>
@@ -125,7 +125,7 @@ export function BardanaPage() {
               {!report || report.movements.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-6 text-center text-textSecondary">
-                    No movements yet. Add bags manually, or save Purchase to Maal / Sale on Paunch invoices.
+                    No movements yet. Add bags manually, or save a Sale on Paunch invoice.
                   </td>
                 </tr>
               ) : (

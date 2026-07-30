@@ -181,9 +181,8 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(stock.totals).toEqual({ totalIn: 10, totalOut: 0, netBalance: 10 });
 
     let empty = await getEmptyBardanaReport();
-    printEmptyBardana('After Step 1 — Empty Bardana', empty);
-    const boriAfter1 = empty.balances.find((b) => b.bagType === 'BORI')!.balance;
-    expect(boriAfter1).toBe(40); // 50 − 10
+    printEmptyBardana('After Step 1 — Empty Bardana (PM must not change)', empty);
+    expect(empty.balances.find((b) => b.bagType === 'BORI')!.balance).toBe(50);
 
     // --- Step 2: PM without bardana, 5 bori, loose 15 kg; carried 25+15=40 → +1 bag ---
     const pm2 = await createPurchaseMaalInvoice({
@@ -219,8 +218,8 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(stock.totals).toEqual({ totalIn: 16, totalOut: 0, netBalance: 16 });
 
     empty = await getEmptyBardanaReport();
-    printEmptyBardana('After Step 2 — Empty Bardana', empty);
-    expect(empty.balances.find((b) => b.bagType === 'BORI')!.balance).toBe(35); // 40 − 5
+    printEmptyBardana('After Step 2 — Empty Bardana (still unchanged)', empty);
+    expect(empty.balances.find((b) => b.bagType === 'BORI')!.balance).toBe(50);
 
     // --- Step 3: PM WITH bardana qty 8 — stock IN 8, empty bardana unchanged ---
     const pm3 = await createPurchaseMaalInvoice({
@@ -256,10 +255,10 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(stock.totals).toEqual({ totalIn: 24, totalOut: 0, netBalance: 24 });
 
     empty = await getEmptyBardanaReport();
-    printEmptyBardana('After Step 3 — Empty Bardana (should be unchanged)', empty);
-    expect(empty.balances.find((b) => b.bagType === 'BORI')!.balance).toBe(35);
+    printEmptyBardana('After Step 3 — Empty Bardana (still unchanged)', empty);
+    expect(empty.balances.find((b) => b.bagType === 'BORI')!.balance).toBe(50);
 
-    // --- Step 4: Sale Paunch OUT 12 — stock 12, empty bardana −12 ---
+    // --- Step 4: Sale Paunch OUT 12 — stock 12, empty bardana −12 only ---
     const sp1 = await createSalePaunchInvoice({
       invoiceDate,
       billNo: `STK-SP1-${stamp}`,
@@ -294,7 +293,7 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     empty = await getEmptyBardanaReport();
     printEmptyBardana('FINAL — Empty Bardana Report', empty);
     const finalBori = empty.balances.find((b) => b.bagType === 'BORI')!.balance;
-    expect(finalBori).toBe(23); // 50 − 10 − 5 − 12 = 23
+    expect(finalBori).toBe(38); // 50 − 12 (Sale Paunch only)
 
     const scenarioOuts = empty.movements.filter(
       (m) =>
@@ -302,7 +301,6 @@ describe('Stock + Empty Bardana E2E scenario', () => {
         && m.direction === 'OUT'
         && refs.some((r) => (m.description ?? '').includes(r) || m.description === r),
     );
-    // Newest-first; collect qty for our invoice refs
     const outByRef = refs.map((ref) => {
       const hit = empty.movements.find(
         (m) => m.bagType === 'BORI' && m.direction === 'OUT' && (m.description === ref || (m.description ?? '').includes(ref)),
@@ -312,12 +310,12 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     // eslint-disable-next-line no-console
     console.log('\nEmpty Bardana OUT tied to scenario invoices:', outByRef);
 
-    expect(outByRef[0]).toMatchObject({ qty: 10, source: 'PURCHASE_MAAL' });
-    expect(outByRef[1]).toMatchObject({ qty: 5, source: 'PURCHASE_MAAL' });
-    expect(outByRef[2].qty).toBeNull(); // PM3 with bardana — no empty-bardana movement
+    expect(outByRef[0].qty).toBeNull(); // PM1 — no empty-bardana effect
+    expect(outByRef[1].qty).toBeNull(); // PM2 — no empty-bardana effect
+    expect(outByRef[2].qty).toBeNull(); // PM3 — no empty-bardana effect
     expect(outByRef[3]).toMatchObject({ qty: 12, source: 'SALE_PAUNCH' });
 
     const totalReduced = scenarioOuts.reduce((s, m) => s + m.qty, 0);
-    expect(totalReduced).toBe(27);
+    expect(totalReduced).toBe(12);
   });
 });

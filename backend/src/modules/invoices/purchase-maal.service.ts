@@ -29,7 +29,6 @@ import {
   type InvoiceVoucherHeader,
   voucherReferenceFromBillNo,
 } from './invoice-voucher-descriptions';
-import { postPurchaseMaalEmptyBardanaOut } from '../inventory/bardana.service';
 import { postPurchaseMaalStockIn } from '../stock/stock.service';
 
 const TYPE_PREFIX = 'PM';
@@ -376,17 +375,6 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
         bhartii: line.bhartii,
         dharanCount: line.dharanCount,
         looseKg: line.looseKg,
-      })),
-    });
-
-    await postPurchaseMaalEmptyBardanaOut(tx, {
-      invoiceId: invoice.id,
-      invoiceReference: reference,
-      invoiceDate,
-      lines: computedLines.map((line) => ({
-        boriOrThelaMode: line.boriOrThelaMode,
-        bagCount: line.bagCount,
-        bardanaQty: line.bardanaQty,
       })),
     });
 

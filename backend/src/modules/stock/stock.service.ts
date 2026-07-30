@@ -208,3 +208,41 @@ export async function getStockReport(params: {
     },
   };
 }
+
+/** Net Bori/Thela bag balances per product for dashboard glance. */
+export async function getProductStockBalances() {
+  const products = await prisma.product.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, code: true },
+    orderBy: { name: 'asc' },
+  });
+  if (products.length === 0) return [];
+
+  const movements = await prisma.stockMovement.findMany({
+    where: { productId: { in: products.map((p) => p.id) } },
+    select: { productId: true, bagType: true, direction: true, bags: true },
+  });
+
+  const nets = new Map<number, { bori: number; thela: number }>();
+  for (const m of movements) {
+    const row = nets.get(m.productId) ?? { bori: 0, thela: 0 };
+    const bags = Number(m.bags);
+    const signed = m.direction === StockDirection.IN ? bags : -bags;
+    if (m.bagType === StockBagType.THELA) row.thela += signed;
+    else row.bori += signed;
+    nets.set(m.productId, row);
+  }
+
+  return products
+    .map((p) => {
+      const net = nets.get(p.id) ?? { bori: 0, thela: 0 };
+      return {
+        productId: p.id,
+        name: p.name,
+        code: p.code,
+        bori: net.bori,
+        thela: net.thela,
+      };
+    })
+    .filter((p) => p.bori !== 0 || p.thela !== 0);
+}

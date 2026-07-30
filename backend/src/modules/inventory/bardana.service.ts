@@ -128,41 +128,6 @@ export async function addEmptyBardana(data: {
   return getEmptyBardanaReport();
 }
 
-export type EmptyBardanaPurchaseLine = {
-  boriOrThelaMode: BoriThelaMode;
-  bagCount: number;
-  bardanaQty?: number | null;
-};
-
-/** Purchase to Maal: reduce empty bags only when row has no bardana (qty null/≤0). */
-export async function postPurchaseMaalEmptyBardanaOut(
-  tx: Tx,
-  data: {
-    invoiceId: number;
-    invoiceReference: string;
-    invoiceDate: Date;
-    lines: EmptyBardanaPurchaseLine[];
-  },
-) {
-  for (const line of data.lines) {
-    const bardanaQty = line.bardanaQty == null ? 0 : Number(line.bardanaQty);
-    if (bardanaQty > 0) continue;
-
-    const qty = Math.max(0, Number(line.bagCount) || 0);
-    if (!(qty > 0)) continue;
-
-    await adjustBalance(tx, {
-      bagType: toBagType(line.boriOrThelaMode),
-      qty,
-      direction: EmptyBardanaDirection.OUT,
-      date: data.invoiceDate,
-      source: 'PURCHASE_MAAL',
-      description: data.invoiceReference,
-      invoiceId: data.invoiceId,
-    });
-  }
-}
-
 export type EmptyBardanaSalePaunchLine = {
   boriOrThelaMode: BoriThelaMode;
   bagCount: number;

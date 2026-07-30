@@ -2156,4 +2156,20 @@
 
 }
 
+@media print {
+  .app-sidebar,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .sale-purchase-report-print {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
 

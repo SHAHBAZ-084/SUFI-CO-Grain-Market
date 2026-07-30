@@ -50,6 +50,7 @@ const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideI
   '/reports/trial-balance': { variant: 'report', icon: BarChart3 },
   '/reports/sale-purchase': { variant: 'report', icon: TrendingUp },
   '/reports/stock': { variant: 'report', icon: Package },
+  '/inventory/bardana': { variant: 'report', icon: Package },
 };
 
 function StatBox({ label, value }: { label: string; value: string }) {
@@ -106,14 +107,46 @@ export function PosHomePage() {
           label="Cash Balance"
           value={summary ? formatLedgerAmount(summary.cashBalance) : '—'}
         />
-        <StatBox
-          label="Receivables"
-          value={summary ? formatLedgerAmount(summary.receivables) : '—'}
-        />
-        <StatBox
-          label="Payables"
-          value={summary ? formatLedgerAmount(summary.payables) : '—'}
-        />
+        <Tile className="min-h-[4.5rem] sm:col-span-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-textMuted">
+              Stock bags
+            </p>
+            <Link to="/reports/stock" className="text-xs font-medium text-financial hover:underline">
+              Stock Report
+            </Link>
+          </div>
+          {!summary ? (
+            <p className="mt-2 text-sm text-textMuted">Loading…</p>
+          ) : summary.productStock.length === 0 ? (
+            <p className="mt-2 text-sm text-textMuted">No bag stock yet.</p>
+          ) : (
+            <div className="mt-2 max-h-36 overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="text-textSecondary">
+                    <th className="pb-1 pr-2 font-medium">Product</th>
+                    <th className="pb-1 pr-2 text-right font-medium">Bori</th>
+                    <th className="pb-1 text-right font-medium">Thela</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.productStock.map((row) => (
+                    <tr key={row.productId} className="border-t border-border">
+                      <td className="py-1 pr-2 text-textPrimary">{row.name}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums font-medium text-financial">
+                        {row.bori}
+                      </td>
+                      <td className="py-1 text-right tabular-nums font-medium text-financial">
+                        {row.thela}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Tile>
         <StatBox
           label="Vouchers Today"
           value={summary ? String(summary.vouchersToday) : '—'}

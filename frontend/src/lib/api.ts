@@ -486,8 +486,13 @@ export const api = {
   getDashboardSummary() {
     return request<{
       cashBalance: number;
-      receivables: number;
-      payables: number;
+      productStock: Array<{
+        productId: number;
+        name: string;
+        code: string;
+        bori: number;
+        thela: number;
+      }>;
       vouchersToday: number;
       recentVouchers: {
         id: number;
@@ -668,5 +673,75 @@ export const api = {
       }>;
       totals: { totalIn: number; totalOut: number; netBalance: number };
     }>(`/api/stock/report?${query.toString()}`);
+  },
+
+  getSalePurchaseReport(params: {
+    mode: 'SALE' | 'PURCHASE';
+    typeFilter: 'ALL' | 'COMMISSION' | 'PAUNCH' | 'MAAL';
+    fromDate: string;
+    toDate: string;
+    partyAccountId?: number | null;
+    productId?: number | null;
+  }) {
+    const query = new URLSearchParams({
+      mode: params.mode,
+      typeFilter: params.typeFilter,
+      fromDate: params.fromDate,
+      toDate: params.toDate,
+    });
+    if (params.partyAccountId) query.set('partyAccountId', String(params.partyAccountId));
+    if (params.productId) query.set('productId', String(params.productId));
+    return request<{
+      mode: 'SALE' | 'PURCHASE';
+      typeFilter: 'ALL' | 'COMMISSION' | 'PAUNCH' | 'MAAL';
+      fromDate: string;
+      toDate: string;
+      title: string;
+      rowCount: number;
+      categories: Array<{
+        category: 'COMMISSION' | 'PAUNCH' | 'MAAL';
+        label: string;
+        parties: Array<{
+          partyAccountId: number;
+          partyName: string;
+          rows: Array<{
+            invoiceId: number;
+            invoiceReference: string;
+            invoiceNumber: string;
+            date: string;
+            category: 'COMMISSION' | 'PAUNCH' | 'MAAL';
+            partyAccountId: number;
+            partyName: string;
+            product: string;
+            thela: number;
+            bori: number;
+            weight: number;
+            totalPrice: number;
+            netBill: number;
+          }>;
+          subtotal: {
+            thela: number;
+            bori: number;
+            weight: number;
+            totalPrice: number;
+            netBill: number;
+          };
+        }>;
+        subtotal: {
+          thela: number;
+          bori: number;
+          weight: number;
+          totalPrice: number;
+          netBill: number;
+        };
+      }>;
+      grandTotal: {
+        thela: number;
+        bori: number;
+        weight: number;
+        totalPrice: number;
+        netBill: number;
+      };
+    }>(`/api/reports/sale-purchase?${query.toString()}`);
   },
 };
