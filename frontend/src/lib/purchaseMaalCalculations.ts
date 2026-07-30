@@ -47,7 +47,7 @@ export function computePurchaseMaalRow(
   const dammiAmount = input.dammiChecked
     ? roundMoney(amount * (prefs.daamiPercent / 100))
     : 0;
-  const netCreditToParty = roundMoney(amount + (bardanaAmount ?? 0));
+  const netCreditToParty = roundMoney(amount + (bardanaAmount ?? 0) + dammiAmount);
 
   return { totalWeightKg, amount, bardanaAmount, dammiAmount, netCreditToParty };
 }

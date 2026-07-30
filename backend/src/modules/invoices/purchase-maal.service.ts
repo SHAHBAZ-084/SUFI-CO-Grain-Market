@@ -148,15 +148,18 @@ function buildLedgerLegs(
     ? splitMazduriByParty(computedLines, totals.mazduriAmount, totals.totalGoodsAmount)
     : new Map<number, number>();
 
-  const partyGoodsByAccount = new Map<number, number>();
+  const partySettlementByAccount = new Map<number, number>();
   for (const line of computedLines) {
-    const current = partyGoodsByAccount.get(line.partyAccountId) ?? 0;
-    partyGoodsByAccount.set(line.partyAccountId, roundMoney(current + line.amount));
+    const current = partySettlementByAccount.get(line.partyAccountId) ?? 0;
+    partySettlementByAccount.set(
+      line.partyAccountId,
+      roundMoney(current + line.amount + line.dammiAmount),
+    );
   }
 
-  for (const [partyAccountId, goodsTotal] of partyGoodsByAccount) {
+  for (const [partyAccountId, settlementTotal] of partySettlementByAccount) {
     const mazduriShare = mazduriShares.get(partyAccountId) ?? 0;
-    const net = roundMoney(goodsTotal - mazduriShare);
+    const net = roundMoney(settlementTotal - mazduriShare);
     if (net <= 0) {
       throw new AppError(500, 'Party net settlement must be positive');
     }
@@ -225,15 +228,6 @@ function buildLedgerLegs(
       accountId: systemAccounts.marketFee.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.marketFeeAmount,
-      description: blendedLegDescription(allLines, header),
-    });
-  }
-
-  if (totals.totalDammiAmount > 0) {
-    legs.push({
-      accountId: systemAccounts.commission.id,
-      type: LedgerEntryType.CREDIT,
-      amount: totals.totalDammiAmount,
       description: blendedLegDescription(allLines, header),
     });
   }

@@ -22,6 +22,7 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
+import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
 import {
   computeKachiMaalInvoiceTotals,
@@ -152,30 +153,32 @@ export function KachiMaalInvoicePage() {
   );
 
   const reload = useCallback(async () => {
-    const refRow = await api.getNextKachiMaalReference();
-    const [accountRows, categoryRows, prefRows, productRows] = await Promise.all([
-      api.listAccounts(),
-      api.listCategories(),
-      api.getSystemPreferences(),
-      api.listProducts(),
-    ]);
-    setAccounts(accountRows);
-    setCategories(categoryRows);
-    setPrefs(prefRows);
-    setProducts(productRows);
-    setPredictedRef(refRow.reference);
+    const base = await loadInvoiceFormBase({ includeProducts: true });
+    setAccounts(base.accounts);
+    setCategories(base.categories);
+    setPrefs(base.prefs);
+    setProducts(base.products ?? []);
+    try {
+      const refRow = await api.getNextKachiMaalReference();
+      setPredictedRef(refRow.reference);
+    } catch {
+      setPredictedRef('');
+    }
   }, []);
 
   useEffect(() => {
-    reload().catch(() => setError('Failed to load accounts or preferences'));
+    reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
 
-  const prefRates = prefs ?? {
-    daamiPercent: 0,
-    paleDariPercent: 0,
-    brokeryPercent: 0,
-    marketFeeRate: 0,
-  };
+  const prefRates = useMemo(
+    () => ({
+      daamiPercent: prefs?.daamiPercent ?? 0,
+      paleDariPercent: prefs?.paleDariPercent ?? 0,
+      brokeryPercent: prefs?.brokeryPercent ?? 0,
+      marketFeeRate: prefs?.marketFeeRate ?? 0,
+    }),
+    [prefs],
+  );
 
   const entryPreview = useMemo(() => {
     const input = {
@@ -375,7 +378,7 @@ export function KachiMaalInvoicePage() {
             <InvoiceFormSection label="Add dheri row">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup label="Identity">
-                  <InvoiceFieldRow cols={3}>
+                  <InvoiceFieldRow cols={6}>
                     <InvoiceField wide>
                       <FlatAccountSelect
                         label="Party"
@@ -402,11 +405,6 @@ export function KachiMaalInvoicePage() {
                       <FieldLabel>{boriThelaMode === 'BORI' ? 'Bori count' : 'Thela count'}</FieldLabel>
                       <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
-                  </InvoiceFieldRow>
-                </InvoiceFieldGroup>
-
-                <InvoiceFieldGroup label="Weight">
-                  <InvoiceFieldRow cols={3}>
                     <InvoiceField>
                       <FieldLabel>Dharan</FieldLabel>
                       <TextInput value={dharanCount} onChange={(e) => setDharanCount(e.target.value)} inputMode="decimal" />
@@ -423,18 +421,13 @@ export function KachiMaalInvoicePage() {
                 </InvoiceFieldGroup>
 
                 <InvoiceFieldGroup label="Pricing">
-                  <InvoiceFieldRow cols={3}>
+                  <InvoiceFieldRow cols={5}>
                     <InvoiceField>
                       <FieldLabel>Rate / Maund</FieldLabel>
                       <TextInput value={ratePerMaund} onChange={(e) => setRatePerMaund(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceReadOnlyField label="Amount" value={entryPreview.amount} />
                     <InvoiceReadOnlyField label="Net to party" value={entryPreview.netCreditToParty} />
-                  </InvoiceFieldRow>
-                </InvoiceFieldGroup>
-
-                <InvoiceFieldGroup label="Bardana">
-                  <InvoiceFieldRow cols={2}>
                     <InvoiceField>
                       <FieldLabel>Bardana qty</FieldLabel>
                       <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />

@@ -8,18 +8,19 @@ type PrefForm = Omit<SystemPreferences, 'updatedAt'>;
 type NumericPrefKey = Exclude<keyof PrefForm, 'closingDate'>;
 
 const PREF_FIELDS: { key: NumericPrefKey; label: string; hint?: string }[] = [
-  { key: 'daamiPercent', label: 'Daami (%)', hint: 'Used by Kachi Maal for profit/commission' },
+  { key: 'daamiPercent', label: 'Daami (%)', hint: 'Kachi Maal profit / Purchase & Commission Dammi' },
   { key: 'paleDariPercent', label: 'Pale Dari (%)', hint: 'Labour rate — Kachi Maal' },
   { key: 'brokeryPercent', label: 'Brokery (%)', hint: 'Broker rate — Kachi Maal' },
-  { key: 'marketFeeRate', label: 'Market Fee (per bag)', hint: 'Flat rate per calculated bag — Kachi Maal' },
-  { key: 'bardanaRate', label: 'Bardana Rate', hint: 'Stored for future invoice types; not auto-filled on Kachi Maal' },
+  { key: 'marketFeeRate', label: 'Market Fee (per bag)', hint: 'Kachi Maal (calc bags) / Sale Commission (bag count)' },
+  { key: 'bardanaRate', label: 'Bardana Rate', hint: 'Default bardana rate reference' },
   { key: 'taxPercent', label: 'Tax (%)' },
   { key: 'kaatPercent', label: 'Kaat (%)' },
-  { key: 'mazduriPercent', label: 'Mazduri (%)' },
-  { key: 'commissionPercent', label: 'Commission (%)' },
-  { key: 'dalaliPercent', label: 'Dalali (%)' },
-  { key: 'sutliRate', label: 'Sutli' },
-  { key: 'markeetFeeRate', label: 'Markeet Fee', hint: 'Legacy separate field — confirm mapping before other invoice types' },
+  { key: 'mazduriPercent', label: 'Mazduri (%)', hint: 'Percentage — Purchase Maal' },
+  { key: 'mazduriPerBagRate', label: 'Mazduri / Labour (per bag)', hint: 'Flat Rs per bag — Sale on Commission' },
+  { key: 'commissionPercent', label: 'Commission (%)', hint: 'Sale on Commission — post-dammi base' },
+  { key: 'dalaliPercent', label: 'Dalali (%)', hint: 'Sale on Commission — pre-dammi goods base' },
+  { key: 'sutliRate', label: 'Sutli (per bag)', hint: 'Sale on Commission' },
+  { key: 'markeetFeeRate', label: 'Markeet Fee', hint: 'Legacy unused field' },
   { key: 'kantaRate', label: 'Kanta' },
 ];
 

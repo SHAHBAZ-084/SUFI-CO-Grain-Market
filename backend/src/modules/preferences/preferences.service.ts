@@ -13,6 +13,7 @@ const DEFAULTS = {
   dalaliPercent: 0,
   sutliRate: 0,
   markeetFeeRate: 0,
+  mazduriPerBagRate: 0,
   kantaRate: 0,
   closingDate: null as string | null,
 };
@@ -34,6 +35,7 @@ function mapPreferences(row: {
   dalaliPercent: unknown;
   sutliRate: unknown;
   markeetFeeRate: unknown;
+  mazduriPerBagRate: unknown;
   kantaRate: unknown;
   closingDate: string | null;
   updatedAt: Date;
@@ -51,6 +53,7 @@ function mapPreferences(row: {
     dalaliPercent: toNumber(row.dalaliPercent),
     sutliRate: toNumber(row.sutliRate),
     markeetFeeRate: toNumber(row.markeetFeeRate),
+    mazduriPerBagRate: toNumber(row.mazduriPerBagRate),
     kantaRate: toNumber(row.kantaRate),
     closingDate: row.closingDate,
     updatedAt: row.updatedAt.toISOString(),

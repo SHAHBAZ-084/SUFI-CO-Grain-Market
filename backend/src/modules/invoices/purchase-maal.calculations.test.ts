@@ -23,7 +23,7 @@ describe('Purchase Maal calculations', () => {
 
     expect(row.amount).toBe(50_000);
     expect(row.dammiAmount).toBe(800);
-    expect(row.netCreditToParty).toBe(50_000);
+    expect(row.netCreditToParty).toBe(50_800);
   });
 
   it('buyer total = goods + dammi + market fee when enabled', () => {

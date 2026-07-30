@@ -73,6 +73,7 @@ export type SystemPreferences = {
   dalaliPercent: number;
   sutliRate: number;
   markeetFeeRate: number;
+  mazduriPerBagRate: number;
   kantaRate: number;
   closingDate: string | null;
   updatedAt: string;
@@ -125,6 +126,7 @@ export type InvoiceDetail = Invoice & {
   tafseel?: string | null;
   notes?: string | null;
   miscAmount?: number | string | null;
+  munshianaAmount?: number | string | null;
   lowerBardanaMode?: 'BORI' | 'THELA' | null;
   lowerBardanaQty?: number | string | null;
   lowerBardanaRate?: number | string | null;
@@ -135,6 +137,7 @@ export type InvoiceDetail = Invoice & {
   items?: InvoiceItemDetail[];
   kachiMaalLines?: KachiMaalLineDetail[];
   purchaseMaalLines?: PurchaseMaalLineDetail[];
+  saleCommissionLines?: MaalLineDetail[];
   vouchers?: { voucher: Voucher }[];
   createdBy?: VoucherUser | null;
 };
@@ -367,6 +370,44 @@ export const api = {
     }[];
   }) {
     return request<KachiMaalInvoiceResult>('/api/invoices/sale-paunch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getNextSaleCommissionReference() {
+    return request<{ reference: string }>('/api/invoices/sale-commission/next-reference');
+  },
+
+  createSaleCommissionInvoice(data: {
+    invoiceDate: string;
+    salePartyAccountId: number;
+    billNo?: string;
+    gariNo?: string;
+    jins?: string;
+    qism?: string;
+    tafseel?: string;
+    munshianaAmount?: number;
+    miscAmount?: number;
+    lowerBardanaMode?: 'BORI' | 'THELA' | null;
+    lowerBardanaQty?: number | null;
+    lowerBardanaRate?: number | null;
+    lines: {
+      partyAccountId: number;
+      jins?: string;
+      qism?: string;
+      boriOrThelaMode: 'BORI' | 'THELA';
+      bagCount: number;
+      bhartii: number;
+      dharanCount: number;
+      looseKg: number;
+      ratePerMaund: number;
+      bardanaQty?: number | null;
+      bardanaRate?: number | null;
+      dammiChecked?: boolean;
+    }[];
+  }) {
+    return request<KachiMaalInvoiceResult>('/api/invoices/sale-commission', {
       method: 'POST',
       body: JSON.stringify(data),
     });

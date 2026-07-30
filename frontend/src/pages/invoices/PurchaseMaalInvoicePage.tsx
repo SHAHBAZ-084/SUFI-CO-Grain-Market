@@ -23,6 +23,7 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
+import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
 import {
   computePurchaseMaalInvoiceTotals,
@@ -157,29 +158,31 @@ export function PurchaseMaalInvoicePage() {
   const maalKhataMissing = Boolean(productId && !maalKhataAccount?.id);
 
   const reload = useCallback(async () => {
-    const refRow = await api.getNextPurchaseMaalReference();
-    const [accountRows, categoryRows, prefRows, productRows] = await Promise.all([
-      api.listAccounts(),
-      api.listCategories(),
-      api.getSystemPreferences(),
-      api.listProducts(),
-    ]);
-    setAccounts(accountRows);
-    setCategories(categoryRows);
-    setPrefs(prefRows);
-    setProducts(productRows);
-    setPredictedRef(refRow.reference);
+    const base = await loadInvoiceFormBase({ includeProducts: true });
+    setAccounts(base.accounts);
+    setCategories(base.categories);
+    setPrefs(base.prefs);
+    setProducts(base.products ?? []);
+    try {
+      const refRow = await api.getNextPurchaseMaalReference();
+      setPredictedRef(refRow.reference);
+    } catch {
+      setPredictedRef('');
+    }
   }, []);
 
   useEffect(() => {
-    reload().catch(() => setError('Failed to load accounts or preferences'));
+    reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
 
-  const prefRates = prefs ?? {
-    daamiPercent: 0,
-    mazduriPercent: 0,
-    marketFeeRate: 0,
-  };
+  const prefRates = useMemo(
+    () => ({
+      daamiPercent: prefs?.daamiPercent ?? 0,
+      mazduriPercent: prefs?.mazduriPercent ?? 0,
+      marketFeeRate: prefs?.marketFeeRate ?? 0,
+    }),
+    [prefs],
+  );
 
   const entryPreview = useMemo(() => {
     const input = {
@@ -379,7 +382,7 @@ export function PurchaseMaalInvoicePage() {
             <InvoiceFormSection label="Add dheri row">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup label="Identity">
-                  <InvoiceFieldRow cols={3}>
+                  <InvoiceFieldRow cols={6}>
                     <InvoiceField wide>
                       <FlatAccountSelect
                         label="Party"
@@ -406,11 +409,6 @@ export function PurchaseMaalInvoicePage() {
                       <FieldLabel>{boriThelaMode === 'BORI' ? 'Bori count' : 'Thela count'}</FieldLabel>
                       <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
-                  </InvoiceFieldRow>
-                </InvoiceFieldGroup>
-
-                <InvoiceFieldGroup label="Weight">
-                  <InvoiceFieldRow cols={3}>
                     <InvoiceField>
                       <FieldLabel>Dharan</FieldLabel>
                       <TextInput value={dharanCount} onChange={(e) => setDharanCount(e.target.value)} inputMode="decimal" />
@@ -427,21 +425,13 @@ export function PurchaseMaalInvoicePage() {
                 </InvoiceFieldGroup>
 
                 <InvoiceFieldGroup label="Pricing">
-                  <InvoiceFieldRow cols={4}>
+                  <InvoiceFieldRow cols={6}>
                     <InvoiceField>
                       <FieldLabel>Rate / Maund</FieldLabel>
                       <TextInput value={ratePerMaund} onChange={(e) => setRatePerMaund(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceReadOnlyField label="Amount" value={entryPreview.amount} />
                     <InvoiceReadOnlyField label="Net to party" value={entryPreview.netCreditToParty} />
-                    {dammiChecked ? (
-                      <InvoiceReadOnlyField label="Dammi amount" value={entryPreview.dammiAmount} />
-                    ) : null}
-                  </InvoiceFieldRow>
-                </InvoiceFieldGroup>
-
-                <InvoiceFieldGroup label="Bardana">
-                  <InvoiceFieldRow cols={3}>
                     <InvoiceField>
                       <FieldLabel>Bardana qty</FieldLabel>
                       <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
@@ -503,8 +493,8 @@ export function PurchaseMaalInvoicePage() {
 
             <InvoiceFormSection label="Settlement (Maal Khata debit)">
               <InvoiceFieldStack>
-                <InvoiceFieldGroup label="Debit account & fees">
-                  <InvoiceFieldRow cols={4}>
+                <InvoiceFieldGroup>
+                  <InvoiceFieldRow cols={5}>
                     <InvoiceField wide>
                       <FieldLabel>Debit account</FieldLabel>
                       {!productId ? (
@@ -524,33 +514,29 @@ export function PurchaseMaalInvoicePage() {
                     </InvoiceField>
                     <InvoiceReadOnlyField label="Goods total" value={invoiceTotals.totalGoodsAmount} />
                     <InvoiceReadOnlyField label="Dammi total" value={invoiceTotals.totalDammiAmount} />
+                    <InvoiceToggleField
+                      label="Apply Market Fee"
+                      checked={marketFeeEnabled}
+                      onChange={setMarketFeeEnabled}
+                    />
+                    <InvoiceToggleField
+                      label="Apply Mazduri"
+                      checked={mazduriEnabled}
+                      onChange={setMazduriEnabled}
+                    />
                   </InvoiceFieldRow>
-                  <div className="mt-4">
-                    <InvoiceFieldRow cols={4}>
-                      <InvoiceToggleField
-                        label="Apply Market Fee"
-                        checked={marketFeeEnabled}
-                        onChange={setMarketFeeEnabled}
-                      />
-                      <InvoiceReadOnlyField
-                        label={`Market fee (${invoiceTotals.totalCalculatedBags.toFixed(2)} bags)`}
-                        value={invoiceTotals.marketFeeAmount}
-                      />
-                      <InvoiceToggleField
-                        label="Apply Mazduri"
-                        checked={mazduriEnabled}
-                        onChange={setMazduriEnabled}
-                      />
-                      <InvoiceReadOnlyField
-                        label={`Mazduri (${prefRates.mazduriPercent}%)`}
-                        value={invoiceTotals.mazduriAmount}
-                      />
-                    </InvoiceFieldRow>
-                  </div>
                 </InvoiceFieldGroup>
 
-                <InvoiceFieldGroup label="Lower bardana">
-                  <InvoiceFieldRow cols={4}>
+                <InvoiceFieldGroup>
+                  <InvoiceFieldRow cols={5}>
+                    <InvoiceReadOnlyField
+                      label={`Market fee (${invoiceTotals.totalCalculatedBags.toFixed(2)} bags)`}
+                      value={invoiceTotals.marketFeeAmount}
+                    />
+                    <InvoiceReadOnlyField
+                      label={`Mazduri (${prefRates.mazduriPercent}%)`}
+                      value={invoiceTotals.mazduriAmount}
+                    />
                     <InvoiceField>
                       <FieldLabel>Lower bardana</FieldLabel>
                       <SegmentedControl
@@ -570,9 +556,6 @@ export function PurchaseMaalInvoicePage() {
                       <FieldLabel>Lower bardana rate</FieldLabel>
                       <TextInput value={lowerBardanaRate} onChange={(e) => setLowerBardanaRate(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
-                    {invoiceTotals.lowerBardanaAmount != null ? (
-                      <InvoiceReadOnlyField label="Lower bardana amount" value={invoiceTotals.lowerBardanaAmount} />
-                    ) : null}
                   </InvoiceFieldRow>
                 </InvoiceFieldGroup>
               </InvoiceFieldStack>

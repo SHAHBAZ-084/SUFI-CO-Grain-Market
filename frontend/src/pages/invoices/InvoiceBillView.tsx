@@ -361,6 +361,7 @@ const DEFAULT_PREFS: SystemPreferences = {
   taxPercent: 0,
   kaatPercent: 0,
   mazduriPercent: 0,
+  mazduriPerBagRate: 0,
   commissionPercent: 0,
   dalaliPercent: 0,
   sutliRate: 0,

@@ -23,6 +23,7 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { api, Account, AccountCategory, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
+import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
 import {
   computeSalePaunchInvoiceTotals,
@@ -147,25 +148,28 @@ export function SalePaunchInvoicePage() {
   const [lowerBardanaRate, setLowerBardanaRate] = useState('');
 
   const reload = useCallback(async () => {
-    const refRow = await api.getNextSalePaunchReference();
-    const [accountRows, categoryRows, prefRows] = await Promise.all([
-      api.listAccounts(),
-      api.listCategories(),
-      api.getSystemPreferences(),
-    ]);
-    setAccounts(accountRows);
-    setCategories(categoryRows);
-    setPrefs(prefRows);
-    setPredictedRef(refRow.reference);
+    const base = await loadInvoiceFormBase();
+    setAccounts(base.accounts);
+    setCategories(base.categories);
+    setPrefs(base.prefs);
+    try {
+      const refRow = await api.getNextSalePaunchReference();
+      setPredictedRef(refRow.reference);
+    } catch {
+      setPredictedRef('');
+    }
   }, []);
 
   useEffect(() => {
-    reload().catch(() => setError('Failed to load accounts or preferences'));
+    reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
 
-  const prefRates = prefs ?? {
-    daamiPercent: 0,
-  };
+  const prefRates = useMemo(
+    () => ({
+      daamiPercent: prefs?.daamiPercent ?? 0,
+    }),
+    [prefs],
+  );
 
   const entryPreview = useMemo(() => {
     const input = {
@@ -423,7 +427,7 @@ export function SalePaunchInvoicePage() {
             <InvoiceFormSection label="Add dheri row">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup label="Identity">
-                  <InvoiceFieldRow cols={3}>
+                  <InvoiceFieldRow cols={6}>
                     <InvoiceField wide>
                       <FlatAccountSelect
                         label="Maal Khata"
@@ -436,18 +440,24 @@ export function SalePaunchInvoicePage() {
                       />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Bori (count)</FieldLabel>
+                      <FieldLabel>Bori / Thela</FieldLabel>
+                      <SegmentedControl
+                        value={boriOrThelaMode}
+                        onChange={(v) => setBoriOrThelaMode(v as BoriThelaMode)}
+                        options={[
+                          { value: 'BORI', label: 'Bori' },
+                          { value: 'THELA', label: 'Thela' },
+                        ]}
+                      />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Bori count</FieldLabel>
                       <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Thela (count)</FieldLabel>
+                      <FieldLabel>Thela count</FieldLabel>
                       <TextInput value={thelaCount} onChange={(e) => setThelaCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
-                  </InvoiceFieldRow>
-                </InvoiceFieldGroup>
-
-                <InvoiceFieldGroup label="Weight">
-                  <InvoiceFieldRow cols={3}>
                     <InvoiceField>
                       <FieldLabel>Computer Weight (kg)</FieldLabel>
                       <TextInput value={compWeightKg} onChange={(e) => setCompWeightKg(e.target.value)} inputMode="decimal" />
@@ -461,7 +471,7 @@ export function SalePaunchInvoicePage() {
                 </InvoiceFieldGroup>
 
                 <InvoiceFieldGroup label="Pricing">
-                  <InvoiceFieldRow cols={3}>
+                  <InvoiceFieldRow cols={6}>
                     <InvoiceField>
                       <FieldLabel>Upper rate / Maund</FieldLabel>
                       <TextInput value={upperRatePerMaund} onChange={(e) => setUpperRatePerMaund(e.target.value)} inputMode="decimal" />
@@ -471,22 +481,6 @@ export function SalePaunchInvoicePage() {
                       <TextInput value={kanta} onChange={(e) => setKanta(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceReadOnlyField label="Upper net" value={entryPreview.netUpperAmount} />
-                  </InvoiceFieldRow>
-                </InvoiceFieldGroup>
-
-                <InvoiceFieldGroup label="Bardana">
-                  <InvoiceFieldRow cols={4}>
-                    <InvoiceField>
-                      <FieldLabel>Row bardana type</FieldLabel>
-                      <SegmentedControl
-                        value={boriOrThelaMode}
-                        onChange={(v) => setBoriOrThelaMode(v as BoriThelaMode)}
-                        options={[
-                          { value: 'BORI', label: 'Bori' },
-                          { value: 'THELA', label: 'Thela' },
-                        ]}
-                      />
-                    </InvoiceField>
                     <InvoiceField>
                       <FieldLabel>Bardana qty</FieldLabel>
                       <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
@@ -501,13 +495,6 @@ export function SalePaunchInvoicePage() {
                       onChange={setDammiChecked}
                     />
                   </InvoiceFieldRow>
-                  {dammiChecked ? (
-                    <div className="mt-4">
-                      <InvoiceFieldRow cols={3}>
-                        <InvoiceReadOnlyField label="Dammi amount" value={entryPreview.dammiAmount} />
-                      </InvoiceFieldRow>
-                    </div>
-                  ) : null}
                 </InvoiceFieldGroup>
 
                 <InvoiceAddRowAction onClick={addRow} />
@@ -561,8 +548,8 @@ export function SalePaunchInvoicePage() {
 
             <InvoiceFormSection label="Settlement (Sale Party debit)">
               <InvoiceFieldStack>
-                <InvoiceFieldGroup label="Sale Party & totals">
-                  <InvoiceFieldRow cols={4}>
+                <InvoiceFieldGroup>
+                  <InvoiceFieldRow cols={5}>
                     <InvoiceField wide>
                       <FlatAccountSelect
                         label="Sale Party"
@@ -576,20 +563,6 @@ export function SalePaunchInvoicePage() {
                     </InvoiceField>
                     <InvoiceReadOnlyField label="Net upper total" value={invoiceTotals.totalNetUpperAmount} />
                     <InvoiceReadOnlyField label="Dammi total" value={invoiceTotals.totalDammiAmount} />
-                    {invoiceTotals.totalKaatKg > 0 ? (
-                      <InvoiceReadOnlyField label="Total upper kaat (kg)" value={invoiceTotals.totalKaatKg} format="number" />
-                    ) : null}
-                    {invoiceTotals.totalLowerKaatKg > 0 ? (
-                      <InvoiceReadOnlyField label="Total lower kaat (kg)" value={invoiceTotals.totalLowerKaatKg} format="number" />
-                    ) : null}
-                    {invoiceTotals.paunchRevenueDifference !== 0 ? (
-                      <InvoiceReadOnlyField label="Paunch revenue" value={invoiceTotals.paunchRevenueDifference} />
-                    ) : null}
-                  </InvoiceFieldRow>
-                </InvoiceFieldGroup>
-
-                <InvoiceFieldGroup label="Lower weight & rate">
-                  <InvoiceFieldRow cols={4}>
                     <InvoiceField>
                       <FieldLabel>Lower Kaat (kg)</FieldLabel>
                       <TextInput value={lowerKaatKg} onChange={(e) => setLowerKaatKg(e.target.value)} inputMode="decimal" />
@@ -598,26 +571,11 @@ export function SalePaunchInvoicePage() {
                       <FieldLabel>Lower rate / Maund</FieldLabel>
                       <TextInput value={lowerRatePerMaund} onChange={(e) => setLowerRatePerMaund(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
-                    <InvoiceReadOnlyField label="Lower net wt (kg)" value={invoiceTotals.totalLowerNetWeightKg} format="number" />
-                    <InvoiceReadOnlyField label="Lower amount" value={invoiceTotals.totalLowerAmount} />
-                    <InvoiceReadOnlyField label="Row revenue" value={invoiceTotals.totalRowRevenue} />
                   </InvoiceFieldRow>
                 </InvoiceFieldGroup>
 
-                <InvoiceFieldGroup label="Charges & lower bardana">
-                  <InvoiceFieldRow cols={4}>
-                    <InvoiceField>
-                      <FieldLabel>Tax</FieldLabel>
-                      <TextInput value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} inputMode="decimal" />
-                    </InvoiceField>
-                    <InvoiceField>
-                      <FieldLabel>Misc</FieldLabel>
-                      <TextInput value={miscAmount} onChange={(e) => setMiscAmount(e.target.value)} inputMode="decimal" />
-                    </InvoiceField>
-                    <InvoiceField>
-                      <FieldLabel>Bilty Kiraya</FieldLabel>
-                      <TextInput value={biltyKirayaAmount} onChange={(e) => setBiltyKirayaAmount(e.target.value)} inputMode="decimal" />
-                    </InvoiceField>
+                <InvoiceFieldGroup>
+                  <InvoiceFieldRow cols={6}>
                     <InvoiceField>
                       <FieldLabel>Lower bardana</FieldLabel>
                       <SegmentedControl
@@ -637,9 +595,26 @@ export function SalePaunchInvoicePage() {
                       <FieldLabel>Lower bardana rate</FieldLabel>
                       <TextInput value={lowerBardanaRate} onChange={(e) => setLowerBardanaRate(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
-                    {invoiceTotals.lowerBardanaAmount != null ? (
-                      <InvoiceReadOnlyField label="Lower bardana amount" value={invoiceTotals.lowerBardanaAmount} />
-                    ) : null}
+                    <InvoiceReadOnlyField label="Lower net wt (kg)" value={invoiceTotals.totalLowerNetWeightKg} format="number" />
+                    <InvoiceReadOnlyField label="Lower amount" value={invoiceTotals.totalLowerAmount} />
+                    <InvoiceReadOnlyField label="Row revenue" value={invoiceTotals.totalRowRevenue} />
+                  </InvoiceFieldRow>
+                </InvoiceFieldGroup>
+
+                <InvoiceFieldGroup>
+                  <InvoiceFieldRow cols={3}>
+                    <InvoiceField>
+                      <FieldLabel>Tax</FieldLabel>
+                      <TextInput value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Misc</FieldLabel>
+                      <TextInput value={miscAmount} onChange={(e) => setMiscAmount(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
+                    <InvoiceField>
+                      <FieldLabel>Bilty Kiraya</FieldLabel>
+                      <TextInput value={biltyKirayaAmount} onChange={(e) => setBiltyKirayaAmount(e.target.value)} inputMode="decimal" />
+                    </InvoiceField>
                   </InvoiceFieldRow>
                 </InvoiceFieldGroup>
               </InvoiceFieldStack>

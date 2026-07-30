@@ -82,7 +82,7 @@ describe('Purchase Maal posting', () => {
     wheatMaalKhataId = wheat.accountId;
   });
 
-  it('posts all settlement debits to the product Maal Khata ledger', async () => {
+  it('posts dammi to the purchase party (not Commission) and Maal Khata absorbs the buyer dammi debit', async () => {
     const invoice = await createPurchaseMaalInvoice({
       invoiceDate,
       billNo: 'PM-BILL-1',
@@ -122,10 +122,20 @@ describe('Purchase Maal posting', () => {
     expect(legs).toEqual(
       expect.arrayContaining([
         { accountId: wheatMaalKhataId, type: 'DEBIT', amount: 50_800 },
-        { accountId: partyAId, type: 'CREDIT', amount: 50_000 },
-        { accountId: commissionId, type: 'CREDIT', amount: 800 },
+        { accountId: partyAId, type: 'CREDIT', amount: 50_800 },
       ]),
     );
+
+    const commissionCredits = legs.filter(
+      (leg) => leg.type === 'CREDIT' && leg.accountId === commissionId,
+    );
+    expect(commissionCredits).toHaveLength(0);
+
+    const partyCredits = legs.filter(
+      (leg) => leg.type === 'CREDIT' && leg.accountId === partyAId,
+    );
+    expect(partyCredits).toHaveLength(1);
+    expect(partyCredits[0]!.amount).toBe(50_800);
 
     const maalKhataDebits = legs.filter(
       (leg) => leg.type === 'DEBIT' && leg.accountId === wheatMaalKhataId,

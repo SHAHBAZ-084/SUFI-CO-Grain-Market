@@ -7,6 +7,7 @@ import { parsePagination } from '../../utils/pagination';
 import * as invoicesService from './invoices.service';
 import { registerKachiMaalRoutes } from './kachi-maal.routes';
 import { registerPurchaseMaalRoutes } from './purchase-maal.routes';
+import { registerSaleCommissionRoutes } from './sale-commission.routes';
 import { registerSalePaunchRoutes } from './sale-paunch.routes';
 
 export const invoicesRouter = Router();
@@ -15,6 +16,7 @@ invoicesRouter.use(requireAuth);
 registerKachiMaalRoutes(invoicesRouter);
 registerPurchaseMaalRoutes(invoicesRouter);
 registerSalePaunchRoutes(invoicesRouter);
+registerSaleCommissionRoutes(invoicesRouter);
 
 const itemSchema = z.object({
   productId: z.number().int().optional(),
@@ -71,4 +73,4 @@ function draftRoute(type: InvoiceType) {
   });
 }
 
-invoicesRouter.post('/sale-commission', validateBody(draftSchema), draftRoute(InvoiceType.SALE_COMMISSION));
+invoicesRouter.post('/sale-commission-draft', validateBody(draftSchema), draftRoute(InvoiceType.SALE_COMMISSION));

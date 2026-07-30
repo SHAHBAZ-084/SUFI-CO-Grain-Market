@@ -253,7 +253,7 @@ async function validateVoucherCreate(
     throw new AppError(400, 'Amount must be greater than zero');
   }
 
-  if (data.type === 'KACHI' || data.type === 'PURCHASE_MAAL' || data.type === 'SALE_PAUNCH') {
+  if (data.type === 'KACHI' || data.type === 'PURCHASE_MAAL' || data.type === 'SALE_PAUNCH' || data.type === 'SALE_COMMISSION') {
     throw new AppError(400, 'Invoice vouchers are created via invoice posting');
   }
 
@@ -746,6 +746,7 @@ function voucherTypeLabel(
         : type === 'KACHI' ? 'Kachi'
           : type === 'PURCHASE_MAAL' ? 'Purchase Maal'
           : type === 'SALE_PAUNCH' ? 'Sale Paunch'
+          : type === 'SALE_COMMISSION' ? 'Sale Commission'
           : 'Journal';
   return isReversal ? `${base} (Reversal)` : base;
 }
@@ -831,7 +832,7 @@ async function nextVoucherNumber(
 async function nextMultiLegVoucherNumber(
   tx: Prisma.TransactionClient,
   financialYearId: number,
-  type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH'>,
+  type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION'>,
 ): Promise<number> {
   const { _max } = await tx.voucher.aggregate({
     where: { financialYearId, type },
@@ -1039,6 +1040,12 @@ export type KachiMaalSystemAccounts = {
   misc: { id: number; name: string };
 };
 
+export type SaleCommissionSystemAccounts = KachiMaalSystemAccounts & {
+  dalali: { id: number; name: string };
+  sutli: { id: number; name: string };
+  munshiana: { id: number; name: string };
+};
+
 /** One-time auto-creation of Kachi Maal fee/bardana categories and accounts. */
 export async function ensureKachiMaalAccounts(
   tx: Prisma.TransactionClient,
@@ -1066,6 +1073,30 @@ export async function ensureKachiMaalAccounts(
     broker: { id: broker.id, name: broker.name },
     marketFee: { id: marketFee.id, name: marketFee.name },
     misc: { id: misc.id, name: misc.name },
+  };
+}
+
+/** Sale on Commission fee accounts (extends Kachi Maal base set). */
+export async function ensureSaleCommissionAccounts(
+  tx: Prisma.TransactionClient,
+): Promise<SaleCommissionSystemAccounts> {
+  const base = await ensureKachiMaalAccounts(tx);
+  const saleFee = await ensureCategoryInTx(tx, KACHI_MAAL_CATEGORY_NAMES.SALE_FEE);
+  const dalali = await ensureDefaultAccountInTx(tx, saleFee.id, 'Dalali', AccountType.EXPENSE, 'SF-DAL');
+  const sutli = await ensureDefaultAccountInTx(tx, saleFee.id, 'Sutli', AccountType.EXPENSE, 'SF-SUT');
+  const munshiana = await ensureDefaultAccountInTx(
+    tx,
+    saleFee.id,
+    'Munshiana',
+    AccountType.EXPENSE,
+    'SF-MUN',
+  );
+
+  return {
+    ...base,
+    dalali: { id: dalali.id, name: dalali.name },
+    sutli: { id: sutli.id, name: sutli.name },
+    munshiana: { id: munshiana.id, name: munshiana.name },
   };
 }
 
@@ -1627,7 +1658,7 @@ async function postMultiLegVoucherEntries(
 export async function createMultiLegVoucherInTx(
   tx: Prisma.TransactionClient,
   data: {
-    type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH'>;
+    type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION'>;
     legs: VoucherLeg[];
     amount: number;
     date: Date | string;
@@ -1998,7 +2029,7 @@ export async function updateVoucherAmount(
     if (voucher.status === VoucherStatus.CANCELLED) {
       throw new AppError(400, 'Cannot update amount on a cancelled voucher');
     }
-    if (voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL' || voucher.type === 'SALE_PAUNCH') {
+    if (voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL' || voucher.type === 'SALE_PAUNCH' || voucher.type === 'SALE_COMMISSION') {
       throw new AppError(400, 'Invoice voucher amounts cannot be edited');
     }
     await assertActiveFinancialYear(tx, voucher.financialYearId);

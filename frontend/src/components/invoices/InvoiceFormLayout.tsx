@@ -69,7 +69,7 @@ export function InvoiceFieldStack({
 
 type FieldRowCols = 2 | 3 | 4 | 5 | 6;
 
-/** Responsive field row — max ~4–5 columns on wide screens. */
+/** Responsive field row — wraps; numeric cells keep an 8-digit min-width. */
 export function InvoiceFieldRow({
   children,
   className = '',

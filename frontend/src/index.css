@@ -838,6 +838,8 @@
 
     width: 100%;
 
+    min-width: 0;
+
     margin: 0;
 
     border: 1px solid var(--border);
@@ -853,6 +855,8 @@
     font-size: 0.8125rem;
 
     line-height: 1.25;
+
+    font-variant-numeric: tabular-nums;
 
     outline: none;
 
@@ -933,6 +937,12 @@
     color: var(--text-primary);
 
     font-variant-numeric: tabular-nums;
+
+    overflow: hidden;
+
+    text-overflow: clip;
+
+    white-space: nowrap;
 
   }
 
@@ -1182,7 +1192,10 @@
 
 
 
-  /* Content-sized fields — do not stretch every column to fill the row */
+  /*
+   * Content-sized fields — wrap rather than shrink below 8 digits.
+   * 10.5rem fits "99,999,999" (en-PK) at form font-size with input padding.
+   */
 
   .inv-field-row {
 
@@ -1202,7 +1215,11 @@
 
     flex: 0 1 auto;
 
-    width: 8.25rem;
+    box-sizing: border-box;
+
+    width: 10.5rem;
+
+    min-width: 10.5rem;
 
     max-width: 100%;
 
@@ -1212,11 +1229,13 @@
 
   .inv-field-row > .app-field.inv-field--wide {
 
-    flex: 1 1 14rem;
+    flex: 1 1 16rem;
 
-    width: min(100%, 18rem);
+    width: min(100%, 20rem);
 
-    max-width: 22rem;
+    min-width: min(100%, 14rem);
+
+    max-width: 24rem;
 
   }
 
@@ -1224,7 +1243,20 @@
 
   .inv-field-row > .app-field.inv-field--toggle {
 
-    width: 11rem;
+    width: 11.5rem;
+
+    min-width: 11.5rem;
+
+  }
+
+
+
+  /* Dense add-row / settlement rows: keep 8-digit min, wrap on smaller screens */
+
+  .inv-field-row--5 > .app-field,
+  .inv-field-row--6 > .app-field {
+
+    flex: 0 1 auto;
 
   }
 
@@ -1232,7 +1264,9 @@
 
   .inv-field-row--header > .app-field {
 
-    width: 8.75rem;
+    width: 10.5rem;
+
+    min-width: 10.5rem;
 
   }
 
@@ -1243,6 +1277,8 @@
     flex: 1 1 10rem;
 
     width: min(100%, 14rem);
+
+    min-width: min(100%, 10.5rem);
 
     max-width: 16rem;
 
