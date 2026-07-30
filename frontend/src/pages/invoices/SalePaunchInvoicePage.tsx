@@ -128,7 +128,6 @@ export function SalePaunchInvoicePage() {
   const [maalKhataAccountId, setMaalKhataAccountId] = useState('');
   const [boriOrThelaMode, setBoriOrThelaMode] = useState<BoriThelaMode>('BORI');
   const [bagCount, setBagCount] = useState('');
-  const [thelaCount, setThelaCount] = useState('');
   const [compWeightKg, setCompWeightKg] = useState('');
   const [kaatKg, setKaatKg] = useState('');
   const [kanta, setKanta] = useState('');
@@ -173,8 +172,8 @@ export function SalePaunchInvoicePage() {
 
   const entryPreview = useMemo(() => {
     const input = {
-      bagCount: parseNum(bagCount),
-      thelaCount: parseNum(thelaCount),
+      bagCount: boriOrThelaMode === 'BORI' ? parseNum(bagCount) : 0,
+      thelaCount: boriOrThelaMode === 'THELA' ? parseNum(bagCount) : 0,
       compWeightKg: parseNum(compWeightKg),
       kaatKg: kaatKg.trim() ? parseNum(kaatKg) : 0,
       upperRatePerMaund: parseNum(upperRatePerMaund),
@@ -186,7 +185,7 @@ export function SalePaunchInvoicePage() {
     return computeSalePaunchRow(input, prefRates);
   }, [
     bagCount,
-    thelaCount,
+    boriOrThelaMode,
     compWeightKg,
     kaatKg,
     upperRatePerMaund,
@@ -267,14 +266,15 @@ export function SalePaunchInvoicePage() {
       return;
     }
 
+    const count = parseNum(bagCount);
     const maalKhata = accounts.find((a) => String(a.id) === maalKhataAccountId);
     const row: GridRow = {
       clientId: `${Date.now()}-${Math.random()}`,
       maalKhataAccountId: Number(maalKhataAccountId),
       maalKhataName: maalKhata?.name ?? '',
       boriOrThelaMode,
-      bagCount: parseNum(bagCount),
-      thelaCount: parseNum(thelaCount),
+      bagCount: boriOrThelaMode === 'BORI' ? count : 0,
+      thelaCount: boriOrThelaMode === 'THELA' ? count : 0,
       compWeightKg: weight,
       kaatKg: kaat,
       upperRatePerMaund: upperRate,
@@ -292,7 +292,6 @@ export function SalePaunchInvoicePage() {
     };
     setGridRows((prev) => [...prev, row]);
     setBagCount('');
-    setThelaCount('');
     setCompWeightKg('');
     setKaatKg('');
     setKanta('');
@@ -451,12 +450,8 @@ export function SalePaunchInvoicePage() {
                       />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Bori count</FieldLabel>
+                      <FieldLabel>{boriOrThelaMode === 'BORI' ? 'Bori count' : 'Thela count'}</FieldLabel>
                       <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
-                    </InvoiceField>
-                    <InvoiceField>
-                      <FieldLabel>Thela count</FieldLabel>
-                      <TextInput value={thelaCount} onChange={(e) => setThelaCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
                       <FieldLabel>Computer Weight (kg)</FieldLabel>
