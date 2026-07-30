@@ -73,6 +73,10 @@ export function compareLedgerEntries(
     voucher?: { date: Date; number: number } | null;
   },
 ): number {
+  // Opening balance is always the first row in a ledger, regardless of createdAt.
+  if (a.isOpeningBalance !== b.isOpeningBalance) {
+    return a.isOpeningBalance ? -1 : 1;
+  }
   const cmp =
     new Date(entryEffectiveDate(a)).getTime() - new Date(entryEffectiveDate(b)).getTime();
   if (cmp !== 0) return cmp;

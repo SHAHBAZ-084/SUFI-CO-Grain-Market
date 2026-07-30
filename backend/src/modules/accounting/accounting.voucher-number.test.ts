@@ -1,9 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../lib/prisma';
-import {
-  activeFinancialYearStartDate,
-  voucherDateInActiveYear,
-} from '../../test-helpers/financial-year';
+import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
 import {
   bootstrapChartOfAccounts,
   cancelVoucher,
@@ -19,20 +16,24 @@ async function accountByName(name: string) {
   return account;
 }
 
-async function nextNumberForYear(financialYearId: number) {
+async function nextNumberForType(
+  financialYearId: number,
+  type: 'PAYMENT' | 'RECEIPT' | 'JOURNAL',
+) {
   const { _max } = await prisma.voucher.aggregate({
-    where: { financialYearId, type: { in: ['PAYMENT', 'RECEIPT', 'JOURNAL'] } },
+    where: { financialYearId, type },
     _max: { number: true },
   });
   return (_max.number ?? 0) + 1;
 }
 
-describe('unified voucher numbering', () => {
+describe('per-type voucher numbering', () => {
   let userId: number;
   let cashId: number;
   let electricityId: number;
   let bankId: number;
   let voucherDate: string;
+  let financialYearId: number;
 
   beforeAll(async () => {
     voucherDate = await voucherDateInActiveYear();
@@ -40,6 +41,10 @@ describe('unified voucher numbering', () => {
     const user = await prisma.user.findFirst();
     if (!user) throw new Error('Seed admin user first');
     userId = user.id;
+
+    const fy = await prisma.financialYear.findFirst({ where: { status: 'ACTIVE' } });
+    if (!fy) throw new Error('No active financial year');
+    financialYearId = fy.id;
 
     cashId = (await accountByName('Cash in Hand')).id;
 
@@ -74,7 +79,11 @@ describe('unified voucher numbering', () => {
     bankId = bank.id;
   });
 
-  it('assigns one shared sequence across Payment, Receipt, and Journal', async () => {
+  it('assigns independent sequences for Payment, Receipt, and Journal', async () => {
+    const paymentPreview = await previewNextVoucherNumber('PAYMENT');
+    const receiptPreview = await previewNextVoucherNumber('RECEIPT');
+    const journalPreview = await previewNextVoucherNumber('JOURNAL');
+
     const payment = await createVoucher({
       type: 'PAYMENT',
       debitAccountId: electricityId,
@@ -105,11 +114,17 @@ describe('unified voucher numbering', () => {
       reference: 'NUM-JRN',
     });
 
-    expect(receipt.number).toBe(payment.number + 1);
-    expect(journal.number).toBe(payment.number + 2);
+    expect(payment.number).toBe(paymentPreview.number);
+    expect(receipt.number).toBe(receiptPreview.number);
+    expect(journal.number).toBe(journalPreview.number);
+
+    // Each type advances only its own sequence
+    expect(await nextNumberForType(financialYearId, 'PAYMENT')).toBe(payment.number + 1);
+    expect(await nextNumberForType(financialYearId, 'RECEIPT')).toBe(receipt.number + 1);
+    expect(await nextNumberForType(financialYearId, 'JOURNAL')).toBe(journal.number + 1);
   });
 
-  it('does not reuse numbers after cancellation', async () => {
+  it('does not reuse numbers after cancellation within the same type', async () => {
     const middle = await createVoucher({
       type: 'RECEIPT',
       debitAccountId: cashId,
@@ -123,9 +138,9 @@ describe('unified voucher numbering', () => {
     await cancelVoucher(middle.id, userId);
 
     const after = await createVoucher({
-      type: 'PAYMENT',
-      debitAccountId: electricityId,
-      creditAccountId: cashId,
+      type: 'RECEIPT',
+      debitAccountId: cashId,
+      creditAccountId: bankId,
       amount: 50,
       date: voucherDate,
       createdById: userId,
@@ -136,8 +151,8 @@ describe('unified voucher numbering', () => {
     expect(after.number).not.toBe(middle.number);
   });
 
-  it('previewNextVoucherNumber matches the next created voucher', async () => {
-    const preview = await previewNextVoucherNumber();
+  it('previewNextVoucherNumber matches the next created voucher of that type', async () => {
+    const preview = await previewNextVoucherNumber('JOURNAL');
     const voucher = await createVoucher({
       type: 'JOURNAL',
       debitAccountId: cashId,
@@ -150,7 +165,7 @@ describe('unified voucher numbering', () => {
     expect(voucher.number).toBe(preview.number);
   });
 
-  it('starts at 1 for a financial year with no vouchers', async () => {
+  it('starts at 1 for a type with no vouchers in a financial year', async () => {
     const fy = await prisma.financialYear.create({
       data: {
         label: `TEST-EMPTY-FY-${Date.now()}`,
@@ -158,6 +173,8 @@ describe('unified voucher numbering', () => {
         status: 'CLOSED',
       },
     });
-    expect(await nextNumberForYear(fy.id)).toBe(1);
+    expect(await nextNumberForType(fy.id, 'PAYMENT')).toBe(1);
+    expect(await nextNumberForType(fy.id, 'RECEIPT')).toBe(1);
+    expect(await nextNumberForType(fy.id, 'JOURNAL')).toBe(1);
   });
 });

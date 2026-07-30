@@ -117,6 +117,33 @@ export type KachiMaalLineDetail = MaalLineDetail;
 
 export type PurchaseMaalLineDetail = MaalLineDetail;
 
+export type SalePaunchLineDetail = {
+  id: number;
+  jins?: string | null;
+  qism?: string | null;
+  boriOrThelaMode: 'BORI' | 'THELA';
+  bagCount: number | string;
+  thelaCount?: number | string | null;
+  totalWeightKg: number | string;
+  kaatKg: number | string;
+  netWeightKg: number | string;
+  lowerKaatKg: number | string;
+  lowerNetWeightKg: number | string;
+  upperRatePerMaund: number | string;
+  upperAmount: number | string;
+  kanta: number | string;
+  netUpperAmount: number | string;
+  lowerRatePerMaund: number | string;
+  lowerAmount: number | string;
+  rowRevenue?: number | string;
+  bardanaQty?: number | string | null;
+  bardanaRate?: number | string | null;
+  bardanaAmount?: number | string | null;
+  dammiChecked?: boolean;
+  dammiAmount?: number | string | null;
+  maalKhataAccount?: VoucherAccount | null;
+};
+
 export type InvoiceDetail = Invoice & {
   invoiceDate?: string | null;
   billNo?: string | null;
@@ -127,6 +154,8 @@ export type InvoiceDetail = Invoice & {
   notes?: string | null;
   miscAmount?: number | string | null;
   munshianaAmount?: number | string | null;
+  taxAmount?: number | string | null;
+  biltyKirayaAmount?: number | string | null;
   lowerBardanaMode?: 'BORI' | 'THELA' | null;
   lowerBardanaQty?: number | string | null;
   lowerBardanaRate?: number | string | null;
@@ -137,6 +166,7 @@ export type InvoiceDetail = Invoice & {
   items?: InvoiceItemDetail[];
   kachiMaalLines?: KachiMaalLineDetail[];
   purchaseMaalLines?: PurchaseMaalLineDetail[];
+  salePaunchLines?: SalePaunchLineDetail[];
   saleCommissionLines?: MaalLineDetail[];
   vouchers?: { voucher: Voucher }[];
   createdBy?: VoucherUser | null;
@@ -470,8 +500,11 @@ export const api = {
       }[];
     }>('/api/accounting/dashboard-summary');
   },
-  getNextVoucherNumber() {
-    return request<{ number: number; financialYearId: number }>('/api/accounting/vouchers/next-number');
+  getNextVoucherNumber(type: 'PAYMENT' | 'RECEIPT' | 'JOURNAL') {
+    const query = new URLSearchParams({ type });
+    return request<{ number: number; financialYearId: number; type: string }>(
+      `/api/accounting/vouchers/next-number?${query.toString()}`,
+    );
   },
   createVoucher(data: {
     type: string;

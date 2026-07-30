@@ -73,8 +73,13 @@ accountingRouter.get(
 
 accountingRouter.get(
   '/vouchers/next-number',
-  asyncHandler(async (_req, res) => {
-    const preview = await accountingService.previewNextVoucherNumber();
+  asyncHandler(async (req, res) => {
+    const typeParam = (req.query.type as string | undefined)?.toUpperCase();
+    const type =
+      typeParam && Object.values(VoucherType).includes(typeParam as VoucherType)
+        ? (typeParam as VoucherType)
+        : VoucherType.PAYMENT;
+    const preview = await accountingService.previewNextVoucherNumber(type);
     res.json(preview);
   }),
 );

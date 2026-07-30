@@ -60,6 +60,10 @@ const invoiceDetailInclude = {
   items: { include: { product: true } },
   kachiMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' as const } },
   purchaseMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' as const } },
+  salePaunchLines: {
+    include: { maalKhataAccount: true },
+    orderBy: { sortOrder: 'asc' as const },
+  },
   saleCommissionLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' as const } },
   vouchers: {
     include: {

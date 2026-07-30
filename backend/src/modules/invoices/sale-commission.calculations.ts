@@ -55,8 +55,8 @@ export function computeSaleCommissionRow(
   const dammiAmount = input.dammiChecked
     ? roundMoney(amount * (prefs.daamiPercent / 100))
     : 0;
-  // Party is credited goods + dammi (row bardana is UI-only; settlement bardana is invoice-level)
-  const netCreditToParty = roundMoney(amount + dammiAmount);
+  // Goods + dammi + row bardana owed to the purchase party (bardana posts separately to Bardana A/c)
+  const netCreditToParty = roundMoney(amount + dammiAmount + (bardanaAmount ?? 0));
 
   return { totalWeightKg, maunds, amount, bardanaAmount, dammiAmount, netCreditToParty };
 }

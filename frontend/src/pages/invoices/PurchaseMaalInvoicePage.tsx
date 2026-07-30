@@ -21,6 +21,7 @@ import {
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useMinimizableForm } from '../../hooks/useMinimizableForm';
 import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
@@ -54,6 +55,33 @@ type GridRow = {
   dammiChecked: boolean;
   dammiAmount: number;
   netCreditToParty: number;
+};
+
+type PurchaseMaalDraft = {
+  predictedRef: string;
+  gridRows: GridRow[];
+  invoiceDate: string;
+  productId: string;
+  jins: string;
+  qism: string;
+  billNo: string;
+  gariNo: string;
+  tafseel: string;
+  partyAccountId: string;
+  boriThelaMode: BoriThelaMode;
+  bagCount: string;
+  bhartii: string;
+  dharanCount: string;
+  looseKg: string;
+  ratePerMaund: string;
+  rowBardanaQty: string;
+  rowBardanaRate: string;
+  dammiChecked: boolean;
+  marketFeeEnabled: boolean;
+  mazduriEnabled: boolean;
+  lowerBoriThela: BoriThelaMode;
+  lowerBardanaQty: string;
+  lowerBardanaRate: string;
 };
 
 function todayInputValue() {
@@ -105,6 +133,8 @@ function FlatAccountSelect({
 
 export function PurchaseMaalInvoicePage() {
   const navigate = useNavigate();
+  const { restoredState, minimize } = useMinimizableForm<PurchaseMaalDraft>('purchase-maal');
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -113,36 +143,36 @@ export function PurchaseMaalInvoicePage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
-  const [predictedRef, setPredictedRef] = useState('');
-  const [gridRows, setGridRows] = useState<GridRow[]>([]);
+  const [predictedRef, setPredictedRef] = useState(() => restoredState?.predictedRef ?? '');
+  const [gridRows, setGridRows] = useState<GridRow[]>(() => restoredState?.gridRows ?? []);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const [invoiceDate, setInvoiceDate] = useState(todayInputValue);
-  const [productId, setProductId] = useState('');
-  const [jins, setJins] = useState('');
-  const [qism] = useState('');
-  const [billNo, setBillNo] = useState('');
-  const [gariNo, setGariNo] = useState('');
-  const [tafseel, setTafseel] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(() => restoredState?.invoiceDate ?? todayInputValue());
+  const [productId, setProductId] = useState(() => restoredState?.productId ?? '');
+  const [jins, setJins] = useState(() => restoredState?.jins ?? '');
+  const [qism] = useState(() => restoredState?.qism ?? '');
+  const [billNo, setBillNo] = useState(() => restoredState?.billNo ?? '');
+  const [gariNo, setGariNo] = useState(() => restoredState?.gariNo ?? '');
+  const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
 
-  const [partyAccountId, setPartyAccountId] = useState('');
-  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>('BORI');
-  const [bagCount, setBagCount] = useState('');
-  const [bhartii, setBhartii] = useState('');
-  const [dharanCount, setDharanCount] = useState('');
-  const [looseKg, setLooseKg] = useState('');
-  const [ratePerMaund, setRatePerMaund] = useState('');
-  const [rowBardanaQty, setRowBardanaQty] = useState('');
-  const [rowBardanaRate, setRowBardanaRate] = useState('');
-  const [dammiChecked, setDammiChecked] = useState(false);
+  const [partyAccountId, setPartyAccountId] = useState(() => restoredState?.partyAccountId ?? '');
+  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriThelaMode ?? 'BORI');
+  const [bagCount, setBagCount] = useState(() => restoredState?.bagCount ?? '');
+  const [bhartii, setBhartii] = useState(() => restoredState?.bhartii ?? '');
+  const [dharanCount, setDharanCount] = useState(() => restoredState?.dharanCount ?? '');
+  const [looseKg, setLooseKg] = useState(() => restoredState?.looseKg ?? '');
+  const [ratePerMaund, setRatePerMaund] = useState(() => restoredState?.ratePerMaund ?? '');
+  const [rowBardanaQty, setRowBardanaQty] = useState(() => restoredState?.rowBardanaQty ?? '');
+  const [rowBardanaRate, setRowBardanaRate] = useState(() => restoredState?.rowBardanaRate ?? '');
+  const [dammiChecked, setDammiChecked] = useState(() => restoredState?.dammiChecked ?? false);
 
-  const [marketFeeEnabled, setMarketFeeEnabled] = useState(false);
-  const [mazduriEnabled, setMazduriEnabled] = useState(false);
-  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>('BORI');
-  const [lowerBardanaQty, setLowerBardanaQty] = useState('');
-  const [lowerBardanaRate, setLowerBardanaRate] = useState('');
+  const [marketFeeEnabled, setMarketFeeEnabled] = useState(() => restoredState?.marketFeeEnabled ?? false);
+  const [mazduriEnabled, setMazduriEnabled] = useState(() => restoredState?.mazduriEnabled ?? false);
+  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>(() => restoredState?.lowerBoriThela ?? 'BORI');
+  const [lowerBardanaQty, setLowerBardanaQty] = useState(() => restoredState?.lowerBardanaQty ?? '');
+  const [lowerBardanaRate, setLowerBardanaRate] = useState(() => restoredState?.lowerBardanaRate ?? '');
 
   const productOptions = useMemo(
     () => products.map((p) => ({ value: String(p.id), label: p.name })),
@@ -165,9 +195,14 @@ export function PurchaseMaalInvoicePage() {
     setProducts(base.products ?? []);
     try {
       const refRow = await api.getNextPurchaseMaalReference();
-      setPredictedRef(refRow.reference);
+      if (keepRestoredPredictedRef.current) {
+        keepRestoredPredictedRef.current = false;
+      } else {
+        setPredictedRef(refRow.reference);
+      }
     } catch {
-      setPredictedRef('');
+      if (!keepRestoredPredictedRef.current) setPredictedRef('');
+      keepRestoredPredictedRef.current = false;
     }
   }, []);
 
@@ -346,8 +381,8 @@ export function PurchaseMaalInvoicePage() {
   }
 
   return (
-    <PageShell centerTitle invoiceTitleBand title="Purchase to Maal">
-      <Panel className="inv-form-panel mx-auto w-full overflow-visible">
+    <PageShell centerTitle invoiceTitleBand title="Purchase to Maal" className="app-page--purchase-maal">
+      <Panel className="inv-form-panel mx-auto w-full overflow-visible bg-white">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <InvoiceFormSection>
@@ -566,6 +601,37 @@ export function PurchaseMaalInvoicePage() {
                 message={message}
                 saving={saving}
                 onClose={() => navigate('/')}
+                onMinimize={() =>
+                  minimize(
+                    {
+                      predictedRef,
+                      gridRows,
+                      invoiceDate,
+                      productId,
+                      jins,
+                      qism,
+                      billNo,
+                      gariNo,
+                      tafseel,
+                      partyAccountId,
+                      boriThelaMode,
+                      bagCount,
+                      bhartii,
+                      dharanCount,
+                      looseKg,
+                      ratePerMaund,
+                      rowBardanaQty,
+                      rowBardanaRate,
+                      dammiChecked,
+                      marketFeeEnabled,
+                      mazduriEnabled,
+                      lowerBoriThela,
+                      lowerBardanaQty,
+                      lowerBardanaRate,
+                    },
+                    `Purchase Maal — ${predictedRef || 'draft'}`,
+                  )
+                }
               />
             </InvoiceFormSection>
           </form>

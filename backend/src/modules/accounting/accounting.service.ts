@@ -14,6 +14,7 @@ import {
   startOfDay,
   trialBalanceFromSignedBalance,
 } from './ledger-utils';
+import { isBardanaLedgerNote } from '../invoices/invoice-voucher-descriptions';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -796,6 +797,7 @@ function buildLedgerEntryDescription(
   saleSummary?: string,
 ): string {
   if (e.isOpeningBalance) return 'Opening Balance';
+  if (isBardanaLedgerNote(e.notes)) return e.notes!.trim();
   if (!voucher?.creditAccount || !voucher?.debitAccount) {
     return e.notes?.trim() || voucher?.description?.trim() || '';
   }
@@ -815,15 +817,20 @@ function buildLedgerEntryDescription(
   return custom ? `${auto} — ${custom}` : auto;
 }
 
-/** Payment, Receipt, and Journal share one number sequence per financial year. */
+/** Payment, Receipt, and Journal each have their own number sequence per financial year. */
 const STANDARD_VOUCHER_TYPES: VoucherType[] = ['PAYMENT', 'RECEIPT', 'JOURNAL'];
+
+function isStandardVoucherType(type: VoucherType): type is 'PAYMENT' | 'RECEIPT' | 'JOURNAL' {
+  return (STANDARD_VOUCHER_TYPES as string[]).includes(type);
+}
 
 async function nextVoucherNumber(
   tx: Prisma.TransactionClient,
   financialYearId: number,
+  type: VoucherType,
 ): Promise<number> {
   const { _max } = await tx.voucher.aggregate({
-    where: { financialYearId, type: { in: STANDARD_VOUCHER_TYPES } },
+    where: { financialYearId, type },
     _max: { number: true },
   });
   return (_max.number ?? 0) + 1;
@@ -834,21 +841,23 @@ async function nextMultiLegVoucherNumber(
   financialYearId: number,
   type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION'>,
 ): Promise<number> {
-  const { _max } = await tx.voucher.aggregate({
-    where: { financialYearId, type },
-    _max: { number: true },
-  });
-  return (_max.number ?? 0) + 1;
+  return nextVoucherNumber(tx, financialYearId, type);
 }
 
-/** Read-only preview of the next voucher number for the active financial year. */
-export async function previewNextVoucherNumber(): Promise<{
+/** Read-only preview of the next voucher number for a type in the active financial year. */
+export async function previewNextVoucherNumber(
+  type: VoucherType = 'PAYMENT',
+): Promise<{
   number: number;
   financialYearId: number;
+  type: VoucherType;
 }> {
+  if (!isStandardVoucherType(type)) {
+    throw new AppError(400, 'Invalid voucher type for number preview');
+  }
   const financialYearId = await getActiveFinancialYearId(prisma);
-  const number = await nextVoucherNumber(prisma, financialYearId);
-  return { number, financialYearId };
+  const number = await nextVoucherNumber(prisma, financialYearId, type);
+  return { number, financialYearId, type };
 }
 
 function parseDateStart(value: string) {
@@ -1526,7 +1535,7 @@ export async function createVoucherInTx(
     reference: trimmedReference,
   });
 
-  const number = await nextVoucherNumber(tx, financialYearId);
+  const number = await nextVoucherNumber(tx, financialYearId, data.type);
 
   const voucher = await tx.voucher.create({
     data: {
@@ -2347,22 +2356,27 @@ async function buildLedgerEntriesReport(
 ) {
   let ledger = await prisma.ledger.findFirst({
     where: { accountId },
-    include: { account: true },
+    include: { account: { include: { category: true } } },
   });
 
   if (!ledger) {
     const account = await prisma.account.findFirst({
       where: { id: accountId, isActive: true },
+      include: { category: true },
     });
     if (!account) throw new AppError(404, 'Ledger not found');
     await prisma.ledger.create({ data: { accountId, balance: 0 } });
     ledger = await prisma.ledger.findFirst({
       where: { accountId },
-      include: { account: true },
+      include: { account: { include: { category: true } } },
     });
   }
 
   if (!ledger) throw new AppError(404, 'Ledger not found');
+
+  const isBardanaAccount =
+    ledger.account.category?.name?.trim().toLowerCase() ===
+    KACHI_MAAL_CATEGORY_NAMES.BARDANA.toLowerCase();
 
   const { balance: baseOpening, priorYearLabel } = await getOpeningBalanceSnapshot(
     prisma,
@@ -2478,7 +2492,9 @@ async function buildLedgerEntriesReport(
       ref: voucher?.reference ?? null,
       type: e.isOpeningBalance
         ? 'Opening Balance'
-        : voucherTypeLabel(voucher ?? null, false),
+        : isBardanaAccount || isBardanaLedgerNote(e.notes)
+          ? 'Bardana'
+          : voucherTypeLabel(voucher ?? null, false),
       description: buildLedgerEntryDescription(e, voucher ?? null, purchaseSummary, saleSummary),
       debit,
       credit,

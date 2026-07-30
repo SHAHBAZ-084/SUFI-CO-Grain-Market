@@ -432,9 +432,14 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
     const partyALedger = await getLedgerEntries(partyAId);
     const voucherNo = String(voucher.number);
     const partyAVoucherRows = partyALedger.rows.filter(
-      (row) => row.type === 'Kachi' && row.voucherNo === voucherNo,
+      (row) => row.voucherNo === voucherNo && (row.type === 'Kachi' || row.type === 'Bardana'),
     );
     expect(partyAVoucherRows).toHaveLength(2);
+    expect(partyAVoucherRows.some((row) => row.type === 'Kachi')).toBe(true);
+    expect(partyAVoucherRows.some((row) => row.type === 'Bardana')).toBe(true);
+    expect(
+      partyAVoucherRows.find((row) => row.type === 'Bardana')?.description,
+    ).toMatch(/^Bardana against KM-/);
     expect(partyAVoucherRows.every((row) => row.ref === 'KM-BILL-2')).toBe(true);
 
     const totalDebit = legs.filter((leg) => leg.type === 'DEBIT').reduce((sum, leg) => sum + leg.amount, 0);

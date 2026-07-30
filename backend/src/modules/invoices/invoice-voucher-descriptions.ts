@@ -43,6 +43,7 @@ export function rowLegDescription(line: InvoiceVoucherLine, header: InvoiceVouch
 export function blendedLegDescription(
   lines: InvoiceVoucherLine[],
   header: InvoiceVoucherHeader,
+  product?: string | null,
 ): string {
   const totalWeightKg = lines.reduce((sum, line) => sum + Number(line.totalWeightKg), 0);
   if (totalWeightKg <= 0) {
@@ -56,7 +57,8 @@ export function blendedLegDescription(
   }
   const blendedRate = weightedRateSum / totalWeightKg;
   const core = `${formatWeightKg(totalWeightKg)} kg @ Rs ${formatRate(blendedRate)}/maund`;
-  return core + invoiceVoucherHeaderSuffix(header);
+  const withProduct = product?.trim() ? `${product.trim()} ${core}` : core;
+  return withProduct + invoiceVoucherHeaderSuffix(header);
 }
 
 export function salePaunchRowLegDescription(
@@ -72,4 +74,16 @@ export function salePaunchRowLegDescription(
     core += ` / sale Rs ${formatRate(line.lowerRatePerMaund)}/maund`;
   }
   return core + invoiceVoucherHeaderSuffix(header);
+}
+
+/** Separate bardana ledger legs — not weight/rate settlement text. */
+export function bardanaAgainstInvoiceDescription(invoiceReference: string): string {
+  const ref = invoiceReference.trim();
+  return ref ? `Bardana against ${ref}` : 'Bardana';
+}
+
+export function isBardanaLedgerNote(notes?: string | null): boolean {
+  const n = notes?.trim().toLowerCase() ?? '';
+  if (!n) return false;
+  return n === 'bardana' || n.startsWith('bardana against') || n.startsWith('bardana ');
 }

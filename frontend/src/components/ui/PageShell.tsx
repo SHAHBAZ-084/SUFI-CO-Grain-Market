@@ -9,6 +9,7 @@ type PageShellProps = {
   /** Soft white↔navy title-band gradient (invoice + voucher forms). */
   invoiceTitleBand?: boolean;
   titleRef?: RefObject<HTMLHeadingElement | null>;
+  className?: string;
 };
 
 export function PageShell({
@@ -19,10 +20,11 @@ export function PageShell({
   centerTitle = false,
   invoiceTitleBand = false,
   titleRef,
+  className = '',
 }: PageShellProps) {
   if (centerTitle) {
     return (
-      <div className="app-page app-page--centered-title">
+      <div className={`app-page app-page--centered-title ${className}`.trim()}>
         <div
           className={`app-page-title-band${invoiceTitleBand ? ' app-page-title-band--invoice' : ''}`}
         >
@@ -41,7 +43,7 @@ export function PageShell({
   }
 
   return (
-    <div className="app-page">
+    <div className={`app-page ${className}`.trim()}>
       {subtitle || actions ? (
         <div className="app-page-toolbar">
           <div>

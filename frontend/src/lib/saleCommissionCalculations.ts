@@ -51,7 +51,7 @@ export function computeSaleCommissionRow(
   const dammiAmount = input.dammiChecked
     ? roundMoney(amount * (prefs.daamiPercent / 100))
     : 0;
-  const netCreditToParty = roundMoney(amount + dammiAmount);
+  const netCreditToParty = roundMoney(amount + dammiAmount + (bardanaAmount ?? 0));
 
   return { totalWeightKg, maunds, amount, bardanaAmount, dammiAmount, netCreditToParty };
 }

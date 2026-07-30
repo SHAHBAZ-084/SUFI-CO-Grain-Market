@@ -199,7 +199,7 @@ export function AccountReportsPage() {
               <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
                   <col className="w-[7.5rem]" />
-                  <col className="w-[4.5rem]" />
+                  <col className="w-[5.75rem]" />
                   <col className="w-[6.5rem]" />
                   <col className="w-[5.5rem]" />
                   <col />
@@ -210,8 +210,8 @@ export function AccountReportsPage() {
                 <thead>
                   <tr className="border-b border-border text-textSecondary">
                     <th className="py-2 pr-2">Date</th>
-                    <th className="py-2 pr-2 text-right">Voucher#</th>
-                    <th className="py-2 pr-2">Ref#</th>
+                    <th className="py-2 pr-4 text-right">Voucher#</th>
+                    <th className="py-2 pl-3 pr-2">Ref#</th>
                     <th className="py-2 pr-2">Type</th>
                     <th className="py-2 pr-2">Description</th>
                     <th className="py-2 pr-2 text-right">Debit</th>
@@ -223,8 +223,8 @@ export function AccountReportsPage() {
                   {ledger.rows.map((r, i) => (
                     <tr key={i} className={`border-b border-border ${r.isOpeningRow ? 'bg-surface1 font-medium' : ''}`}>
                       <td className="py-2 pr-2 whitespace-nowrap">{formatDate(r.date)}</td>
-                      <td className="py-2 pr-2 text-right font-mono text-xs font-semibold text-financial">{r.voucherNo}</td>
-                      <td className="py-2 pr-2 truncate text-textSecondary" title={r.ref ?? ''}>{r.ref ?? ''}</td>
+                      <td className="py-2 pr-4 text-right font-mono text-xs font-semibold text-financial">{r.voucherNo}</td>
+                      <td className="py-2 pl-3 pr-2 truncate text-textSecondary" title={r.ref ?? ''}>{r.ref ?? ''}</td>
                       <td className={`py-2 pr-2 font-medium ${voucherTypeColorClass(r.type)}`}>{formatVoucherTypeLabel(r.type)}</td>
                       <td className="py-2 pr-2 truncate text-textSecondary" title={r.description}>{r.description}</td>
                       <td className="py-2 pr-2 text-right tabular-nums">{r.debit > 0 ? formatLedgerAmount(r.debit) : ''}</td>

@@ -21,7 +21,13 @@ import {
   computeSaleCommissionRow,
   roundMoney,
 } from './sale-commission.calculations';
-import { voucherReferenceFromBillNo } from './invoice-voucher-descriptions';
+import {
+  blendedLegDescription,
+  bardanaAgainstInvoiceDescription,
+  rowLegDescription,
+  voucherReferenceFromBillNo,
+  type InvoiceVoucherHeader,
+} from './invoice-voucher-descriptions';
 
 const TYPE_PREFIX = 'SC';
 
@@ -121,15 +127,6 @@ function buildComputedLines(
   });
 }
 
-function rowGoodsDescription(line: ComputedLine, index: number) {
-  const jins = line.jins?.trim() || 'Goods';
-  return `Row ${index + 1} — ${jins} ${line.totalWeightKg}kg @ ${line.ratePerMaund}`;
-}
-
-function rowDammiDescription(index: number, daamiPercent: number) {
-  return `Row ${index + 1} — Dammi @ ${daamiPercent}%`;
-}
-
 function bardanaAccountId(
   mode: BoriThelaMode,
   systemAccounts: Awaited<ReturnType<typeof ensureSaleCommissionAccounts>>,
@@ -137,47 +134,63 @@ function bardanaAccountId(
   return mode === BoriThelaMode.THELA ? systemAccounts.thela.id : systemAccounts.bori.id;
 }
 
+function toVoucherLines(lines: ComputedLine[]) {
+  return lines.map((line) => ({
+    totalWeightKg: line.totalWeightKg,
+    ratePerMaund: line.ratePerMaund,
+  }));
+}
+
+/**
+ * Sale Party gets one net debit (like Sale Paunch).
+ * Purchase parties / fee / bardana accounts still receive their credit legs.
+ * Row bardana: Dr Bardana (Bori/Thela) / Cr purchase party — does not affect Sale Party.
+ */
 function buildLedgerLegs(
   salePartyAccountId: number,
   computedLines: ComputedLine[],
   totals: ReturnType<typeof computeSaleCommissionInvoiceTotals>,
   systemAccounts: Awaited<ReturnType<typeof ensureSaleCommissionAccounts>>,
   lowerBardanaMode: BoriThelaMode | null | undefined,
-  daamiPercent: number,
+  header: InvoiceVoucherHeader,
+  invoiceReference: string,
+  product?: string | null,
 ) {
   const legs: VoucherLeg[] = [];
+  const settlementDescription = blendedLegDescription(
+    toVoucherLines(computedLines),
+    header,
+    product,
+  );
+  const bardanaDesc = bardanaAgainstInvoiceDescription(invoiceReference);
 
-  for (let i = 0; i < computedLines.length; i += 1) {
-    const line = computedLines[i]!;
-    const goodsDesc = rowGoodsDescription(line, i);
-    legs.push(
-      {
-        accountId: salePartyAccountId,
-        type: LedgerEntryType.DEBIT,
-        amount: line.amount,
-        description: goodsDesc,
-      },
-      {
+  for (const line of computedLines) {
+    const goodsCredit = roundMoney(line.amount + line.dammiAmount);
+    if (goodsCredit > 0) {
+      legs.push({
         accountId: line.partyAccountId,
         type: LedgerEntryType.CREDIT,
-        amount: line.amount,
-        description: goodsDesc,
-      },
-    );
-    if (line.dammiAmount > 0) {
-      const dammiDesc = rowDammiDescription(i, daamiPercent);
+        amount: goodsCredit,
+        description: rowLegDescription(
+          { totalWeightKg: line.totalWeightKg, ratePerMaund: line.ratePerMaund },
+          header,
+        ),
+      });
+    }
+
+    if (line.bardanaAmount != null && line.bardanaAmount > 0) {
       legs.push(
         {
-          accountId: salePartyAccountId,
+          accountId: bardanaAccountId(line.boriOrThelaMode, systemAccounts),
           type: LedgerEntryType.DEBIT,
-          amount: line.dammiAmount,
-          description: dammiDesc,
+          amount: line.bardanaAmount,
+          description: bardanaDesc,
         },
         {
           accountId: line.partyAccountId,
           type: LedgerEntryType.CREDIT,
-          amount: line.dammiAmount,
-          description: dammiDesc,
+          amount: line.bardanaAmount,
+          description: bardanaDesc,
         },
       );
     }
@@ -195,41 +208,32 @@ function buildLedgerLegs(
 
   for (const fee of feeLegs) {
     if (!(fee.amount > 0)) continue;
-    legs.push(
-      {
-        accountId: salePartyAccountId,
-        type: LedgerEntryType.DEBIT,
-        amount: fee.amount,
-        description: fee.description,
-      },
-      {
-        accountId: fee.creditAccountId,
-        type: LedgerEntryType.CREDIT,
-        amount: fee.amount,
-        description: fee.description,
-      },
-    );
+    legs.push({
+      accountId: fee.creditAccountId,
+      type: LedgerEntryType.CREDIT,
+      amount: fee.amount,
+      description: fee.description,
+    });
   }
 
   if (totals.settlementBardanaAmount != null && totals.settlementBardanaAmount > 0) {
     if (!lowerBardanaMode) {
       throw new AppError(400, 'Settlement bardana requires Bori/Thela selection');
     }
-    legs.push(
-      {
-        accountId: salePartyAccountId,
-        type: LedgerEntryType.DEBIT,
-        amount: totals.settlementBardanaAmount,
-        description: 'Bardana',
-      },
-      {
-        accountId: bardanaAccountId(lowerBardanaMode, systemAccounts),
-        type: LedgerEntryType.CREDIT,
-        amount: totals.settlementBardanaAmount,
-        description: 'Bardana',
-      },
-    );
+    legs.push({
+      accountId: bardanaAccountId(lowerBardanaMode, systemAccounts),
+      type: LedgerEntryType.CREDIT,
+      amount: totals.settlementBardanaAmount,
+      description: bardanaDesc,
+    });
   }
+
+  legs.push({
+    accountId: salePartyAccountId,
+    type: LedgerEntryType.DEBIT,
+    amount: totals.netSalePartyDebit,
+    description: settlementDescription,
+  });
 
   const totalDebits = roundMoney(
     legs.filter((leg) => leg.type === LedgerEntryType.DEBIT).reduce((sum, leg) => sum + leg.amount, 0),
@@ -237,12 +241,24 @@ function buildLedgerLegs(
   const totalCredits = roundMoney(
     legs.filter((leg) => leg.type === LedgerEntryType.CREDIT).reduce((sum, leg) => sum + leg.amount, 0),
   );
+  const salePartyDebit = roundMoney(
+    legs
+      .filter((leg) => leg.type === LedgerEntryType.DEBIT && leg.accountId === salePartyAccountId)
+      .reduce((sum, leg) => sum + leg.amount, 0),
+  );
 
   if (Math.abs(totalDebits - totalCredits) > 0.01) {
     throw new AppError(500, 'Sale Commission voucher debits and credits do not balance');
   }
-  if (Math.abs(totalDebits - totals.netSalePartyDebit) > 0.01) {
+  if (Math.abs(salePartyDebit - totals.netSalePartyDebit) > 0.01) {
     throw new AppError(500, 'Sale Party debit total does not match net invoice amount');
+  }
+
+  const salePartyDebitCount = legs.filter(
+    (leg) => leg.type === LedgerEntryType.DEBIT && leg.accountId === salePartyAccountId,
+  ).length;
+  if (salePartyDebitCount !== 1) {
+    throw new AppError(500, 'Sale Commission must post exactly one Sale Party settlement debit');
   }
 
   return { legs, totalDebits, totalCredits };
@@ -274,6 +290,12 @@ export async function createSaleCommissionInvoice(data: CreateSaleCommissionInpu
       await assertPurchasePartyAccount(tx, line.partyAccountId);
     }
 
+    const header: InvoiceVoucherHeader = {
+      tafseel: data.tafseel,
+      gariNo: data.gariNo,
+    };
+    const product = data.jins?.trim() || computedLines[0]?.jins?.trim() || null;
+
     const reference = await nextReference(tx);
     const { legs, totalDebits } = buildLedgerLegs(
       data.salePartyAccountId,
@@ -281,7 +303,9 @@ export async function createSaleCommissionInvoice(data: CreateSaleCommissionInpu
       totals,
       systemAccounts,
       data.lowerBardanaMode,
-      prefs.daamiPercent,
+      header,
+      reference,
+      product,
     );
 
     const financialYearId = await getActiveFinancialYearId(tx);
@@ -368,12 +392,12 @@ export async function previewSaleCommissionTotals(data: {
   lowerBardanaRate?: number | null;
 }) {
   const prefs = await getSystemPreferences();
-  const computedLines = data.lines.map((line) => computeSaleCommissionRow(line, prefs));
+  const computedLines = buildComputedLines(data.lines, prefs);
   return computeSaleCommissionInvoiceTotals(
-    computedLines.map((row, i) => ({
+    computedLines.map((row) => ({
       amount: row.amount,
       dammiAmount: row.dammiAmount,
-      bagCount: data.lines[i]!.bagCount,
+      bagCount: row.bagCount,
     })),
     prefs,
     {

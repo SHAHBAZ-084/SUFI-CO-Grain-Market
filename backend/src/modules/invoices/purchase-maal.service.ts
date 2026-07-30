@@ -24,8 +24,8 @@ import {
   splitMazduriByParty,
 } from './purchase-maal.calculations';
 import {
+  bardanaAgainstInvoiceDescription,
   blendedLegDescription,
-  rowLegDescription,
   type InvoiceVoucherHeader,
   voucherReferenceFromBillNo,
 } from './invoice-voucher-descriptions';
@@ -131,9 +131,11 @@ function buildLedgerLegs(
   lowerBardanaMode: BoriThelaMode | null | undefined,
   mazduriEnabled: boolean,
   header: InvoiceVoucherHeader,
+  invoiceReference: string,
 ) {
   const legs: VoucherLeg[] = [];
   const allLines = computedLines;
+  const bardanaDesc = bardanaAgainstInvoiceDescription(invoiceReference);
 
   if (totals.totalDebitAmount > 0) {
     legs.push({
@@ -182,13 +184,13 @@ function buildLedgerLegs(
           accountId: bardanaAccountId(line.boriOrThelaMode, systemAccounts),
           type: LedgerEntryType.DEBIT,
           amount: line.bardanaAmount,
-          description: rowLegDescription(line, header),
+          description: bardanaDesc,
         },
         {
           accountId: line.partyAccountId,
           type: LedgerEntryType.CREDIT,
           amount: line.bardanaAmount,
-          description: rowLegDescription(line, header),
+          description: bardanaDesc,
         },
       );
     }
@@ -203,13 +205,13 @@ function buildLedgerLegs(
         accountId: maalKhataAccountId,
         type: LedgerEntryType.DEBIT,
         amount: totals.lowerBardanaAmount,
-        description: blendedLegDescription(allLines, header),
+        description: bardanaDesc,
       },
       {
         accountId: bardanaAccountId(lowerBardanaMode, systemAccounts),
         type: LedgerEntryType.CREDIT,
         amount: totals.lowerBardanaAmount,
-        description: blendedLegDescription(allLines, header),
+        description: bardanaDesc,
       },
     );
   }
@@ -288,6 +290,7 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
       data.lowerBardanaMode,
       mazduriEnabled,
       voucherHeader,
+      reference,
     );
 
     if (Math.abs(totalDebits - totalCredits) > 0.01) {

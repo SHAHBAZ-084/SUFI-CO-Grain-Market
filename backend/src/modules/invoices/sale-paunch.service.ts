@@ -19,9 +19,9 @@ import {
 import { assertMaalKhataAccount } from '../products/maal-khata';
 import { getSystemPreferences } from '../preferences/preferences.service';
 import {
+  bardanaAgainstInvoiceDescription,
   blendedLegDescription,
   invoiceVoucherHeaderSuffix,
-  salePaunchRowLegDescription,
   type InvoiceVoucherHeader,
   voucherReferenceFromBillNo,
 } from './invoice-voucher-descriptions';
@@ -166,9 +166,11 @@ function buildLedgerLegs(
   taxAmount: number,
   biltyKirayaAmount: number,
   miscAmount: number,
+  invoiceReference: string,
 ) {
   const legs: VoucherLeg[] = [];
   const allLines = computedLines;
+  const bardanaDesc = bardanaAgainstInvoiceDescription(invoiceReference);
 
   const maalKhataByAccount = new Map<number, number>();
   for (const line of computedLines) {
@@ -211,13 +213,13 @@ function buildLedgerLegs(
           accountId: salePartyAccountId,
           type: LedgerEntryType.DEBIT,
           amount: line.bardanaAmount,
-          description: salePaunchRowLegDescription(toVoucherLine(line), header),
+          description: bardanaDesc,
         },
         {
           accountId: bardanaAccountId(line.boriOrThelaMode, systemAccounts),
           type: LedgerEntryType.CREDIT,
           amount: line.bardanaAmount,
-          description: salePaunchRowLegDescription(toVoucherLine(line), header),
+          description: bardanaDesc,
         },
       );
     }
@@ -232,13 +234,13 @@ function buildLedgerLegs(
         accountId: bardanaAccountId(lowerBardanaMode, systemAccounts),
         type: LedgerEntryType.DEBIT,
         amount: totals.lowerBardanaAmount,
-        description: blendedLegDescription(toVoucherLines(allLines), header),
+        description: bardanaDesc,
       },
       {
         accountId: salePartyAccountId,
         type: LedgerEntryType.CREDIT,
         amount: totals.lowerBardanaAmount,
-        description: blendedLegDescription(toVoucherLines(allLines), header),
+        description: bardanaDesc,
       },
     );
   }
@@ -364,6 +366,7 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
       taxAmount,
       biltyKirayaAmount,
       miscAmount,
+      reference,
     );
 
     if (Math.abs(totalDebits - totalCredits) > 0.01) {

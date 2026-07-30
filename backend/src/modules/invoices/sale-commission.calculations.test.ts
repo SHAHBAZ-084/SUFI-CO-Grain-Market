@@ -23,6 +23,26 @@ describe('sale-commission.calculations', () => {
     expect(row.netCreditToParty).toBe(651_510);
   });
 
+  it('includes row bardana in net credit to purchase party', () => {
+    const row = computeSaleCommissionRow(
+      {
+        bagCount: 10,
+        bhartii: 100,
+        dharanCount: 0,
+        looseKg: 0,
+        ratePerMaund: 2000,
+        bardanaQty: 10,
+        bardanaRate: 50,
+        dammiChecked: false,
+      },
+      { daamiPercent: 1.6 },
+    );
+    // 1000kg → 25 maund × 2000 = 50000 goods + 500 bardana
+    expect(row.amount).toBe(50_000);
+    expect(row.bardanaAmount).toBe(500);
+    expect(row.netCreditToParty).toBe(50_500);
+  });
+
   it('stacks settlement fees on post-dammi total with dalali on pre-dammi goods', () => {
     const row = computeSaleCommissionRow(
       {

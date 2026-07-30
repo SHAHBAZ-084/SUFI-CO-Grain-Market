@@ -10,6 +10,8 @@ type FormActionFooterProps = {
   savingLabel?: string;
   saving?: boolean;
   onClose: () => void;
+  /** Pause this form and keep its draft in the session tray. */
+  onMinimize?: () => void;
   primaryRef?: Ref<HTMLButtonElement>;
   primaryType?: ButtonHTMLAttributes<HTMLButtonElement>['type'];
   primaryTabIndex?: number;
@@ -18,7 +20,7 @@ type FormActionFooterProps = {
 };
 
 /**
- * Shared form footer: optional leading content + right-aligned primary + Close.
+ * Shared form footer: optional leading content + right-aligned primary + Minimize + Close.
  * Used by vouchers and invoices.
  */
 export function FormActionFooter({
@@ -29,6 +31,7 @@ export function FormActionFooter({
   savingLabel = 'Saving…',
   saving = false,
   onClose,
+  onMinimize,
   primaryRef,
   primaryType = 'submit',
   primaryTabIndex,
@@ -50,6 +53,16 @@ export function FormActionFooter({
         >
           {saving ? savingLabel : primaryLabel}
         </FinancialButton>
+        {onMinimize ? (
+          <SecondaryButton
+            type="button"
+            className="px-6 py-2.5"
+            disabled={saving}
+            onClick={onMinimize}
+          >
+            Minimize
+          </SecondaryButton>
+        ) : null}
         <SecondaryButton
           type="button"
           tabIndex={closeTabIndex}

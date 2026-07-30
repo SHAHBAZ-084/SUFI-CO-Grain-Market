@@ -21,6 +21,7 @@ import {
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useMinimizableForm } from '../../hooks/useMinimizableForm';
 import { api, Account, AccountCategory, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
@@ -56,6 +57,34 @@ type GridRow = {
   netUpperAmount: number;
   dammiAmount: number;
   bardanaAmount: number | null;
+};
+
+type SalePaunchDraft = {
+  predictedRef: string;
+  gridRows: GridRow[];
+  invoiceDate: string;
+  billNo: string;
+  gariNo: string;
+  tafseel: string;
+  maalKhataAccountId: string;
+  boriOrThelaMode: BoriThelaMode;
+  bagCount: string;
+  compWeightKg: string;
+  kaatKg: string;
+  kanta: string;
+  upperRatePerMaund: string;
+  rowBardanaQty: string;
+  rowBardanaRate: string;
+  dammiChecked: boolean;
+  salePartyAccountId: string;
+  lowerRatePerMaund: string;
+  lowerKaatKg: string;
+  taxAmount: string;
+  miscAmount: string;
+  biltyKirayaAmount: string;
+  lowerBoriThela: BoriThelaMode;
+  lowerBardanaQty: string;
+  lowerBardanaRate: string;
 };
 
 function todayInputValue() {
@@ -107,6 +136,8 @@ function FlatAccountSelect({
 
 export function SalePaunchInvoicePage() {
   const navigate = useNavigate();
+  const { restoredState, minimize } = useMinimizableForm<SalePaunchDraft>('sale-paunch');
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -114,37 +145,37 @@ export function SalePaunchInvoicePage() {
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
-  const [predictedRef, setPredictedRef] = useState('');
-  const [gridRows, setGridRows] = useState<GridRow[]>([]);
+  const [predictedRef, setPredictedRef] = useState(() => restoredState?.predictedRef ?? '');
+  const [gridRows, setGridRows] = useState<GridRow[]>(() => restoredState?.gridRows ?? []);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const [invoiceDate, setInvoiceDate] = useState(todayInputValue);
-  const [billNo, setBillNo] = useState('');
-  const [gariNo, setGariNo] = useState('');
-  const [tafseel, setTafseel] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(() => restoredState?.invoiceDate ?? todayInputValue());
+  const [billNo, setBillNo] = useState(() => restoredState?.billNo ?? '');
+  const [gariNo, setGariNo] = useState(() => restoredState?.gariNo ?? '');
+  const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
 
-  const [maalKhataAccountId, setMaalKhataAccountId] = useState('');
-  const [boriOrThelaMode, setBoriOrThelaMode] = useState<BoriThelaMode>('BORI');
-  const [bagCount, setBagCount] = useState('');
-  const [compWeightKg, setCompWeightKg] = useState('');
-  const [kaatKg, setKaatKg] = useState('');
-  const [kanta, setKanta] = useState('');
-  const [upperRatePerMaund, setUpperRatePerMaund] = useState('');
-  const [rowBardanaQty, setRowBardanaQty] = useState('');
-  const [rowBardanaRate, setRowBardanaRate] = useState('');
-  const [dammiChecked, setDammiChecked] = useState(false);
+  const [maalKhataAccountId, setMaalKhataAccountId] = useState(() => restoredState?.maalKhataAccountId ?? '');
+  const [boriOrThelaMode, setBoriOrThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriOrThelaMode ?? 'BORI');
+  const [bagCount, setBagCount] = useState(() => restoredState?.bagCount ?? '');
+  const [compWeightKg, setCompWeightKg] = useState(() => restoredState?.compWeightKg ?? '');
+  const [kaatKg, setKaatKg] = useState(() => restoredState?.kaatKg ?? '');
+  const [kanta, setKanta] = useState(() => restoredState?.kanta ?? '');
+  const [upperRatePerMaund, setUpperRatePerMaund] = useState(() => restoredState?.upperRatePerMaund ?? '');
+  const [rowBardanaQty, setRowBardanaQty] = useState(() => restoredState?.rowBardanaQty ?? '');
+  const [rowBardanaRate, setRowBardanaRate] = useState(() => restoredState?.rowBardanaRate ?? '');
+  const [dammiChecked, setDammiChecked] = useState(() => restoredState?.dammiChecked ?? false);
 
-  const [salePartyAccountId, setSalePartyAccountId] = useState('');
-  const [lowerRatePerMaund, setLowerRatePerMaund] = useState('');
-  const [lowerKaatKg, setLowerKaatKg] = useState('');
-  const [taxAmount, setTaxAmount] = useState('');
-  const [miscAmount, setMiscAmount] = useState('');
-  const [biltyKirayaAmount, setBiltyKirayaAmount] = useState('');
-  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>('BORI');
-  const [lowerBardanaQty, setLowerBardanaQty] = useState('');
-  const [lowerBardanaRate, setLowerBardanaRate] = useState('');
+  const [salePartyAccountId, setSalePartyAccountId] = useState(() => restoredState?.salePartyAccountId ?? '');
+  const [lowerRatePerMaund, setLowerRatePerMaund] = useState(() => restoredState?.lowerRatePerMaund ?? '');
+  const [lowerKaatKg, setLowerKaatKg] = useState(() => restoredState?.lowerKaatKg ?? '');
+  const [taxAmount, setTaxAmount] = useState(() => restoredState?.taxAmount ?? '');
+  const [miscAmount, setMiscAmount] = useState(() => restoredState?.miscAmount ?? '');
+  const [biltyKirayaAmount, setBiltyKirayaAmount] = useState(() => restoredState?.biltyKirayaAmount ?? '');
+  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>(() => restoredState?.lowerBoriThela ?? 'BORI');
+  const [lowerBardanaQty, setLowerBardanaQty] = useState(() => restoredState?.lowerBardanaQty ?? '');
+  const [lowerBardanaRate, setLowerBardanaRate] = useState(() => restoredState?.lowerBardanaRate ?? '');
 
   const reload = useCallback(async () => {
     const base = await loadInvoiceFormBase();
@@ -153,9 +184,14 @@ export function SalePaunchInvoicePage() {
     setPrefs(base.prefs);
     try {
       const refRow = await api.getNextSalePaunchReference();
-      setPredictedRef(refRow.reference);
+      if (keepRestoredPredictedRef.current) {
+        keepRestoredPredictedRef.current = false;
+      } else {
+        setPredictedRef(refRow.reference);
+      }
     } catch {
-      setPredictedRef('');
+      if (!keepRestoredPredictedRef.current) setPredictedRef('');
+      keepRestoredPredictedRef.current = false;
     }
   }, []);
 
@@ -394,8 +430,8 @@ export function SalePaunchInvoicePage() {
   }
 
   return (
-    <PageShell centerTitle invoiceTitleBand title="Sale on Paunch">
-      <Panel className="inv-form-panel mx-auto w-full overflow-visible">
+    <PageShell centerTitle invoiceTitleBand title="Sale on Paunch" className="app-page--sale-paunch">
+      <Panel className="inv-form-panel mx-auto w-full overflow-visible bg-white">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <InvoiceFormSection>
@@ -620,6 +656,38 @@ export function SalePaunchInvoicePage() {
                 message={message}
                 saving={saving}
                 onClose={() => navigate('/')}
+                onMinimize={() =>
+                  minimize(
+                    {
+                      predictedRef,
+                      gridRows,
+                      invoiceDate,
+                      billNo,
+                      gariNo,
+                      tafseel,
+                      maalKhataAccountId,
+                      boriOrThelaMode,
+                      bagCount,
+                      compWeightKg,
+                      kaatKg,
+                      kanta,
+                      upperRatePerMaund,
+                      rowBardanaQty,
+                      rowBardanaRate,
+                      dammiChecked,
+                      salePartyAccountId,
+                      lowerRatePerMaund,
+                      lowerKaatKg,
+                      taxAmount,
+                      miscAmount,
+                      biltyKirayaAmount,
+                      lowerBoriThela,
+                      lowerBardanaQty,
+                      lowerBardanaRate,
+                    },
+                    `Sale on Paunch — ${predictedRef || 'draft'}`,
+                  )
+                }
               />
             </InvoiceFormSection>
           </form>

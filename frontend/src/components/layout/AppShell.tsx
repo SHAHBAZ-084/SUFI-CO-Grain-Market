@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { ContentHeader } from './ContentHeader';
+import { MinimizedFormsTray } from './MinimizedFormsTray';
 import { Sidebar } from './Sidebar';
 
 export function AppShell() {
@@ -11,6 +12,7 @@ export function AppShell() {
         <main className="app-main-scroll">
           <Outlet />
         </main>
+        <MinimizedFormsTray />
       </div>
     </div>
   );

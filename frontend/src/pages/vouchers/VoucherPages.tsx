@@ -6,6 +6,20 @@ import { DangerButton, FieldLabel, PageShell, Panel, PrimaryButton, SecondaryBut
 import { FormActionFooter } from '../../components/ui/FormActionFooter';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useMinimizableForm } from '../../hooks/useMinimizableForm';
+import type { MinimizedFormKind } from '../../stores/minimizedFormsStore';
+
+type VoucherDraft = {
+  debitCategoryId: string;
+  creditCategoryId: string;
+  debitAccountId: string;
+  creditAccountId: string;
+  amount: string;
+  voucherDate: string;
+  reference: string;
+  description: string;
+  predictedNumber?: number | null;
+};
 
 const VOUCHER_TYPES: Record<string, string> = {
   payment: 'PAYMENT',
@@ -124,6 +138,9 @@ function categoriesForSide(
 
 export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) {
   const navigate = useNavigate();
+  const formKind = kind as MinimizedFormKind;
+  const { restoredState, minimize } = useMinimizableForm<VoucherDraft>(formKind);
+  const keepRestoredPredictedNumber = useRef(restoredState?.predictedNumber != null);
   const formRef = useRef<HTMLFormElement>(null);
   const trapRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -145,16 +162,16 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<AccountCategory[]>([]);
 
-  const [debitCategoryId, setDebitCategoryId] = useState('');
-  const [creditCategoryId, setCreditCategoryId] = useState('');
-  const [debitAccountId, setDebitAccountId] = useState('');
-  const [creditAccountId, setCreditAccountId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [voucherDate, setVoucherDate] = useState(todayInputValue);
-  const [predictedNumber, setPredictedNumber] = useState<number | null>(null);
+  const [debitCategoryId, setDebitCategoryId] = useState(restoredState?.debitCategoryId ?? '');
+  const [creditCategoryId, setCreditCategoryId] = useState(restoredState?.creditCategoryId ?? '');
+  const [debitAccountId, setDebitAccountId] = useState(restoredState?.debitAccountId ?? '');
+  const [creditAccountId, setCreditAccountId] = useState(restoredState?.creditAccountId ?? '');
+  const [amount, setAmount] = useState(restoredState?.amount ?? '');
+  const [voucherDate, setVoucherDate] = useState(restoredState?.voucherDate ?? todayInputValue);
+  const [predictedNumber, setPredictedNumber] = useState<number | null>(restoredState?.predictedNumber ?? null);
   const [numberMismatch, setNumberMismatch] = useState(false);
-  const [reference, setReference] = useState('');
-  const [description, setDescription] = useState('');
+  const [reference, setReference] = useState(restoredState?.reference ?? '');
+  const [description, setDescription] = useState(restoredState?.description ?? '');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -175,13 +192,18 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
 
   const refreshPredictedNumber = useCallback(async () => {
     try {
-      const { number } = await api.getNextVoucherNumber();
-      setPredictedNumber(number);
+      const { number } = await api.getNextVoucherNumber(VOUCHER_TYPES[kind] as 'PAYMENT' | 'RECEIPT' | 'JOURNAL');
+      if (keepRestoredPredictedNumber.current) {
+        keepRestoredPredictedNumber.current = false;
+      } else {
+        setPredictedNumber(number);
+      }
       setNumberMismatch(false);
     } catch {
-      setPredictedNumber(null);
+      if (!keepRestoredPredictedNumber.current) setPredictedNumber(null);
+      keepRestoredPredictedNumber.current = false;
     }
-  }, []);
+  }, [kind]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -421,6 +443,22 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
             primaryTabIndex={9}
             closeTabIndex={10}
             onClose={() => navigate('/')}
+            onMinimize={() =>
+              minimize(
+                {
+                  debitCategoryId,
+                  creditCategoryId,
+                  debitAccountId,
+                  creditAccountId,
+                  amount,
+                  voucherDate,
+                  reference,
+                  description,
+                  predictedNumber,
+                },
+                `${VOUCHER_PAGE_TITLES[kind]} — ${predictedNumber != null ? formatVoucherNumber(predictedNumber) : 'draft'}`,
+              )
+            }
           />
         </form>
         </div>

@@ -16,6 +16,7 @@ import { FieldLabel, PageShell, Panel, TextInput } from '../../components/ui/Pag
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useMinimizableForm } from '../../hooks/useMinimizableForm';
 import { api, Account, AccountCategory, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
@@ -49,6 +50,32 @@ type GridRow = {
   dammiChecked: boolean;
   dammiAmount: number;
   netCreditToParty: number;
+};
+
+type SaleCommissionDraft = {
+  predictedRef: string;
+  gridRows: GridRow[];
+  invoiceDate: string;
+  jins: string;
+  billNo: string;
+  gariNo: string;
+  tafseel: string;
+  partyAccountId: string;
+  boriThelaMode: BoriThelaMode;
+  bagCount: string;
+  bhartii: string;
+  dharanCount: string;
+  looseKg: string;
+  ratePerMaund: string;
+  rowBardanaQty: string;
+  rowBardanaRate: string;
+  dammiChecked: boolean;
+  salePartyAccountId: string;
+  munshianaAmount: string;
+  miscAmount: string;
+  lowerBoriThela: BoriThelaMode;
+  lowerBardanaQty: string;
+  lowerBardanaRate: string;
 };
 
 function todayInputValue() {
@@ -100,6 +127,8 @@ function FlatAccountSelect({
 
 export function SaleCommissionInvoicePage() {
   const navigate = useNavigate();
+  const { restoredState, minimize } = useMinimizableForm<SaleCommissionDraft>('sale-commission');
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -107,35 +136,35 @@ export function SaleCommissionInvoicePage() {
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
-  const [predictedRef, setPredictedRef] = useState('');
-  const [gridRows, setGridRows] = useState<GridRow[]>([]);
+  const [predictedRef, setPredictedRef] = useState(() => restoredState?.predictedRef ?? '');
+  const [gridRows, setGridRows] = useState<GridRow[]>(() => restoredState?.gridRows ?? []);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const [invoiceDate, setInvoiceDate] = useState(todayInputValue);
-  const [jins, setJins] = useState('');
-  const [billNo, setBillNo] = useState('');
-  const [gariNo, setGariNo] = useState('');
-  const [tafseel, setTafseel] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(() => restoredState?.invoiceDate ?? todayInputValue());
+  const [jins, setJins] = useState(() => restoredState?.jins ?? '');
+  const [billNo, setBillNo] = useState(() => restoredState?.billNo ?? '');
+  const [gariNo, setGariNo] = useState(() => restoredState?.gariNo ?? '');
+  const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
 
-  const [partyAccountId, setPartyAccountId] = useState('');
-  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>('BORI');
-  const [bagCount, setBagCount] = useState('');
-  const [bhartii, setBhartii] = useState('');
-  const [dharanCount, setDharanCount] = useState('');
-  const [looseKg, setLooseKg] = useState('');
-  const [ratePerMaund, setRatePerMaund] = useState('');
-  const [rowBardanaQty, setRowBardanaQty] = useState('');
-  const [rowBardanaRate, setRowBardanaRate] = useState('');
-  const [dammiChecked, setDammiChecked] = useState(false);
+  const [partyAccountId, setPartyAccountId] = useState(() => restoredState?.partyAccountId ?? '');
+  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriThelaMode ?? 'BORI');
+  const [bagCount, setBagCount] = useState(() => restoredState?.bagCount ?? '');
+  const [bhartii, setBhartii] = useState(() => restoredState?.bhartii ?? '');
+  const [dharanCount, setDharanCount] = useState(() => restoredState?.dharanCount ?? '');
+  const [looseKg, setLooseKg] = useState(() => restoredState?.looseKg ?? '');
+  const [ratePerMaund, setRatePerMaund] = useState(() => restoredState?.ratePerMaund ?? '');
+  const [rowBardanaQty, setRowBardanaQty] = useState(() => restoredState?.rowBardanaQty ?? '');
+  const [rowBardanaRate, setRowBardanaRate] = useState(() => restoredState?.rowBardanaRate ?? '');
+  const [dammiChecked, setDammiChecked] = useState(() => restoredState?.dammiChecked ?? false);
 
-  const [salePartyAccountId, setSalePartyAccountId] = useState('');
-  const [munshianaAmount, setMunshianaAmount] = useState('');
-  const [miscAmount, setMiscAmount] = useState('');
-  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>('THELA');
-  const [lowerBardanaQty, setLowerBardanaQty] = useState('');
-  const [lowerBardanaRate, setLowerBardanaRate] = useState('');
+  const [salePartyAccountId, setSalePartyAccountId] = useState(() => restoredState?.salePartyAccountId ?? '');
+  const [munshianaAmount, setMunshianaAmount] = useState(() => restoredState?.munshianaAmount ?? '');
+  const [miscAmount, setMiscAmount] = useState(() => restoredState?.miscAmount ?? '');
+  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>(() => restoredState?.lowerBoriThela ?? 'THELA');
+  const [lowerBardanaQty, setLowerBardanaQty] = useState(() => restoredState?.lowerBardanaQty ?? '');
+  const [lowerBardanaRate, setLowerBardanaRate] = useState(() => restoredState?.lowerBardanaRate ?? '');
 
   const reload = useCallback(async () => {
     const base = await loadInvoiceFormBase();
@@ -144,9 +173,14 @@ export function SaleCommissionInvoicePage() {
     setPrefs(base.prefs);
     try {
       const refRow = await api.getNextSaleCommissionReference();
-      setPredictedRef(refRow.reference);
+      if (keepRestoredPredictedRef.current) {
+        keepRestoredPredictedRef.current = false;
+      } else {
+        setPredictedRef(refRow.reference);
+      }
     } catch {
-      setPredictedRef('');
+      if (!keepRestoredPredictedRef.current) setPredictedRef('');
+      keepRestoredPredictedRef.current = false;
     }
   }, []);
 
@@ -316,8 +350,8 @@ export function SaleCommissionInvoicePage() {
   }
 
   return (
-    <PageShell centerTitle invoiceTitleBand title="Sale on Commission">
-      <Panel className="inv-form-panel mx-auto w-full overflow-visible">
+    <PageShell centerTitle invoiceTitleBand title="Sale on Commission" className="app-page--sale-commission">
+      <Panel className="inv-form-panel mx-auto w-full overflow-visible bg-white">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <InvoiceFormSection>
@@ -538,6 +572,36 @@ export function SaleCommissionInvoicePage() {
                 message={message}
                 saving={saving}
                 onClose={() => navigate('/')}
+                onMinimize={() =>
+                  minimize(
+                    {
+                      predictedRef,
+                      gridRows,
+                      invoiceDate,
+                      jins,
+                      billNo,
+                      gariNo,
+                      tafseel,
+                      partyAccountId,
+                      boriThelaMode,
+                      bagCount,
+                      bhartii,
+                      dharanCount,
+                      looseKg,
+                      ratePerMaund,
+                      rowBardanaQty,
+                      rowBardanaRate,
+                      dammiChecked,
+                      salePartyAccountId,
+                      munshianaAmount,
+                      miscAmount,
+                      lowerBoriThela,
+                      lowerBardanaQty,
+                      lowerBardanaRate,
+                    },
+                    `Sale on Commission — ${predictedRef || 'draft'}`,
+                  )
+                }
               />
             </InvoiceFormSection>
           </form>

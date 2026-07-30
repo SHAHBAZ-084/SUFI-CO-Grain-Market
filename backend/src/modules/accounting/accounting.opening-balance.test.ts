@@ -36,6 +36,7 @@ describe('opening balance ledger report (Part 8 regression)', () => {
     expect(openingRow).toBeTruthy();
     expect(openingRow!.debit).toBe(50000);
     expect(openingRow!.voucherNo).toBe('0');
+    expect(ledgerReport.rows[0]?.type).toBe('Opening Balance');
 
     expect(ledgerReport.balance).toBeCloseTo(tbRow!.balance, 2);
     expect(ledgerReport.summary.closingBalance).toBeCloseTo(tbRow!.balance, 2);

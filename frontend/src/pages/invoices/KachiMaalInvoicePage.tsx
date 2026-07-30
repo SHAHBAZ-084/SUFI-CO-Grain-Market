@@ -20,6 +20,7 @@ import {
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useMinimizableForm } from '../../hooks/useMinimizableForm';
 import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
@@ -53,6 +54,32 @@ type GridRow = {
   bardanaAmount: number | null;
   netCreditToParty: number;
   totalMazduriPreview: number;
+};
+
+type KachiMaalDraft = {
+  predictedRef: string;
+  gridRows: GridRow[];
+  invoiceDate: string;
+  productId: string;
+  jins: string;
+  qism: string;
+  billNo: string;
+  gariNo: string;
+  tafseel: string;
+  partyAccountId: string;
+  boriThelaMode: BoriThelaMode;
+  bagCount: string;
+  bhartii: string;
+  dharanCount: string;
+  looseKg: string;
+  ratePerMaund: string;
+  rowBardanaQty: string;
+  rowBardanaRate: string;
+  debitAccountId: string;
+  miscAmount: string;
+  lowerBoriThela: BoriThelaMode;
+  lowerBardanaQty: string;
+  lowerBardanaRate: string;
 };
 
 function todayInputValue() {
@@ -109,6 +136,8 @@ function FlatAccountSelect({
 
 export function KachiMaalInvoicePage() {
   const navigate = useNavigate();
+  const { restoredState, minimize } = useMinimizableForm<KachiMaalDraft>('kachi-maal');
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -117,35 +146,35 @@ export function KachiMaalInvoicePage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
-  const [predictedRef, setPredictedRef] = useState('');
-  const [gridRows, setGridRows] = useState<GridRow[]>([]);
+  const [predictedRef, setPredictedRef] = useState(() => restoredState?.predictedRef ?? '');
+  const [gridRows, setGridRows] = useState<GridRow[]>(() => restoredState?.gridRows ?? []);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const [invoiceDate, setInvoiceDate] = useState(todayInputValue);
-  const [productId, setProductId] = useState('');
-  const [jins, setJins] = useState('');
-  const [qism] = useState('');
-  const [billNo, setBillNo] = useState('');
-  const [gariNo, setGariNo] = useState('');
-  const [tafseel, setTafseel] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(() => restoredState?.invoiceDate ?? todayInputValue());
+  const [productId, setProductId] = useState(() => restoredState?.productId ?? '');
+  const [jins, setJins] = useState(() => restoredState?.jins ?? '');
+  const [qism] = useState(() => restoredState?.qism ?? '');
+  const [billNo, setBillNo] = useState(() => restoredState?.billNo ?? '');
+  const [gariNo, setGariNo] = useState(() => restoredState?.gariNo ?? '');
+  const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
 
-  const [partyAccountId, setPartyAccountId] = useState('');
-  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>('BORI');
-  const [bagCount, setBagCount] = useState('');
-  const [bhartii, setBhartii] = useState('');
-  const [dharanCount, setDharanCount] = useState('');
-  const [looseKg, setLooseKg] = useState('');
-  const [ratePerMaund, setRatePerMaund] = useState('');
-  const [rowBardanaQty, setRowBardanaQty] = useState('');
-  const [rowBardanaRate, setRowBardanaRate] = useState('');
+  const [partyAccountId, setPartyAccountId] = useState(() => restoredState?.partyAccountId ?? '');
+  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriThelaMode ?? 'BORI');
+  const [bagCount, setBagCount] = useState(() => restoredState?.bagCount ?? '');
+  const [bhartii, setBhartii] = useState(() => restoredState?.bhartii ?? '');
+  const [dharanCount, setDharanCount] = useState(() => restoredState?.dharanCount ?? '');
+  const [looseKg, setLooseKg] = useState(() => restoredState?.looseKg ?? '');
+  const [ratePerMaund, setRatePerMaund] = useState(() => restoredState?.ratePerMaund ?? '');
+  const [rowBardanaQty, setRowBardanaQty] = useState(() => restoredState?.rowBardanaQty ?? '');
+  const [rowBardanaRate, setRowBardanaRate] = useState(() => restoredState?.rowBardanaRate ?? '');
 
-  const [debitAccountId, setDebitAccountId] = useState('');
-  const [miscAmount, setMiscAmount] = useState('');
-  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>('BORI');
-  const [lowerBardanaQty, setLowerBardanaQty] = useState('');
-  const [lowerBardanaRate, setLowerBardanaRate] = useState('');
+  const [debitAccountId, setDebitAccountId] = useState(() => restoredState?.debitAccountId ?? '');
+  const [miscAmount, setMiscAmount] = useState(() => restoredState?.miscAmount ?? '');
+  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>(() => restoredState?.lowerBoriThela ?? 'BORI');
+  const [lowerBardanaQty, setLowerBardanaQty] = useState(() => restoredState?.lowerBardanaQty ?? '');
+  const [lowerBardanaRate, setLowerBardanaRate] = useState(() => restoredState?.lowerBardanaRate ?? '');
 
   const productOptions = useMemo(
     () => products.map((p) => ({ value: String(p.id), label: p.name })),
@@ -160,9 +189,14 @@ export function KachiMaalInvoicePage() {
     setProducts(base.products ?? []);
     try {
       const refRow = await api.getNextKachiMaalReference();
-      setPredictedRef(refRow.reference);
+      if (keepRestoredPredictedRef.current) {
+        keepRestoredPredictedRef.current = false;
+      } else {
+        setPredictedRef(refRow.reference);
+      }
     } catch {
-      setPredictedRef('');
+      if (!keepRestoredPredictedRef.current) setPredictedRef('');
+      keepRestoredPredictedRef.current = false;
     }
   }, []);
 
@@ -329,8 +363,8 @@ export function KachiMaalInvoicePage() {
   }
 
   return (
-    <PageShell centerTitle invoiceTitleBand title="Kachi Maal">
-      <Panel className="inv-form-panel mx-auto w-full overflow-visible">
+    <PageShell centerTitle invoiceTitleBand title="Kachi Maal" className="app-page--kachi-maal">
+      <Panel className="inv-form-panel mx-auto w-full overflow-visible bg-white">
         <div ref={trapRef} className="overflow-visible">
           <form onSubmit={onSave} className="space-y-0">
             <InvoiceFormSection>
@@ -553,6 +587,36 @@ export function KachiMaalInvoicePage() {
                 message={message}
                 saving={saving}
                 onClose={() => navigate('/')}
+                onMinimize={() =>
+                  minimize(
+                    {
+                      predictedRef,
+                      gridRows,
+                      invoiceDate,
+                      productId,
+                      jins,
+                      qism,
+                      billNo,
+                      gariNo,
+                      tafseel,
+                      partyAccountId,
+                      boriThelaMode,
+                      bagCount,
+                      bhartii,
+                      dharanCount,
+                      looseKg,
+                      ratePerMaund,
+                      rowBardanaQty,
+                      rowBardanaRate,
+                      debitAccountId,
+                      miscAmount,
+                      lowerBoriThela,
+                      lowerBardanaQty,
+                      lowerBardanaRate,
+                    },
+                    `Kachi Maal — ${predictedRef || 'draft'}`,
+                  )
+                }
               />
             </InvoiceFormSection>
           </form>

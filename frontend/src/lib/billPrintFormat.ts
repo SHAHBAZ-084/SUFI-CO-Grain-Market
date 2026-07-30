@@ -1,4 +1,4 @@
-import type { InvoiceDetail, MaalLineDetail, SystemPreferences } from './api';
+import type { InvoiceDetail, MaalLineDetail, SalePaunchLineDetail, SystemPreferences } from './api';
 
 export type BillLineRow = {
   variety: string;
@@ -37,6 +37,61 @@ export function formatBillAmount(amount: number | string) {
   });
 }
 
+export function formatBillWeight(amount: number | string) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return '0';
+  const hasFraction = Math.abs(n % 1) > 1e-9;
+  return n.toLocaleString('en-PK', {
+    minimumFractionDigits: hasFraction ? 1 : 0,
+    maximumFractionDigits: 1,
+  });
+}
+
+export type CommissionBillRow = {
+  variety: string;
+  bori: number;
+  thela: number;
+  weight: number;
+  rate: number;
+  amount: number;
+};
+
+export function saleCommissionLineToBillRow(line: MaalLineDetail): CommissionBillRow {
+  const count = Number(line.bagCount ?? 0);
+  const isThela = line.boriOrThelaMode === 'THELA';
+  return {
+    variety: line.qism?.trim() || line.jins?.trim() || '',
+    bori: isThela ? 0 : count,
+    thela: isThela ? count : 0,
+    weight: Number(line.totalWeightKg),
+    rate: Number(line.ratePerMaund),
+    amount: Number(line.amount),
+  };
+}
+
+export function sumCommissionBillRows(rows: CommissionBillRow[]) {
+  return {
+    bori: rows.reduce((s, r) => s + r.bori, 0),
+    thela: rows.reduce((s, r) => s + r.thela, 0),
+    weight: round2(rows.reduce((s, r) => s + r.weight, 0)),
+    amount: round2(rows.reduce((s, r) => s + r.amount, 0)),
+  };
+}
+
+/** Compact bardana line as on legacy Sale Commission bills: `0 Bori@ 0, 552 Thela@ 45`. */
+export function formatCommissionBardanaLine(
+  boriQty: number,
+  boriRate: number,
+  thelaQty: number,
+  thelaRate: number,
+) {
+  const fmt = (n: number) => {
+    if (!Number.isFinite(n)) return '0';
+    return Number.isInteger(n) ? String(n) : formatBillAmount(n);
+  };
+  return `${boriQty} Bori@ ${fmt(boriRate)}, ${thelaQty} Thela@ ${fmt(thelaRate)}`;
+}
+
 export function maalLineToBillRow(line: MaalLineDetail, kaatPercent: number): BillLineRow {
   const compWeight = Number(line.totalWeightKg);
   const kaat = kaatPercent > 0 ? round2(compWeight * (kaatPercent / 100)) : 0;
@@ -62,7 +117,7 @@ export function formatBoriThelaLine(
   thelaQty: number,
   thelaRate: number,
 ) {
-  return `${boriQty} Bori@ ${formatBillAmount(boriRate)}, ${thelaQty} Thela@ ${formatBillAmount(thelaRate)}`;
+  return `${boriQty} Bori @ ${formatBillAmount(boriRate)}, ${thelaQty} Thela @ ${formatBillAmount(thelaRate)}`;
 }
 
 export function invoiceBillDate(invoice: InvoiceDetail) {
@@ -145,6 +200,72 @@ export function computeKachiDeductions(
   return {
     goods: round2(goods),
     deduction: round2(paleDari + brokery + marketFee),
+  };
+}
+
+/** Sale-party (Bill To) row — lower rate / lower kaat. */
+export function salePaunchLowerToBillRow(line: SalePaunchLineDetail): BillLineRow {
+  return {
+    variety: line.qism?.trim() || line.jins?.trim() || '',
+    bori: Number(line.bagCount ?? 0),
+    thela: Number(line.thelaCount ?? 0),
+    compWeight: Number(line.totalWeightKg),
+    kaat: Number(line.lowerKaatKg),
+    netWeight: Number(line.lowerNetWeightKg),
+    rate: Number(line.lowerRatePerMaund),
+    amount: Number(line.lowerAmount),
+  };
+}
+
+/** Maal Khata (Bill From) row — upper rate / upper kaat. */
+export function salePaunchUpperToBillRow(line: SalePaunchLineDetail): BillLineRow {
+  return {
+    variety: line.qism?.trim() || line.jins?.trim() || '',
+    bori: Number(line.bagCount ?? 0),
+    thela: Number(line.thelaCount ?? 0),
+    compWeight: Number(line.totalWeightKg),
+    kaat: Number(line.kaatKg),
+    netWeight: Number(line.netWeightKg),
+    rate: Number(line.upperRatePerMaund),
+    amount: Number(line.upperAmount),
+  };
+}
+
+export function resolveSalePaunchBillFromLabel(
+  lines: SalePaunchLineDetail[],
+  product: string,
+): string {
+  const names = [
+    ...new Set(
+      lines
+        .map((line) => line.maalKhataAccount?.name?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ];
+  const party = names.length > 0 ? names.join(', ') : 'Maal Khata';
+  const jins = product.trim();
+  return jins ? `${party} [${jins}]` : party;
+}
+
+export function computeSalePaunchBillFromTotals(
+  lines: SalePaunchLineDetail[],
+  prefs: Pick<SystemPreferences, 'kantaRate'>,
+) {
+  const kantaDeduction = round2(lines.reduce((s, line) => s + Number(line.kanta ?? 0), 0));
+  const purchaseNet = round2(lines.reduce((s, line) => s + Number(line.netUpperAmount), 0));
+  const purchaseThela = lines.reduce((s, line) => s + Number(line.thelaCount ?? 0), 0);
+
+  return {
+    purchaseThela,
+    kantaDeduction,
+    purchaseNet,
+    totals: [
+      { label: 'Less Kanta', value: formatBillAmount(kantaDeduction) },
+      {
+        label: `${purchaseThela} Thela @${formatBillAmount(prefs.kantaRate)}`,
+        value: formatBillAmount(0),
+      },
+    ],
   };
 }
 
