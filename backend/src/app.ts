@@ -13,6 +13,7 @@ import { invoicesRouter } from './modules/invoices/invoices.routes';
 import { inventoryRouter } from './modules/inventory/inventory.routes';
 import { preferencesRouter } from './modules/preferences/preferences.routes';
 import { createSystemHealthHandler, systemRouter } from './modules/system/system.routes';
+import { stockRouter } from './modules/stock/stock.routes';
 import type { StartupStatus } from './lib/startup';
 
 declare module 'express-session' {
@@ -57,6 +58,7 @@ export function createApp(getStartupStatus?: () => StartupStatus | null) {
   app.use('/api/products', productsRouter);
   app.use('/api/invoices', invoicesRouter);
   app.use('/api/inventory', inventoryRouter);
+  app.use('/api/stock', stockRouter);
   app.use('/api/preferences', preferencesRouter);
   app.use('/api/system', systemRouter);
 

@@ -254,9 +254,11 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  account      Account       @relation(fields: [accountId], references: [id])
-  invoiceItems InvoiceItem[]
-  invoices     Invoice[]
+  account         Account          @relation(fields: [accountId], references: [id])
+  invoiceItems    InvoiceItem[]
+  invoices        Invoice[]
+  stockMovements  StockMovement[]
+  stockRemainders StockRemainder[]
 }
 
 model Invoice {
@@ -304,6 +306,8 @@ model Invoice {
   purchaseMaalLines PurchaseMaalLine[]
   salePaunchLines SalePaunchLine[]
   saleCommissionLines SaleCommissionLine[]
+  stockMovements StockMovement[]
+  emptyBardanaMovements EmptyBardanaMovement[]
 
   @@index([financialYearId])
   @@index([financialYearId, type, status])
@@ -479,13 +483,75 @@ model InvoiceVoucher {
   @@index([invoiceId])
 }
 
-model BardanaStock {
-  id        Int      @id @default(autoincrement())
-  name      String
-  quantity  Decimal  @default(0)
-  unit      String   @default("bag")
-  notes     String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+/** Physical empty bags (Bori/Thela) — report + manual add only, not chart of accounts. */
+enum EmptyBardanaDirection {
+  IN
+  OUT
+}
+
+model EmptyBardanaBalance {
+  bagType   BoriThelaMode @id
+  balance   Decimal       @default(0)
+  updatedAt DateTime      @updatedAt
+}
+
+model EmptyBardanaMovement {
+  id          Int                   @id @default(autoincrement())
+  bagType     BoriThelaMode
+  direction   EmptyBardanaDirection
+  qty         Decimal
+  date        DateTime
+  source      String
+  description String?
+  invoiceId   Int?
+  createdAt   DateTime              @default(now())
+
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([bagType, date, id])
+  @@index([invoiceId])
+}
+
+/** Report-only bag stock — not linked to chart of accounts / vouchers. */
+enum StockBagType {
+  BORI
+  THELA
+}
+
+enum StockDirection {
+  IN
+  OUT
+}
+
+model StockRemainder {
+  id           Int          @id @default(autoincrement())
+  productId    Int
+  bagType      StockBagType
+  remainderKg  Decimal      @default(0)
+  updatedAt    DateTime     @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, bagType])
+  @@index([productId])
+}
+
+model StockMovement {
+  id               Int            @id @default(autoincrement())
+  productId        Int
+  bagType          StockBagType
+  direction        StockDirection
+  bags             Decimal
+  date             DateTime
+  invoiceId        Int?
+  invoiceType      InvoiceType
+  invoiceReference String
+  description      String?
+  createdAt        DateTime       @default(now())
+
+  product Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([productId, bagType, date, id])
+  @@index([invoiceId])
 }

@@ -30,6 +30,8 @@ import {
   computeSalePaunchRow,
   roundMoney,
 } from './sale-paunch.calculations';
+import { postSalePaunchEmptyBardanaOut } from '../inventory/bardana.service';
+import { postSalePaunchStockOut } from '../stock/stock.service';
 
 const TYPE_PREFIX = 'SP';
 
@@ -444,6 +446,29 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
 
     await tx.invoiceVoucher.create({
       data: { invoiceId: invoice.id, voucherId: voucher.id },
+    });
+
+    await postSalePaunchStockOut(tx, {
+      invoiceId: invoice.id,
+      invoiceReference: reference,
+      invoiceDate,
+      lines: computedLines.map((line) => ({
+        maalKhataAccountId: line.maalKhataAccountId,
+        boriOrThelaMode: line.boriOrThelaMode,
+        bagCount: line.bagCount,
+        thelaCount: line.thelaCount ?? 0,
+      })),
+    });
+
+    await postSalePaunchEmptyBardanaOut(tx, {
+      invoiceId: invoice.id,
+      invoiceReference: reference,
+      invoiceDate,
+      lines: computedLines.map((line) => ({
+        boriOrThelaMode: line.boriOrThelaMode,
+        bagCount: line.bagCount,
+        thelaCount: line.thelaCount ?? 0,
+      })),
     });
 
     return tx.invoice.findUniqueOrThrow({

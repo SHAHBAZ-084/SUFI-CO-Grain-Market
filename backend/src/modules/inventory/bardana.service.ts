@@ -1,41 +1,200 @@
+import {
+  BoriThelaMode,
+  EmptyBardanaDirection,
+  Prisma,
+} from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
 
-export async function listBardana() {
-  return prisma.bardanaStock.findMany({
-    where: { isActive: true },
-    orderBy: { name: 'asc' },
-  });
+type Tx = Prisma.TransactionClient;
+
+export type EmptyBardanaBagKind = 'BORI' | 'THELA';
+
+const BAG_TYPES: BoriThelaMode[] = [BoriThelaMode.BORI, BoriThelaMode.THELA];
+
+function toBagType(kind: EmptyBardanaBagKind | BoriThelaMode): BoriThelaMode {
+  return kind === 'THELA' ? BoriThelaMode.THELA : BoriThelaMode.BORI;
 }
 
-export async function createBardana(data: { name: string; quantity?: number; unit?: string; notes?: string }) {
-  const name = data.name.trim();
-  if (!name) throw new AppError(400, 'Name is required');
-
-  return prisma.bardanaStock.create({
-    data: {
-      name,
-      quantity: data.quantity ?? 0,
-      unit: data.unit?.trim() || 'bag',
-      notes: data.notes?.trim() || null,
-    },
-  });
+async function ensureBalances(tx: Tx | typeof prisma = prisma) {
+  for (const bagType of BAG_TYPES) {
+    await tx.emptyBardanaBalance.upsert({
+      where: { bagType },
+      create: { bagType, balance: 0 },
+      update: {},
+    });
+  }
 }
 
-export async function updateBardana(
-  id: number,
-  data: Partial<{ name: string; quantity: number; unit: string; notes: string }>,
+async function adjustBalance(
+  tx: Tx,
+  data: {
+    bagType: BoriThelaMode;
+    qty: number;
+    direction: EmptyBardanaDirection;
+    date: Date;
+    source: string;
+    description?: string | null;
+    invoiceId?: number | null;
+  },
 ) {
-  const row = await prisma.bardanaStock.findFirst({ where: { id, isActive: true } });
-  if (!row) throw new AppError(404, 'Bardana record not found');
+  const qty = Math.max(0, Number(data.qty) || 0);
+  if (!(qty > 0)) return;
 
-  return prisma.bardanaStock.update({
-    where: { id },
+  await ensureBalances(tx);
+
+  const delta = data.direction === EmptyBardanaDirection.IN ? qty : -qty;
+  const current = await tx.emptyBardanaBalance.findUniqueOrThrow({
+    where: { bagType: data.bagType },
+  });
+  const nextBalance = Number(current.balance) + delta;
+
+  await tx.emptyBardanaBalance.update({
+    where: { bagType: data.bagType },
+    data: { balance: nextBalance },
+  });
+
+  await tx.emptyBardanaMovement.create({
     data: {
-      name: data.name?.trim() ?? row.name,
-      quantity: data.quantity ?? row.quantity,
-      unit: data.unit?.trim() ?? row.unit,
-      notes: data.notes?.trim() ?? row.notes,
+      bagType: data.bagType,
+      direction: data.direction,
+      qty,
+      date: data.date,
+      source: data.source,
+      description: data.description ?? null,
+      invoiceId: data.invoiceId ?? null,
     },
   });
+}
+
+export async function getEmptyBardanaReport() {
+  await ensureBalances();
+
+  const [balances, movements] = await Promise.all([
+    prisma.emptyBardanaBalance.findMany({
+      orderBy: { bagType: 'asc' },
+    }),
+    prisma.emptyBardanaMovement.findMany({
+      orderBy: [{ date: 'desc' }, { id: 'desc' }],
+      take: 200,
+    }),
+  ]);
+
+  return {
+    balances: BAG_TYPES.map((bagType) => {
+      const row = balances.find((b) => b.bagType === bagType);
+      return {
+        bagType: bagType as EmptyBardanaBagKind,
+        balance: row ? Number(row.balance) : 0,
+      };
+    }),
+    movements: movements.map((m) => ({
+      id: m.id,
+      date: m.date.toISOString(),
+      bagType: m.bagType as EmptyBardanaBagKind,
+      direction: m.direction as 'IN' | 'OUT',
+      qty: Number(m.qty),
+      source: m.source,
+      description: m.description,
+      invoiceId: m.invoiceId,
+    })),
+  };
+}
+
+/** Manual top-up of empty Bori or Thela bags. */
+export async function addEmptyBardana(data: {
+  bagType: EmptyBardanaBagKind;
+  quantity: number;
+}) {
+  const quantity = Number(data.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new AppError(400, 'Quantity must be greater than zero');
+  }
+
+  const bagType = toBagType(data.bagType);
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await adjustBalance(tx, {
+      bagType,
+      qty: quantity,
+      direction: EmptyBardanaDirection.IN,
+      date: now,
+      source: 'MANUAL',
+      description: 'Manual add',
+    });
+  });
+
+  return getEmptyBardanaReport();
+}
+
+export type EmptyBardanaPurchaseLine = {
+  boriOrThelaMode: BoriThelaMode;
+  bagCount: number;
+  bardanaQty?: number | null;
+};
+
+/** Purchase to Maal: reduce empty bags only when row has no bardana (qty null/≤0). */
+export async function postPurchaseMaalEmptyBardanaOut(
+  tx: Tx,
+  data: {
+    invoiceId: number;
+    invoiceReference: string;
+    invoiceDate: Date;
+    lines: EmptyBardanaPurchaseLine[];
+  },
+) {
+  for (const line of data.lines) {
+    const bardanaQty = line.bardanaQty == null ? 0 : Number(line.bardanaQty);
+    if (bardanaQty > 0) continue;
+
+    const qty = Math.max(0, Number(line.bagCount) || 0);
+    if (!(qty > 0)) continue;
+
+    await adjustBalance(tx, {
+      bagType: toBagType(line.boriOrThelaMode),
+      qty,
+      direction: EmptyBardanaDirection.OUT,
+      date: data.invoiceDate,
+      source: 'PURCHASE_MAAL',
+      description: data.invoiceReference,
+      invoiceId: data.invoiceId,
+    });
+  }
+}
+
+export type EmptyBardanaSalePaunchLine = {
+  boriOrThelaMode: BoriThelaMode;
+  bagCount: number;
+  thelaCount: number;
+};
+
+/** Sale on Paunch: always reduce empty bags by the row's Bori/Thela count. */
+export async function postSalePaunchEmptyBardanaOut(
+  tx: Tx,
+  data: {
+    invoiceId: number;
+    invoiceReference: string;
+    invoiceDate: Date;
+    lines: EmptyBardanaSalePaunchLine[];
+  },
+) {
+  for (const line of data.lines) {
+    const bagType = toBagType(line.boriOrThelaMode);
+    const qty = Math.max(
+      0,
+      Number(bagType === BoriThelaMode.THELA ? line.thelaCount : line.bagCount) || 0,
+    );
+    if (!(qty > 0)) continue;
+
+    await adjustBalance(tx, {
+      bagType,
+      qty,
+      direction: EmptyBardanaDirection.OUT,
+      date: data.invoiceDate,
+      source: 'SALE_PAUNCH',
+      description: data.invoiceReference,
+      invoiceId: data.invoiceId,
+    });
+  }
 }

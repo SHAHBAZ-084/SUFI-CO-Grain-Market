@@ -327,6 +327,135 @@ export function SalePurchaseReportsPage() {
   );
 }
 
+type StockBagType = 'BORI' | 'THELA';
+type StockReportResult = Awaited<ReturnType<typeof api.getStockReport>>;
+
+export function StockReportPage() {
+  const [products, setProducts] = useState<Array<{ id: number; name: string; code: string }>>([]);
+  const [productId, setProductId] = useState('');
+  const [bagType, setBagType] = useState<StockBagType>('BORI');
+  const [report, setReport] = useState<StockReportResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.listProducts()
+      .then((rows) => setProducts(rows.map((p) => ({ id: p.id, name: p.name, code: p.code }))))
+      .catch(() => setProducts([]));
+  }, []);
+
+  async function onLoad() {
+    setError('');
+    setReport(null);
+    const id = Number(productId);
+    if (!Number.isFinite(id) || id < 1) {
+      setError('Select a product');
+      return;
+    }
+    setLoading(true);
+    try {
+      setReport(await api.getStockReport({ productId: id, bagType }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load stock report');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <PageShell title="Stock Report" subtitle="Bag stock from Purchase to Maal (IN) and Sale on Paunch (OUT)">
+      <Panel>
+        <div className="grid gap-3 md:grid-cols-4 md:items-end">
+          <div className="md:col-span-2">
+            <FieldLabel>Product</FieldLabel>
+            <SearchSelect
+              value={productId}
+              onChange={setProductId}
+              options={products.map((p) => ({ value: String(p.id), label: `${p.code} — ${p.name}` }))}
+              placeholder="Search product…"
+            />
+          </div>
+          <div>
+            <FieldLabel>Bag type</FieldLabel>
+            <SegmentedControl
+              value={bagType}
+              onChange={(v) => setBagType(v as StockBagType)}
+              options={[
+                { value: 'BORI', label: 'Bori' },
+                { value: 'THELA', label: 'Thela' },
+              ]}
+            />
+          </div>
+          <FinancialButton type="button" onClick={onLoad} disabled={loading}>
+            {loading ? 'Loading…' : 'Show report'}
+          </FinancialButton>
+        </div>
+
+        {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
+
+        {report ? (
+          <div className="mt-6 space-y-4">
+            <p className="text-sm text-textSecondary">
+              Tracking from {formatDate(report.trackingStartedAt)} onward.
+              {!report.historicalBackfill
+                ? ' Invoices saved before stock tracking started are not included.'
+                : null}
+              {' '}Carried loose remainder: {report.carriedRemainderKg} kg
+              ({report.bagType === 'BORI' ? 'Bori' : 'Thela'}).
+            </p>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-textSecondary">
+                    <th className="py-2 pr-3">Date</th>
+                    <th className="py-2 pr-3">Description</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3 text-right">Bags</th>
+                    <th className="py-2 text-right">Running Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-textSecondary">
+                        No stock movements for this product / bag type yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    report.rows.map((row) => (
+                      <tr key={row.id} className="border-b border-border">
+                        <td className="py-2 pr-3 whitespace-nowrap">{formatDate(row.date)}</td>
+                        <td className="py-2 pr-3">{row.description}</td>
+                        <td className={`py-2 pr-3 font-medium ${row.status === 'IN' ? 'text-success' : 'text-danger'}`}>
+                          {row.status}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{row.bags}</td>
+                        <td className="py-2 text-right font-medium tabular-nums">{row.runningBalance}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border font-semibold">
+                    <td className="py-2 pr-3" colSpan={3}>
+                      Total In {report.totals.totalIn} · Total Out {report.totals.totalOut}
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums" />
+                    <td className="py-2 text-right tabular-nums">
+                      Net {report.totals.netBalance}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        ) : null}
+      </Panel>
+    </PageShell>
+  );
+}
+
 type BalanceSideFilter = 'both' | 'debit' | 'credit';
 type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | 'PURCHASE_MAAL';
 

@@ -614,10 +614,59 @@ export const api = {
     }>(`/api/accounting/reports/account-balance?${query.toString()}`);
   },
 
-  listBardana() {
-    return request<{ id: number; name: string; quantity: number | string; unit: string }[]>('/api/inventory/bardana');
+  getEmptyBardana() {
+    return request<{
+      balances: Array<{ bagType: 'BORI' | 'THELA'; balance: number }>;
+      movements: Array<{
+        id: number;
+        date: string;
+        bagType: 'BORI' | 'THELA';
+        direction: 'IN' | 'OUT';
+        qty: number;
+        source: string;
+        description: string | null;
+        invoiceId: number | null;
+      }>;
+    }>('/api/inventory/bardana');
   },
-  createBardana(data: { name: string; quantity?: number; unit?: string; notes?: string }) {
-    return request('/api/inventory/bardana', { method: 'POST', body: JSON.stringify(data) });
+  addEmptyBardana(data: { bagType: 'BORI' | 'THELA'; quantity: number }) {
+    return request<{
+      balances: Array<{ bagType: 'BORI' | 'THELA'; balance: number }>;
+      movements: Array<{
+        id: number;
+        date: string;
+        bagType: 'BORI' | 'THELA';
+        direction: 'IN' | 'OUT';
+        qty: number;
+        source: string;
+        description: string | null;
+        invoiceId: number | null;
+      }>;
+    }>('/api/inventory/bardana/add', { method: 'POST', body: JSON.stringify(data) });
+  },
+
+  getStockReport(params: { productId: number; bagType: 'BORI' | 'THELA' }) {
+    const query = new URLSearchParams({
+      productId: String(params.productId),
+      bagType: params.bagType,
+    });
+    return request<{
+      product: { id: number; name: string; code: string };
+      bagType: 'BORI' | 'THELA';
+      trackingStartedAt: string;
+      historicalBackfill: false;
+      carriedRemainderKg: number;
+      rows: Array<{
+        id: number;
+        date: string;
+        description: string;
+        invoiceReference: string;
+        invoiceType: string;
+        status: 'IN' | 'OUT';
+        bags: number;
+        runningBalance: number;
+      }>;
+      totals: { totalIn: number; totalOut: number; netBalance: number };
+    }>(`/api/stock/report?${query.toString()}`);
   },
 };

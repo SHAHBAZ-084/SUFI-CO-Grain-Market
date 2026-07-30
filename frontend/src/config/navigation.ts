@@ -83,7 +83,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     items: [
       { kind: 'link', label: 'Add Product', to: '/accounts/products/add' },
       { kind: 'link', label: 'Remove Product', to: '/accounts/products/remove' },
-      { kind: 'link', label: 'Bardana Stock', to: '/inventory/bardana' },
+      { kind: 'link', label: 'Empty Bardana', to: '/inventory/bardana' },
     ],
   },
   {
@@ -102,6 +102,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
       },
       { kind: 'link', label: 'Detail Trial Balance', to: '/reports/trial-balance' },
       { kind: 'link', label: 'Sale/Purchase Reports', to: '/reports/sale-purchase' },
+      { kind: 'link', label: 'Stock Report', to: '/reports/stock' },
     ],
   },
   {

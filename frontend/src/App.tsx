@@ -13,7 +13,7 @@ import { InvoiceFormPage } from './pages/invoices/InvoiceFormPage';
 import { ViewInvoicePage } from './pages/invoices/ViewInvoicePage';
 import { LoginPage } from './pages/LoginPage';
 import { PosHomePage } from './pages/PosHomePage';
-import { AccountReportsPage, AccountBalancePage, SalePurchaseReportsPage, TrialBalancePage, VouchersReportPage } from './pages/reports/ReportPages';
+import { AccountReportsPage, AccountBalancePage, SalePurchaseReportsPage, StockReportPage, TrialBalancePage, VouchersReportPage } from './pages/reports/ReportPages';
 import { SystemPreferencesPage } from './pages/system/SystemPreferencesPage';
 import { UserInfoPage } from './pages/user/UserInfoPage';
 import { VoucherFormPage, VoucherListPage } from './pages/vouchers/VoucherPages';
@@ -59,6 +59,7 @@ export default function App() {
               <Route path="/reports/vouchers" element={<VouchersReportPage />} />
               <Route path="/reports/trial-balance" element={<TrialBalancePage />} />
               <Route path="/reports/sale-purchase" element={<SalePurchaseReportsPage />} />
+              <Route path="/reports/stock" element={<StockReportPage />} />
 
               <Route path="/system/preferences" element={<SystemPreferencesPage />} />
               <Route path="/user" element={<UserInfoPage />} />

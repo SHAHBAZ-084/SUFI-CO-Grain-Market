@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
-import { asyncHandler, param, validateBody } from '../../utils/helpers';
+import { asyncHandler, validateBody } from '../../utils/helpers';
 import * as bardanaService from './bardana.service';
 
 export const inventoryRouter = Router();
@@ -10,36 +10,19 @@ inventoryRouter.use(requireAuth);
 inventoryRouter.get(
   '/bardana',
   asyncHandler(async (_req, res) => {
-    res.json(await bardanaService.listBardana());
+    res.json(await bardanaService.getEmptyBardanaReport());
   }),
 );
 
 inventoryRouter.post(
-  '/bardana',
+  '/bardana/add',
   validateBody(
     z.object({
-      name: z.string().min(1),
-      quantity: z.number().min(0).optional(),
-      unit: z.string().optional(),
-      notes: z.string().optional(),
+      bagType: z.enum(['BORI', 'THELA']),
+      quantity: z.number().positive(),
     }),
   ),
   asyncHandler(async (req, res) => {
-    res.status(201).json(await bardanaService.createBardana(req.body));
-  }),
-);
-
-inventoryRouter.patch(
-  '/bardana/:id',
-  validateBody(
-    z.object({
-      name: z.string().optional(),
-      quantity: z.number().min(0).optional(),
-      unit: z.string().optional(),
-      notes: z.string().optional(),
-    }),
-  ),
-  asyncHandler(async (req, res) => {
-    res.json(await bardanaService.updateBardana(parseInt(param(req.params.id), 10), req.body));
+    res.status(201).json(await bardanaService.addEmptyBardana(req.body));
   }),
 );

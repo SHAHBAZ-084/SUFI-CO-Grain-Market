@@ -49,6 +49,7 @@ const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideI
   '/reports/vouchers': { variant: 'report', icon: Receipt },
   '/reports/trial-balance': { variant: 'report', icon: BarChart3 },
   '/reports/sale-purchase': { variant: 'report', icon: TrendingUp },
+  '/reports/stock': { variant: 'report', icon: Package },
 };
 
 function StatBox({ label, value }: { label: string; value: string }) {
