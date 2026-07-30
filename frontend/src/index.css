@@ -2020,7 +2020,7 @@
 
     border-left-color: var(--ql-accent, var(--fill-financial));
 
-    background: var(--surface-2);
+    background: var(--ql-bg, var(--surface-2));
 
     padding: 0.625rem 0.75rem;
 
@@ -2068,9 +2068,31 @@
 
   .quick-link-card--payment {
 
-    --ql-accent: var(--ql-payment);
+    --ql-accent: #B42318;
 
-    --ql-hover: var(--ql-payment-hover);
+    --ql-bg: #FDECEC;
+
+    --ql-hover: #FAD4D4;
+
+    border-left-color: #B42318;
+
+    background: #FDECEC;
+
+  }
+
+
+
+  .quick-link-card--payment .quick-link-icon {
+
+    color: #B42318;
+
+  }
+
+
+
+  .quick-link-card--payment h3 {
+
+    color: #B42318;
 
   }
 
@@ -2078,9 +2100,31 @@
 
   .quick-link-card--receipt {
 
-    --ql-accent: var(--ql-receipt);
+    --ql-accent: #0F7A4F;
 
-    --ql-hover: var(--ql-receipt-hover);
+    --ql-bg: #E8F7EF;
+
+    --ql-hover: #D2EFDF;
+
+    border-left-color: #0F7A4F;
+
+    background: #E8F7EF;
+
+  }
+
+
+
+  .quick-link-card--receipt .quick-link-icon {
+
+    color: #0F7A4F;
+
+  }
+
+
+
+  .quick-link-card--receipt h3 {
+
+    color: #0F7A4F;
 
   }
 
@@ -2088,9 +2132,31 @@
 
   .quick-link-card--journal {
 
-    --ql-accent: var(--ql-journal);
+    --ql-accent: #8A7340;
 
-    --ql-hover: var(--ql-journal-hover);
+    --ql-bg: #F7F3E8;
+
+    --ql-hover: #EEE6D4;
+
+    border-left-color: #8A7340;
+
+    background: #F7F3E8;
+
+  }
+
+
+
+  .quick-link-card--journal .quick-link-icon {
+
+    color: #8A7340;
+
+  }
+
+
+
+  .quick-link-card--journal h3 {
+
+    color: #8A7340;
 
   }
 

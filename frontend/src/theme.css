@@ -49,12 +49,15 @@
   --card-kachi-maal-accent: #0A2E5C;
 
   /* Dashboard quick-link accents */
-  --ql-payment: #8B2942;
-  --ql-payment-hover: #FBF2F4;
-  --ql-receipt: #1E5C4A;
-  --ql-receipt-hover: #EEF6F2;
-  --ql-journal: #4A5568;
-  --ql-journal-hover: #F0F2F5;
+  --ql-payment: #B42318;
+  --ql-payment-bg: #FDECEC;
+  --ql-payment-hover: #FAD4D4;
+  --ql-receipt: #0F7A4F;
+  --ql-receipt-bg: #E8F7EF;
+  --ql-receipt-hover: #D2EFDF;
+  --ql-journal: #8A7340;
+  --ql-journal-bg: #F7F3E8;
+  --ql-journal-hover: #EEE6D4;
   --ql-sale-commission: #1A6B7A;
   --ql-sale-commission-hover: #ECF5F7;
   --ql-sale-paunch: #B86E00;
@@ -134,12 +137,15 @@
   --card-kachi-maal-bg: #222D3D;
   --card-kachi-maal-accent: #C8D4E4;
 
-  --ql-payment: #C87070;
-  --ql-payment-hover: #2A1E22;
+  --ql-payment: #E88888;
+  --ql-payment-bg: #3A2224;
+  --ql-payment-hover: #4A2A2C;
   --ql-receipt: #6BC4A8;
-  --ql-receipt-hover: #1A2A24;
-  --ql-journal: #8A96A8;
-  --ql-journal-hover: #1E2430;
+  --ql-receipt-bg: #1A2E28;
+  --ql-receipt-hover: #223830;
+  --ql-journal: #D4B86A;
+  --ql-journal-bg: #2A2618;
+  --ql-journal-hover: #35301E;
   --ql-sale-commission: #5BC4D4;
   --ql-sale-commission-hover: #1A2A30;
   --ql-sale-paunch: #E8A855;
