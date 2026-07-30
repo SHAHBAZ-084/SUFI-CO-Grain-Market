@@ -26,6 +26,8 @@ import {
 import {
   bardanaAgainstInvoiceDescription,
   blendedLegDescription,
+  purchaseMaalBlendedLegDescription,
+  rowLegDescription,
   type InvoiceVoucherHeader,
   voucherReferenceFromBillNo,
 } from './invoice-voucher-descriptions';
@@ -138,12 +140,23 @@ function buildLedgerLegs(
   const allLines = computedLines;
   const bardanaDesc = bardanaAgainstInvoiceDescription(invoiceReference);
 
+  const totalBardanaAmount = roundMoney(
+    computedLines.reduce((sum, line) => sum + (line.bardanaAmount ?? 0), 0),
+  );
+  const invoiceExpenses = {
+    totalGoodsAmount: totals.totalGoodsAmount,
+    totalDammiAmount: totals.totalDammiAmount,
+    totalBardanaAmount,
+    marketFeeAmount: totals.marketFeeAmount,
+    mazduriAmount: totals.mazduriAmount,
+  };
+
   if (totals.totalDebitAmount > 0) {
     legs.push({
       accountId: maalKhataAccountId,
       type: LedgerEntryType.DEBIT,
       amount: totals.totalDebitAmount,
-      description: blendedLegDescription(allLines, header),
+      description: purchaseMaalBlendedLegDescription(allLines, header, invoiceExpenses),
     });
   }
 
@@ -151,30 +164,45 @@ function buildLedgerLegs(
     ? splitMazduriByParty(computedLines, totals.mazduriAmount, totals.totalGoodsAmount)
     : new Map<number, number>();
 
-  const partySettlementByAccount = new Map<number, number>();
+  // One credit per dheri (row) on the purchase party — per-row rate in description.
+  // Mazduri (if any) is allocated across that party's rows proportional to goods amount.
+  const linesByParty = new Map<number, ComputedLine[]>();
   for (const line of computedLines) {
-    const current = partySettlementByAccount.get(line.partyAccountId) ?? 0;
-    partySettlementByAccount.set(
-      line.partyAccountId,
-      roundMoney(current + line.amount + line.dammiAmount),
-    );
+    const list = linesByParty.get(line.partyAccountId) ?? [];
+    list.push(line);
+    linesByParty.set(line.partyAccountId, list);
   }
 
-  for (const [partyAccountId, settlementTotal] of partySettlementByAccount) {
-    const mazduriShare = mazduriShares.get(partyAccountId) ?? 0;
-    const net = roundMoney(settlementTotal - mazduriShare);
-    if (net <= 0) {
-      throw new AppError(500, 'Party net settlement must be positive');
+  for (const [partyAccountId, partyLines] of linesByParty) {
+    const partyMazduri = mazduriShares.get(partyAccountId) ?? 0;
+    const partyGoods = roundMoney(partyLines.reduce((sum, line) => sum + line.amount, 0));
+    let mazduriAllocated = 0;
+
+    for (let i = 0; i < partyLines.length; i += 1) {
+      const line = partyLines[i]!;
+      let lineMazduri = 0;
+      if (partyMazduri > 0 && partyGoods > 0) {
+        if (i === partyLines.length - 1) {
+          lineMazduri = roundMoney(partyMazduri - mazduriAllocated);
+        } else {
+          lineMazduri = roundMoney((partyMazduri * line.amount) / partyGoods);
+          mazduriAllocated = roundMoney(mazduriAllocated + lineMazduri);
+        }
+      }
+      const net = roundMoney(line.amount + line.dammiAmount - lineMazduri);
+      if (net <= 0) {
+        throw new AppError(500, 'Party net settlement must be positive');
+      }
+      legs.push({
+        accountId: partyAccountId,
+        type: LedgerEntryType.CREDIT,
+        amount: net,
+        description: rowLegDescription(
+          { totalWeightKg: line.totalWeightKg, ratePerMaund: line.ratePerMaund },
+          header,
+        ),
+      });
     }
-    legs.push({
-      accountId: partyAccountId,
-      type: LedgerEntryType.CREDIT,
-      amount: net,
-      description: blendedLegDescription(
-        allLines.filter((line) => line.partyAccountId === partyAccountId),
-        header,
-      ),
-    });
   }
 
   for (let i = 0; i < computedLines.length; i += 1) {

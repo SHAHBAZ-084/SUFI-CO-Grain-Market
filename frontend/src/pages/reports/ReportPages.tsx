@@ -223,14 +223,14 @@ export function AccountReportsPage() {
                 <tbody>
                   {ledger.rows.map((r, i) => (
                     <tr key={i} className={`border-b border-border ${r.isOpeningRow ? 'bg-surface1 font-medium' : ''}`}>
-                      <td className="py-2 pr-2 whitespace-nowrap">{formatDate(r.date)}</td>
-                      <td className="py-2 pr-4 text-right font-mono text-xs font-semibold text-financial">{r.voucherNo}</td>
-                      <td className="py-2 pl-3 pr-2 truncate text-textSecondary" title={r.ref ?? ''}>{r.ref ?? ''}</td>
-                      <td className={`py-2 pr-2 font-medium ${voucherTypeColorClass(r.type)}`}>{formatVoucherTypeLabel(r.type)}</td>
-                      <td className="py-2 pr-2 truncate text-textSecondary" title={r.description}>{r.description}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums">{r.debit > 0 ? formatLedgerAmount(r.debit) : ''}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums">{r.credit > 0 ? formatLedgerAmount(r.credit) : ''}</td>
-                      <td className="py-2 text-right font-medium tabular-nums text-accent">{formatLedgerBalance(r.balance)}</td>
+                      <td className="py-2 pr-2 align-top whitespace-nowrap">{formatDate(r.date)}</td>
+                      <td className="py-2 pr-4 align-top text-right font-mono text-xs font-semibold text-financial">{r.voucherNo}</td>
+                      <td className="py-2 pl-3 pr-2 align-top truncate text-textSecondary" title={r.ref ?? ''}>{r.ref ?? ''}</td>
+                      <td className={`py-2 pr-2 align-top font-medium ${voucherTypeColorClass(r.type)}`}>{formatVoucherTypeLabel(r.type)}</td>
+                      <td className="py-2 pr-2 align-top whitespace-normal break-words text-textSecondary">{r.description}</td>
+                      <td className="py-2 pr-2 align-top text-right tabular-nums">{r.debit > 0 ? formatLedgerAmount(r.debit) : ''}</td>
+                      <td className="py-2 pr-2 align-top text-right tabular-nums">{r.credit > 0 ? formatLedgerAmount(r.credit) : ''}</td>
+                      <td className="py-2 align-top text-right font-medium tabular-nums text-accent">{formatLedgerBalance(r.balance)}</td>
                     </tr>
                   ))}
                 </tbody>
