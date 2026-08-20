@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../../lib/format';
+import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
 import { api, Account, AccountCategory, Voucher, VoucherAccount, VoucherUser } from '../../lib/api';
 import { DangerButton, FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 import { FormActionFooter } from '../../components/ui/FormActionFooter';
@@ -109,7 +109,10 @@ function AccountSideFields({
         </div>
         {selected?.ledger ? (
           <p className="text-xs text-textSecondary">
-            Current balance: {formatLedgerBalance(selected.ledger.balance)}
+            Current balance:{' '}
+            <span className={`font-medium tabular-nums ${ledgerBalanceColorClass(selected.ledger.balance)}`}>
+              {formatLedgerBalance(selected.ledger.balance)}
+            </span>
           </p>
         ) : null}
       </div>
@@ -611,10 +614,12 @@ export function VoucherDetailCard({
                         <td className="py-2 pr-3 font-medium text-textPrimary">
                           {leg.ledger?.account?.name ?? '—'}
                         </td>
-                        <td className={`py-2 pr-3 font-medium ${leg.type === 'DEBIT' ? 'text-danger' : 'text-success'}`}>
+                        <td className={`py-2 pr-3 font-medium ${leg.type === 'DEBIT' ? 'text-ledgerDebit' : 'text-ledgerCredit'}`}>
                           {leg.type === 'DEBIT' ? 'Debit' : 'Credit'}
                         </td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{formatLedgerAmount(leg.amount)}</td>
+                        <td className={`py-2 pr-3 text-right tabular-nums ${leg.type === 'DEBIT' ? 'text-ledgerDebit' : 'text-ledgerCredit'}`}>
+                          {formatLedgerAmount(leg.amount)}
+                        </td>
                         <td className="py-2 text-textSecondary">{leg.notes ?? ''}</td>
                       </tr>
                     ))}
@@ -623,7 +628,9 @@ export function VoucherDetailCard({
                     <tr className="border-t-2 border-border font-semibold">
                       <td className="py-2" colSpan={2}>Totals</td>
                       <td className="py-2 text-right tabular-nums">
-                        Dr {formatLedgerAmount(kachiDebitTotal)} / Cr {formatLedgerAmount(kachiCreditTotal)}
+                        Dr <span className={ledgerDebitColorClass(kachiDebitTotal)}>{formatLedgerAmount(kachiDebitTotal)}</span>
+                        {' / '}Cr{' '}
+                        <span className={ledgerCreditColorClass(kachiCreditTotal)}>{formatLedgerAmount(kachiCreditTotal)}</span>
                       </td>
                       <td className="py-2" />
                     </tr>

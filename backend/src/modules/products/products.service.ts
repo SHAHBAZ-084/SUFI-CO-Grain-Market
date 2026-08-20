@@ -1,6 +1,7 @@
 import { AccountType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import { postOpeningBalanceForLedger } from '../accounting/accounting.service';
 import {
   ensureMaalKhataCategoryInTx,
   generateNextMaalKhataCodeInTx,
@@ -17,7 +18,13 @@ export async function listProducts() {
   });
 }
 
-export async function createProduct(data: { name: string; unit?: string; code?: string }) {
+export async function createProduct(data: {
+  name: string;
+  unit?: string;
+  code?: string;
+  openingBalance?: number;
+  openingBalanceSide?: 'DR' | 'CR';
+}) {
   const name = data.name.trim();
   if (!name) throw new AppError(400, 'Product name is required');
 
@@ -25,6 +32,12 @@ export async function createProduct(data: { name: string; unit?: string; code?: 
     where: { isActive: true, name },
   });
   if (existing) throw new AppError(400, `Product "${name}" already exists`);
+
+  const amount = Math.abs(Number(data.openingBalance ?? 0));
+  if (amount > 0 && data.openingBalanceSide !== 'DR' && data.openingBalanceSide !== 'CR') {
+    throw new AppError(400, 'Opening balance requires Debit or Credit selection');
+  }
+  const side = data.openingBalanceSide ?? 'DR';
 
   return prisma.$transaction(async (tx) => {
     const category = await ensureMaalKhataCategoryInTx(tx);
@@ -48,7 +61,16 @@ export async function createProduct(data: { name: string; unit?: string; code?: 
       },
     });
 
-    await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
+    const ledger = await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
+
+    if (amount > 0) {
+      await postOpeningBalanceForLedger(tx, {
+        ledgerId: ledger.id,
+        accountName,
+        amount,
+        side,
+      });
+    }
 
     const product = await tx.product.create({
       data: {

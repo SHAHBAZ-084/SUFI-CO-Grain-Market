@@ -2,12 +2,25 @@ import { roundMoney } from './kachiMaalCalculations';
 
 export {
   MAUND_KG,
+  PARTY_ACCOUNT_CATEGORIES,
+  SALE_PAUNCH_LINE_ACCOUNT_CATEGORIES,
   parseNum,
   roundMoney,
 } from './kachiMaalCalculations';
 
-export const MAAL_KHATA_CATEGORIES = ['Maal Khata'] as const;
-export const SALE_PARTY_CATEGORIES = ['Sale Party'] as const;
+/** @deprecated Prefer SALE_PAUNCH_LINE_ACCOUNT_CATEGORIES for the line picker. */
+export const MAAL_KHATA_CATEGORIES = [
+  'Maal Khata',
+  'Int. Purchase Party',
+  'Ext. Purchase Party',
+] as const;
+
+/** Settlement: Int + Ext + Sale Party. */
+export const SALE_PARTY_CATEGORIES = [
+  'Int. Purchase Party',
+  'Ext. Purchase Party',
+  'Sale Party',
+] as const;
 
 export type SalePaunchPreferenceRates = {
   daamiPercent: number;

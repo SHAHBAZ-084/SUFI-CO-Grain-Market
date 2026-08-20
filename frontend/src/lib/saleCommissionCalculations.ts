@@ -1,6 +1,7 @@
 export {
   DHARAN_KG,
   MAUND_KG,
+  PARTY_ACCOUNT_CATEGORIES,
   PURCHASE_PARTY_CATEGORIES,
   parseNum,
   roundMoney,
@@ -8,7 +9,12 @@ export {
 
 import { roundMoney } from './kachiMaalCalculations';
 
-export const SALE_PARTY_CATEGORIES = ['Sale Party'] as const;
+/** @deprecated Prefer PARTY_ACCOUNT_CATEGORIES — settlement allows Int/Ext/Sale Party. */
+export const SALE_PARTY_CATEGORIES = [
+  'Int. Purchase Party',
+  'Ext. Purchase Party',
+  'Sale Party',
+] as const;
 
 export type SaleCommissionPreferenceRates = {
   daamiPercent: number;

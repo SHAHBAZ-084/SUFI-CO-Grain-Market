@@ -30,7 +30,7 @@ import {
   computePurchaseMaalInvoiceTotals,
   computePurchaseMaalRow,
   parseNum,
-  PURCHASE_PARTY_CATEGORIES,
+  PARTY_ACCOUNT_CATEGORIES,
 } from '../../lib/purchaseMaalCalculations';
 
 type BoriThelaMode = 'BORI' | 'THELA';
@@ -328,7 +328,7 @@ export function PurchaseMaalInvoicePage() {
       return;
     }
     if (invoiceTotals.lowerBardanaAmount != null && invoiceTotals.lowerBardanaAmount > 0 && !lowerBoriThela) {
-      setError('Select Bori or Thela for lower-section bardana');
+      setError('Select Bori or Thela for bardana');
       return;
     }
 
@@ -396,7 +396,7 @@ export function PurchaseMaalInvoicePage() {
                   <div className="app-input-static app-input-static--emphasis tabular-nums">{predictedRef || '…'}</div>
                 </InvoiceField>
                 <InvoiceField>
-                  <FieldLabel>Jins</FieldLabel>
+                  <FieldLabel>جنس</FieldLabel>
                   <SearchSelect value={productId} onChange={onProductChange} options={productOptions} placeholder="Select product…" />
                 </InvoiceField>
                 <InvoiceField>
@@ -404,11 +404,11 @@ export function PurchaseMaalInvoicePage() {
                   <TextInput value={billNo} onChange={(e) => setBillNo(e.target.value)} />
                 </InvoiceField>
                 <InvoiceField>
-                  <FieldLabel>Gari #</FieldLabel>
+                  <FieldLabel>گاڑی #</FieldLabel>
                   <TextInput value={gariNo} onChange={(e) => setGariNo(e.target.value)} />
                 </InvoiceField>
                 <InvoiceField>
-                  <FieldLabel>Tafseel</FieldLabel>
+                  <FieldLabel>تفصیل</FieldLabel>
                   <TextInput value={tafseel} onChange={(e) => setTafseel(e.target.value)} />
                 </InvoiceField>
               </InvoiceHeaderRow>
@@ -421,7 +421,7 @@ export function PurchaseMaalInvoicePage() {
                     <InvoiceField wide>
                       <FlatAccountSelect
                         label="Party"
-                        categoryNames={PURCHASE_PARTY_CATEGORIES}
+                        categoryNames={PARTY_ACCOUNT_CATEGORIES}
                         categories={categories}
                         accounts={accounts}
                         value={partyAccountId}
@@ -445,15 +445,15 @@ export function PurchaseMaalInvoicePage() {
                       <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Dharan</FieldLabel>
+                      <FieldLabel>دھارَن</FieldLabel>
                       <TextInput value={dharanCount} onChange={(e) => setDharanCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Kilo</FieldLabel>
+                      <FieldLabel>کلو</FieldLabel>
                       <TextInput value={looseKg} onChange={(e) => setLooseKg(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Bhartii</FieldLabel>
+                      <FieldLabel>بھرتی</FieldLabel>
                       <TextInput value={bhartii} onChange={(e) => setBhartii(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                   </InvoiceFieldRow>
@@ -462,7 +462,7 @@ export function PurchaseMaalInvoicePage() {
                 <InvoiceFieldGroup label="Pricing">
                   <InvoiceFieldRow cols={6}>
                     <InvoiceField>
-                      <FieldLabel>Rate / Maund</FieldLabel>
+                      <FieldLabel>ریٹ / من</FieldLabel>
                       <TextInput value={ratePerMaund} onChange={(e) => setRatePerMaund(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceReadOnlyField label="Amount" value={entryPreview.amount} />
@@ -573,7 +573,7 @@ export function PurchaseMaalInvoicePage() {
                       value={invoiceTotals.mazduriAmount}
                     />
                     <InvoiceField>
-                      <FieldLabel>Lower bardana</FieldLabel>
+                      <FieldLabel>Bardana</FieldLabel>
                       <SegmentedControl
                         value={lowerBoriThela}
                         onChange={(v) => setLowerBoriThela(v as BoriThelaMode)}
@@ -584,11 +584,11 @@ export function PurchaseMaalInvoicePage() {
                       />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Lower bardana qty</FieldLabel>
+                      <FieldLabel>Bardana qty</FieldLabel>
                       <TextInput value={lowerBardanaQty} onChange={(e) => setLowerBardanaQty(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Lower bardana rate</FieldLabel>
+                      <FieldLabel>Bardana rate</FieldLabel>
                       <TextInput value={lowerBardanaRate} onChange={(e) => setLowerBardanaRate(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                   </InvoiceFieldRow>

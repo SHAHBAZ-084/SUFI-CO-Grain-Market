@@ -2,6 +2,7 @@ export {
   DEBIT_ACCOUNT_CATEGORIES,
   DHARAN_KG,
   MAUND_KG,
+  PARTY_ACCOUNT_CATEGORIES,
   PURCHASE_PARTY_CATEGORIES,
   parseNum,
 } from './kachiMaalCalculations';

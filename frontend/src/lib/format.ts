@@ -10,6 +10,27 @@ export function formatLedgerBalance(balance: number | string) {
   return n > 0 ? `${abs} Dr` : `${abs} Cr`;
 }
 
+/** Debit column / Dr balance — red when amount > 0. */
+export function ledgerDebitColorClass(amount: number | string) {
+  return Number(amount) > 0 ? 'text-ledgerDebit' : '';
+}
+
+/** Credit column / Cr balance — green when amount > 0. */
+export function ledgerCreditColorClass(amount: number | string) {
+  return Number(amount) > 0 ? 'text-ledgerCredit' : '';
+}
+
+/**
+ * Signed ledger balance color: positive = Dr (red), negative = Cr (green), zero = neutral.
+ * Matches formatLedgerBalance side convention.
+ */
+export function ledgerBalanceColorClass(balance: number | string) {
+  const n = Number(balance);
+  if (n > 0) return 'text-ledgerDebit';
+  if (n < 0) return 'text-ledgerCredit';
+  return '';
+}
+
 export function formatDate(date: string | Date) {
   return new Date(date).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
 }

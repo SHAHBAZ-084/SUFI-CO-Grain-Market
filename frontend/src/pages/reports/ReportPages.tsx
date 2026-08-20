@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api, type Account, type AccountCategory, type Voucher } from '../../lib/api';
 import { BILL_LETTERHEAD } from '../../config/billPrint';
-import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../../lib/format';
+import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
 import { downloadExcel, downloadPdf } from '../../lib/reportExport';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
@@ -228,18 +228,18 @@ export function AccountReportsPage() {
                       <td className="py-2 pl-3 pr-2 align-top truncate text-textSecondary" title={r.ref ?? ''}>{r.ref ?? ''}</td>
                       <td className={`py-2 pr-2 align-top font-medium ${voucherTypeColorClass(r.type)}`}>{formatVoucherTypeLabel(r.type)}</td>
                       <td className="py-2 pr-2 align-top whitespace-normal break-words text-textSecondary">{r.description}</td>
-                      <td className="py-2 pr-2 align-top text-right tabular-nums">{r.debit > 0 ? formatLedgerAmount(r.debit) : ''}</td>
-                      <td className="py-2 pr-2 align-top text-right tabular-nums">{r.credit > 0 ? formatLedgerAmount(r.credit) : ''}</td>
-                      <td className="py-2 align-top text-right font-medium tabular-nums text-accent">{formatLedgerBalance(r.balance)}</td>
+                      <td className={`py-2 pr-2 align-top text-right tabular-nums ${ledgerDebitColorClass(r.debit)}`}>{r.debit > 0 ? formatLedgerAmount(r.debit) : ''}</td>
+                      <td className={`py-2 pr-2 align-top text-right tabular-nums ${ledgerCreditColorClass(r.credit)}`}>{r.credit > 0 ? formatLedgerAmount(r.credit) : ''}</td>
+                      <td className={`py-2 align-top text-right font-medium tabular-nums ${ledgerBalanceColorClass(r.balance)}`}>{formatLedgerBalance(r.balance)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border font-semibold">
                     <td className="py-2" colSpan={5}>Total / Closing</td>
-                    <td className="py-2 text-right">{formatLedgerAmount(ledger.summary.totalDebit)}</td>
-                    <td className="py-2 text-right">{formatLedgerAmount(ledger.summary.totalCredit)}</td>
-                    <td className="py-2 text-right text-accent">{formatLedgerBalance(ledger.summary.closingBalance)}</td>
+                    <td className={`py-2 text-right ${ledgerDebitColorClass(ledger.summary.totalDebit)}`}>{formatLedgerAmount(ledger.summary.totalDebit)}</td>
+                    <td className={`py-2 text-right ${ledgerCreditColorClass(ledger.summary.totalCredit)}`}>{formatLedgerAmount(ledger.summary.totalCredit)}</td>
+                    <td className={`py-2 text-right ${ledgerBalanceColorClass(ledger.summary.closingBalance)}`}>{formatLedgerBalance(ledger.summary.closingBalance)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -296,14 +296,22 @@ export function TrialBalancePage() {
                 {data.accounts.map((row, i) => (
                   <tr key={i} className="border-b border-border">
                     <td className="py-2">{row.accountName}</td>
-                    <td className="py-2 text-right">{row.debit.toFixed(2)}</td>
-                    <td className="py-2 text-right">{row.credit.toFixed(2)}</td>
+                    <td className={`py-2 text-right tabular-nums ${ledgerDebitColorClass(row.debit)}`}>
+                      {row.debit.toFixed(2)}
+                    </td>
+                    <td className={`py-2 text-right tabular-nums ${ledgerCreditColorClass(row.credit)}`}>
+                      {row.credit.toFixed(2)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <p className="mt-4 text-sm text-textSecondary">
-              Total debit {data.totalDebit.toFixed(2)} · Total credit {data.totalCredit.toFixed(2)} ·{' '}
+              Total debit{' '}
+              <span className={ledgerDebitColorClass(data.totalDebit)}>{data.totalDebit.toFixed(2)}</span>
+              {' · '}Total credit{' '}
+              <span className={ledgerCreditColorClass(data.totalCredit)}>{data.totalCredit.toFixed(2)}</span>
+              {' · '}
               {data.isBalanced ? 'Balanced' : 'Out of balance'}
             </p>
           </>
@@ -785,49 +793,50 @@ type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | '
 
 function BalanceTable({
   rows,
-  totalDebit,
-  totalCredit,
+  groups,
 }: {
-  rows: AccountBalanceResult['accounts'];
-  totalDebit: number;
-  totalCredit: number;
+  rows?: AccountBalanceResult['accounts'];
+  groups?: AccountBalanceResult['groups'];
 }) {
   return (
     <table className="w-full text-left text-sm">
       <thead>
         <tr className="border-b border-border text-textSecondary">
-          <th className="py-2 pr-3">Account Code</th>
           <th className="py-2 pr-3">Account Name</th>
-          <th className="py-2 pr-3 text-right">Debit</th>
-          <th className="py-2 pr-3 text-right">Credit</th>
           <th className="py-2 text-right">Balance</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
-          <tr key={row.accountId} className="border-b border-border">
-            <td className="py-2 pr-3 font-mono text-xs text-textSecondary">{row.accountCode}</td>
-            <td className="py-2 pr-3">{row.accountName}</td>
-            <td className="py-2 pr-3 text-right tabular-nums">
-              {row.debit > 0 ? formatLedgerAmount(row.debit) : ''}
-            </td>
-            <td className="py-2 pr-3 text-right tabular-nums">
-              {row.credit > 0 ? formatLedgerAmount(row.credit) : ''}
-            </td>
-            <td className="py-2 text-right font-medium tabular-nums text-accent">
-              {formatLedgerBalance(row.balance)}
-            </td>
-          </tr>
-        ))}
+        {groups
+          ? groups.map((group) => (
+              <Fragment key={group.categoryId}>
+                <tr className="border-b border-border bg-surface1">
+                  <td
+                    colSpan={2}
+                    className="py-2 pr-3 text-xs font-semibold uppercase tracking-wide text-textMuted"
+                  >
+                    {group.categoryName}
+                  </td>
+                </tr>
+                {group.accounts.map((row) => (
+                  <tr key={row.accountId} className="border-b border-border">
+                    <td className="py-2 pr-3">{row.accountName}</td>
+                    <td className={`py-2 text-right font-medium tabular-nums ${ledgerBalanceColorClass(row.balance)}`}>
+                      {formatLedgerBalance(row.balance)}
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
+            ))
+          : (rows ?? []).map((row) => (
+              <tr key={row.accountId} className="border-b border-border">
+                <td className="py-2 pr-3">{row.accountName}</td>
+                <td className={`py-2 text-right font-medium tabular-nums ${ledgerBalanceColorClass(row.balance)}`}>
+                  {formatLedgerBalance(row.balance)}
+                </td>
+              </tr>
+            ))}
       </tbody>
-      <tfoot>
-        <tr className="border-t-2 border-border font-semibold">
-          <td className="py-2" colSpan={2}>Total</td>
-          <td className="py-2 text-right tabular-nums">{formatLedgerAmount(totalDebit)}</td>
-          <td className="py-2 text-right tabular-nums">{formatLedgerAmount(totalCredit)}</td>
-          <td className="py-2" />
-        </tr>
-      </tfoot>
     </table>
   );
 }
@@ -873,20 +882,10 @@ export function AccountBalancePage() {
 
   function exportReport(format: 'pdf' | 'excel') {
     if (!report) return;
-    const headers = ['Account Code', 'Account Name', 'Debit', 'Credit', 'Balance'];
+    const headers = ['Account Name', 'Balance'];
     const rows = report.accounts.map((row) => [
-      row.accountCode,
       row.accountName,
-      row.debit > 0 ? formatLedgerAmount(row.debit) : '',
-      row.credit > 0 ? formatLedgerAmount(row.credit) : '',
       formatLedgerBalance(row.balance),
-    ]);
-    rows.push([
-      'Total',
-      '',
-      formatLedgerAmount(report.totalDebit),
-      formatLedgerAmount(report.totalCredit),
-      '',
     ]);
     const title = `Account Balance as of ${formatDate(datedOn)}`;
     const safeDate = datedOn.replace(/[^\d-]/g, '');
@@ -953,38 +952,9 @@ export function AccountBalancePage() {
             </div>
             <div className="overflow-x-auto">
               {showGrouped ? (
-                <div className="space-y-6">
-                  {report.groups.map((group) => (
-                    <div key={group.categoryId}>
-                      <div className="mb-2 border-b border-border pb-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-textMuted">
-                          {group.categoryName}
-                        </p>
-                      </div>
-                      <BalanceTable
-                        rows={group.accounts}
-                        totalDebit={group.accounts.reduce((s, r) => s + r.debit, 0)}
-                        totalCredit={group.accounts.reduce((s, r) => s + r.credit, 0)}
-                      />
-                    </div>
-                  ))}
-                  <table className="w-full text-left text-sm">
-                    <tfoot>
-                      <tr className="border-t-2 border-border font-semibold">
-                        <td className="py-2" colSpan={2}>Grand Total</td>
-                        <td className="py-2 text-right tabular-nums">{formatLedgerAmount(report.totalDebit)}</td>
-                        <td className="py-2 text-right tabular-nums">{formatLedgerAmount(report.totalCredit)}</td>
-                        <td className="py-2" />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                <BalanceTable groups={report.groups} />
               ) : (
-                <BalanceTable
-                  rows={report.accounts}
-                  totalDebit={report.totalDebit}
-                  totalCredit={report.totalCredit}
-                />
+                <BalanceTable rows={report.accounts} />
               )}
             </div>
           </>

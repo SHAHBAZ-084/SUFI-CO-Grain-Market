@@ -126,9 +126,8 @@ export async function postSalePaunchStockOut(
     const product = await tx.product.findFirst({
       where: { accountId: line.maalKhataAccountId, isActive: true },
     });
-    if (!product) {
-      throw new AppError(400, 'Sale Paunch line Maal Khata is not linked to an active product');
-    }
+    // Party accounts (Int/Ext) on Sale Paunch lines have no product stock to reduce.
+    if (!product) continue;
 
     const kind = bagTypeFromMode(line.boriOrThelaMode);
     const bagsOut = computeStockOutBags(line.bagCount, line.thelaCount, kind);

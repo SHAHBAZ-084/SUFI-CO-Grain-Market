@@ -248,7 +248,13 @@ export const api = {
   listProducts() {
     return request<Product[]>('/api/products');
   },
-  createProduct(data: { name: string; unit?: string; code?: string }) {
+  createProduct(data: {
+    name: string;
+    unit?: string;
+    code?: string;
+    openingBalance?: number;
+    openingBalanceSide?: 'DR' | 'CR';
+  }) {
     return request<Product>('/api/products', { method: 'POST', body: JSON.stringify(data) });
   },
   removeProduct(id: number) {

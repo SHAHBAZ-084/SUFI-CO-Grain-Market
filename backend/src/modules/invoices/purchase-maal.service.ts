@@ -96,8 +96,12 @@ async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountI
   if (
     name !== KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE
     && name !== KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE
+    && name !== KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY
   ) {
-    throw new AppError(400, 'Party must be an Int. or Ext. Purchase Party account');
+    throw new AppError(
+      400,
+      'Party must be an Int. Purchase Party, Ext. Purchase Party, or Sale Party account',
+    );
   }
   return account;
 }

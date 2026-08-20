@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, type Party } from '../../lib/api';
-import { formatLedgerBalance } from '../../lib/format';
+import { formatLedgerBalance, ledgerBalanceColorClass } from '../../lib/format';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 
 function PartyPage({
@@ -101,7 +101,9 @@ function PartyPage({
               <tr key={party.id} className="border-b border-border">
                 <td className="py-2 font-medium">{party.name}</td>
                 <td className="py-2">{party.phone ?? '—'}</td>
-                <td className="py-2">{formatLedgerBalance(party.balance ?? 0)}</td>
+                <td className={`py-2 tabular-nums ${ledgerBalanceColorClass(party.balance ?? 0)}`}>
+                  {formatLedgerBalance(party.balance ?? 0)}
+                </td>
                 <td className="py-2 text-right">
                   <SecondaryButton className="text-xs" onClick={() => onRemove(party.id)}>Remove</SecondaryButton>
                 </td>

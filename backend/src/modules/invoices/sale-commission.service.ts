@@ -85,8 +85,12 @@ async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountI
   if (
     name !== KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE
     && name !== KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE
+    && name !== KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY
   ) {
-    throw new AppError(400, 'Party must be an Int. or Ext. Purchase Party account');
+    throw new AppError(
+      400,
+      'Party must be an Int. Purchase Party, Ext. Purchase Party, or Sale Party account',
+    );
   }
   return account;
 }
@@ -97,8 +101,16 @@ async function assertSalePartyAccount(tx: Prisma.TransactionClient, accountId: n
     include: { category: true },
   });
   if (!account) throw new AppError(400, 'Invalid sale party account');
-  if (account.category.name !== KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY) {
-    throw new AppError(400, 'Settlement party must be a Sale Party account');
+  const name = account.category.name;
+  if (
+    name !== KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE
+    && name !== KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE
+    && name !== KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY
+  ) {
+    throw new AppError(
+      400,
+      'Settlement party must be an Int. Purchase Party, Ext. Purchase Party, or Sale Party account',
+    );
   }
   return account;
 }

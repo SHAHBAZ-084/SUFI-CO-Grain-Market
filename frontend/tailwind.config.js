@@ -18,6 +18,8 @@ export default {
         danger: 'var(--text-danger)',
         bgSuccess: 'var(--bg-success)',
         bgDanger: 'var(--bg-danger)',
+        ledgerDebit: 'var(--ledger-debit)',
+        ledgerCredit: 'var(--ledger-credit)',
         surface3: 'var(--surface-3)',
         nav: 'var(--nav-bg)',
         navBorder: 'var(--nav-border)',

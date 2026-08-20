@@ -16,7 +16,7 @@ import {
   type SalePaunchSystemAccounts,
   type VoucherLeg,
 } from '../accounting/accounting.service';
-import { assertMaalKhataAccount } from '../products/maal-khata';
+import { isMaalKhataCategoryName } from '../products/maal-khata';
 import { getSystemPreferences } from '../preferences/preferences.service';
 import {
   bardanaAgainstInvoiceDescription,
@@ -97,8 +97,39 @@ async function assertSalePartyAccount(tx: Prisma.TransactionClient, accountId: n
     include: { category: true },
   });
   if (!account) throw new AppError(400, 'Invalid sale party account');
-  if (account.category.name !== KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY) {
-    throw new AppError(400, 'Settlement party must be a Sale Party account');
+  const name = account.category.name;
+  if (
+    name !== KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE
+    && name !== KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE
+    && name !== KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY
+  ) {
+    throw new AppError(
+      400,
+      'Settlement party must be an Int. Purchase Party, Ext. Purchase Party, or Sale Party account',
+    );
+  }
+  return account;
+}
+
+async function assertSalePaunchLineAccount(tx: Prisma.TransactionClient, accountId: number) {
+  const account = await tx.account.findFirst({
+    where: { id: accountId, isActive: true },
+    include: { category: true, ledger: true },
+  });
+  if (!account) throw new AppError(400, 'Invalid line account');
+  const name = account.category.name;
+  const allowed =
+    isMaalKhataCategoryName(name)
+    || name === KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE
+    || name === KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE;
+  if (!allowed) {
+    throw new AppError(
+      400,
+      'Line account must be a Maal Khata, Int. Purchase Party, or Ext. Purchase Party account',
+    );
+  }
+  if (!account.ledger) {
+    await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
   }
   return account;
 }
@@ -349,7 +380,7 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
     const systemAccounts = await ensureSalePaunchAccounts(tx);
     await assertSalePartyAccount(tx, data.salePartyAccountId);
     for (const line of computedLines) {
-      await assertMaalKhataAccount(tx, line.maalKhataAccountId);
+      await assertSalePaunchLineAccount(tx, line.maalKhataAccountId);
     }
 
     const voucherHeader: InvoiceVoucherHeader = {

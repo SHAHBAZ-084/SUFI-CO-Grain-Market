@@ -40,5 +40,10 @@ describe('opening balance ledger report (Part 8 regression)', () => {
 
     expect(ledgerReport.balance).toBeCloseTo(tbRow!.balance, 2);
     expect(ledgerReport.summary.closingBalance).toBeCloseTo(tbRow!.balance, 2);
+
+    expect(trialBalance.isBalanced).toBe(true);
+    expect(
+      trialBalance.accounts.some((a) => a.accountName === 'Opening Balance Equity'),
+    ).toBe(false);
   });
 });

@@ -275,7 +275,7 @@ export function SalePaunchInvoicePage() {
   function addRow() {
     setError('');
     if (!maalKhataAccountId) {
-      setError('Select a Maal Khata account before adding a row');
+      setError('Select a Maal Khata or Int/Ext Purchase Party account before adding a row');
       return;
     }
     const weight = parseNum(compWeightKg);
@@ -285,12 +285,12 @@ export function SalePaunchInvoicePage() {
       return;
     }
     if (!(upperRate > 0)) {
-      setError('Upper rate must be greater than zero');
+      setError('Rate must be greater than zero');
       return;
     }
     const kaat = kaatKg.trim() ? parseNum(kaatKg) : 0;
     if (kaat > weight) {
-      setError('Upper kaat cannot exceed computer weight');
+      setError('Kaat cannot exceed computer weight');
       return;
     }
     if (!(entryPreview.netWeightKg > 0)) {
@@ -298,7 +298,7 @@ export function SalePaunchInvoicePage() {
       return;
     }
     if (!(entryPreview.netUpperAmount > 0)) {
-      setError('Net upper amount must be greater than zero after kanta');
+      setError('Net amount must be greater than zero after kanta');
       return;
     }
 
@@ -355,25 +355,25 @@ export function SalePaunchInvoicePage() {
     }
     const lowerRate = lowerRatePerMaund.trim() ? parseNum(lowerRatePerMaund) : 0;
     if (!(lowerRate > 0)) {
-      setError('Lower rate must be greater than zero');
+      setError('Rate must be greater than zero');
       return;
     }
     const lowerKaat = lowerKaatKg.trim() ? parseNum(lowerKaatKg) : 0;
     const overweight = gridRows.find((row) => lowerKaat > row.compWeightKg);
     if (overweight) {
-      setError('Lower kaat cannot exceed computer weight on any row');
+      setError('Kaat cannot exceed computer weight on any row');
       return;
     }
     if (!(invoiceTotals.totalLowerAmount > 0)) {
-      setError('Lower amount must be greater than zero');
+      setError('Amount must be greater than zero');
       return;
     }
     if (invoiceTotals.totalLowerNetWeightKg <= 0) {
-      setError('Lower net weight after kaat must be greater than zero');
+      setError('Net weight after kaat must be greater than zero');
       return;
     }
     if (invoiceTotals.lowerBardanaAmount != null && invoiceTotals.lowerBardanaAmount > 0 && !lowerBoriThela) {
-      setError('Select Bori or Thela for lower-section bardana');
+      setError('Select Bori or Thela for bardana');
       return;
     }
 
@@ -449,11 +449,11 @@ export function SalePaunchInvoicePage() {
                   <TextInput value={billNo} onChange={(e) => setBillNo(e.target.value)} />
                 </InvoiceField>
                 <InvoiceField>
-                  <FieldLabel>Gari #</FieldLabel>
+                  <FieldLabel>گاڑی #</FieldLabel>
                   <TextInput value={gariNo} onChange={(e) => setGariNo(e.target.value)} />
                 </InvoiceField>
                 <InvoiceField>
-                  <FieldLabel>Tafseel</FieldLabel>
+                  <FieldLabel>تفصیل</FieldLabel>
                   <TextInput value={tafseel} onChange={(e) => setTafseel(e.target.value)} />
                 </InvoiceField>
               </InvoiceHeaderRow>
@@ -465,13 +465,13 @@ export function SalePaunchInvoicePage() {
                   <InvoiceFieldRow cols={6}>
                     <InvoiceField wide>
                       <FlatAccountSelect
-                        label="Maal Khata"
+                        label="Line account"
                         categoryNames={MAAL_KHATA_CATEGORIES}
                         categories={categories}
                         accounts={accounts}
                         value={maalKhataAccountId}
                         onChange={setMaalKhataAccountId}
-                        placeholder="Search Maal Khata…"
+                        placeholder="Search Maal Khata / Int / Ext…"
                       />
                     </InvoiceField>
                     <InvoiceField>
@@ -494,7 +494,7 @@ export function SalePaunchInvoicePage() {
                       <TextInput value={compWeightKg} onChange={(e) => setCompWeightKg(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Kaat (kg)</FieldLabel>
+                      <FieldLabel>کاٹ (kg)</FieldLabel>
                       <TextInput value={kaatKg} onChange={(e) => setKaatKg(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceReadOnlyField label="Net weight (kg)" value={entryPreview.netWeightKg} format="number" />
@@ -504,14 +504,14 @@ export function SalePaunchInvoicePage() {
                 <InvoiceFieldGroup label="Pricing">
                   <InvoiceFieldRow cols={6}>
                     <InvoiceField>
-                      <FieldLabel>Upper rate / Maund</FieldLabel>
+                      <FieldLabel>ریٹ / من</FieldLabel>
                       <TextInput value={upperRatePerMaund} onChange={(e) => setUpperRatePerMaund(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Kanta</FieldLabel>
+                      <FieldLabel>کانٹا</FieldLabel>
                       <TextInput value={kanta} onChange={(e) => setKanta(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
-                    <InvoiceReadOnlyField label="Upper net" value={entryPreview.netUpperAmount} />
+                    <InvoiceReadOnlyField label="Net" value={entryPreview.netUpperAmount} />
                     <InvoiceField>
                       <FieldLabel>Bardana qty</FieldLabel>
                       <TextInput value={rowBardanaQty} onChange={(e) => setRowBardanaQty(e.target.value)} inputMode="decimal" />
@@ -543,9 +543,9 @@ export function SalePaunchInvoicePage() {
                       <th className="px-3 py-2.5 text-right">Comp wt</th>
                       <th className="px-3 py-2.5 text-right">Kaat</th>
                       <th className="px-3 py-2.5 text-right">Net wt</th>
-                      <th className="px-3 py-2.5 text-right">Upper rate</th>
+                      <th className="px-3 py-2.5 text-right">Rate</th>
                       <th className="px-3 py-2.5 text-right">Kanta</th>
-                      <th className="px-3 py-2.5 text-right">Upper net</th>
+                      <th className="px-3 py-2.5 text-right">Net</th>
                       <th className="px-3 py-2.5 text-right">Dammi</th>
                       <th className="px-3 py-2.5" />
                     </tr>
@@ -577,29 +577,29 @@ export function SalePaunchInvoicePage() {
               </InvoicePreviewGridShell>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Settlement (Sale Party debit)">
+            <InvoiceFormSection label="Settlement (party debit)">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup>
                   <InvoiceFieldRow cols={5}>
                     <InvoiceField wide>
                       <FlatAccountSelect
-                        label="Sale Party"
+                        label="Settlement party"
                         categoryNames={SALE_PARTY_CATEGORIES}
                         categories={categories}
                         accounts={accounts}
                         value={salePartyAccountId}
                         onChange={setSalePartyAccountId}
-                        placeholder="Search sale party…"
+                        placeholder="Search Int / Ext / Sale Party…"
                       />
                     </InvoiceField>
-                    <InvoiceReadOnlyField label="Net upper total" value={invoiceTotals.totalNetUpperAmount} />
+                    <InvoiceReadOnlyField label="Net total" value={invoiceTotals.totalNetUpperAmount} />
                     <InvoiceReadOnlyField label="Dammi total" value={invoiceTotals.totalDammiAmount} />
                     <InvoiceField>
-                      <FieldLabel>Lower Kaat (kg)</FieldLabel>
+                      <FieldLabel>کاٹ (kg)</FieldLabel>
                       <TextInput value={lowerKaatKg} onChange={(e) => setLowerKaatKg(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Lower rate / Maund</FieldLabel>
+                      <FieldLabel>ریٹ / من</FieldLabel>
                       <TextInput value={lowerRatePerMaund} onChange={(e) => setLowerRatePerMaund(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                   </InvoiceFieldRow>
@@ -608,7 +608,7 @@ export function SalePaunchInvoicePage() {
                 <InvoiceFieldGroup>
                   <InvoiceFieldRow cols={6}>
                     <InvoiceField>
-                      <FieldLabel>Lower bardana</FieldLabel>
+                      <FieldLabel>Bardana</FieldLabel>
                       <SegmentedControl
                         value={lowerBoriThela}
                         onChange={(v) => setLowerBoriThela(v as BoriThelaMode)}
@@ -619,15 +619,15 @@ export function SalePaunchInvoicePage() {
                       />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Lower bardana qty</FieldLabel>
+                      <FieldLabel>Bardana qty</FieldLabel>
                       <TextInput value={lowerBardanaQty} onChange={(e) => setLowerBardanaQty(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Lower bardana rate</FieldLabel>
+                      <FieldLabel>Bardana rate</FieldLabel>
                       <TextInput value={lowerBardanaRate} onChange={(e) => setLowerBardanaRate(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
-                    <InvoiceReadOnlyField label="Lower net wt (kg)" value={invoiceTotals.totalLowerNetWeightKg} format="number" />
-                    <InvoiceReadOnlyField label="Lower amount" value={invoiceTotals.totalLowerAmount} />
+                    <InvoiceReadOnlyField label="Net wt (kg)" value={invoiceTotals.totalLowerNetWeightKg} format="number" />
+                    <InvoiceReadOnlyField label="Amount" value={invoiceTotals.totalLowerAmount} />
                     <InvoiceReadOnlyField label="Row revenue" value={invoiceTotals.totalRowRevenue} />
                   </InvoiceFieldRow>
                 </InvoiceFieldGroup>
@@ -635,22 +635,22 @@ export function SalePaunchInvoicePage() {
                 <InvoiceFieldGroup>
                   <InvoiceFieldRow cols={3}>
                     <InvoiceField>
-                      <FieldLabel>Tax</FieldLabel>
+                      <FieldLabel>ٹیکس</FieldLabel>
                       <TextInput value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Misc</FieldLabel>
+                      <FieldLabel>متفرق</FieldLabel>
                       <TextInput value={miscAmount} onChange={(e) => setMiscAmount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Bilty Kiraya</FieldLabel>
+                      <FieldLabel>بلٹی کرایہ</FieldLabel>
                       <TextInput value={biltyKirayaAmount} onChange={(e) => setBiltyKirayaAmount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                   </InvoiceFieldRow>
                 </InvoiceFieldGroup>
               </InvoiceFieldStack>
               <InvoiceFormFooter
-                totalLabel="Sale Party total debit"
+                totalLabel="Settlement total debit"
                 totalValue={invoiceTotals.lowerNetTotal}
                 error={error}
                 message={message}

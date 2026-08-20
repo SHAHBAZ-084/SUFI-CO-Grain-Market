@@ -25,6 +25,9 @@
   --bg-success: #EEF6F2;
   --bg-danger: #FBEFEF;
 
+  --ledger-debit: #FF0000;
+  --ledger-credit: #1BB255;
+
   --voucher-payment: #A32D2D;
   --voucher-receipt: #1E5C4A;
   --voucher-journal: #1B3A6B;
@@ -113,6 +116,9 @@
   --text-danger: #E88888;
   --bg-success: #1A2E28;
   --bg-danger: #3A2020;
+
+  --ledger-debit: #FF0000;
+  --ledger-credit: #1BB255;
 
   --voucher-payment: #E88888;
   --voucher-receipt: #6BC4A8;

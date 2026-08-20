@@ -361,7 +361,7 @@ export async function listAccountCategories() {
   const [categories, customerCount, supplierCount, inventoryAccounts] = await Promise.all([
     prisma.accountCategory.findMany({
       where: { isActive: true },
-      include: { accounts: { where: { isActive: true }, include: { ledger: true } } },
+      include: { accounts: { where: { isActive: true, isHidden: false }, include: { ledger: true } } },
       orderBy: { name: 'asc' },
     }),
     prisma.customer.count({ where: { isActive: true } }),
@@ -462,17 +462,33 @@ async function generateNextAccountCodeInTx(
   return String(max + 1);
 }
 
+export const OPENING_BALANCE_EQUITY_ACCOUNT_NAME = 'Opening Balance Equity';
+
 async function findOrCreateOpeningBalanceEquityAccount(
   tx: Prisma.TransactionClient,
   ) {
   const existing = await tx.account.findFirst({
-    where: { isActive: true,
+    where: {
       type: AccountType.EQUITY,
-      name: { equals: 'Opening Balance Equity' },
+      name: { equals: OPENING_BALANCE_EQUITY_ACCOUNT_NAME },
     },
     include: { ledger: true },
   });
-  if (existing?.ledger) return existing;
+  if (existing) {
+    const updates: Prisma.AccountUpdateInput = {};
+    if (!existing.isHidden) updates.isHidden = true;
+    if (!existing.isActive) updates.isActive = true;
+    if (Object.keys(updates).length > 0) {
+      await tx.account.update({ where: { id: existing.id }, data: updates });
+    }
+    if (!existing.ledger) {
+      await tx.ledger.create({ data: { accountId: existing.id, balance: 0 } });
+    }
+    return tx.account.findUniqueOrThrow({
+      where: { id: existing.id },
+      include: { ledger: true },
+    });
+  }
 
   let category = await tx.accountCategory.findFirst({
     where: { isActive: true,
@@ -487,13 +503,14 @@ async function findOrCreateOpeningBalanceEquityAccount(
 
   const account = await tx.account.create({
     data: { categoryId: category.id,
-      name: 'Opening Balance Equity',
+      name: OPENING_BALANCE_EQUITY_ACCOUNT_NAME,
       code: await generateNextAccountCodeInTx(tx),
       type: AccountType.EQUITY,
+      isHidden: true,
     },
   });
 
-  const ledger = await tx.ledger.create({
+  await tx.ledger.create({
     data: { accountId: account.id, balance: 0 },
   });
 
@@ -528,6 +545,37 @@ async function postOpeningBalanceOffset(
     where: { id: equityLedger.id },
     data: { balance: offsetBalance },
   });
+}
+
+/** Post Maal Khata / account opening balance + hidden Opening Balance Equity offset. */
+export async function postOpeningBalanceForLedger(
+  tx: Prisma.TransactionClient,
+  params: {
+    ledgerId: number;
+    accountName: string;
+    amount: number;
+    side: 'DR' | 'CR';
+  },
+) {
+  const amount = Math.abs(params.amount);
+  if (amount <= 0) return;
+
+  const signedBalance = params.side === 'DR' ? amount : -amount;
+  await tx.ledgerEntry.create({
+    data: {
+      ledgerId: params.ledgerId,
+      type: params.side === 'DR' ? LedgerEntryType.DEBIT : LedgerEntryType.CREDIT,
+      amount,
+      balance: signedBalance,
+      notes: 'Opening Balance',
+      isOpeningBalance: true,
+    },
+  });
+  await tx.ledger.update({
+    where: { id: params.ledgerId },
+    data: { balance: signedBalance },
+  });
+  await postOpeningBalanceOffset(tx, params.accountName, amount, params.side);
 }
 
 export async function createAccount(data: {
@@ -573,7 +621,6 @@ export async function createAccount(data: {
 
   const amount = Math.abs(data.openingBalance ?? 0);
   const side = data.openingBalanceSide ?? defaultOpeningSide(type);
-  const signedBalance = amount === 0 ? 0 : side === 'DR' ? amount : -amount;
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const account = await tx.account.create({
@@ -586,21 +633,16 @@ export async function createAccount(data: {
     });
 
     const ledger = await tx.ledger.create({
-      data: { accountId: account.id, balance: signedBalance },
+      data: { accountId: account.id, balance: 0 },
     });
 
-    if (amount > 0 && trimmedName.toLowerCase() !== 'opening balance equity') {
-      await tx.ledgerEntry.create({
-        data: {
-          ledgerId: ledger.id,
-          type: side === 'DR' ? LedgerEntryType.DEBIT : LedgerEntryType.CREDIT,
-          amount,
-          balance: signedBalance,
-          notes: 'Opening Balance',
-          isOpeningBalance: true,
-        },
+    if (amount > 0 && trimmedName.toLowerCase() !== OPENING_BALANCE_EQUITY_ACCOUNT_NAME.toLowerCase()) {
+      await postOpeningBalanceForLedger(tx, {
+        ledgerId: ledger.id,
+        accountName: trimmedName,
+        amount,
+        side,
       });
-      await postOpeningBalanceOffset(tx, trimmedName, amount, side);
     }
 
     return tx.account.findUniqueOrThrow({
@@ -906,7 +948,7 @@ export async function listAccounts() {
   });
 
   const accounts = await prisma.account.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isHidden: false },
     include: { category: true, ledger: true },
     orderBy: { code: 'asc' },
   });
@@ -1842,7 +1884,7 @@ export async function getDashboardSummary() {
   }
 
   const accounts = await prisma.account.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isHidden: false },
     include: { category: true, ledger: true },
   });
 
@@ -2138,6 +2180,7 @@ export async function getAccountBalancesAsOf(params: {
   const accounts = await prisma.account.findMany({
     where: {
       isActive: true,
+      isHidden: false,
       ...(params.categoryId != null ? { categoryId: params.categoryId } : {}),
     },
     include: { category: true, ledger: true },
@@ -2265,7 +2308,7 @@ export async function getTrialBalance() {
     orderBy: [{ account: { type: 'asc' } }, { account: { code: 'asc' } }],
   });
 
-  const accounts = ledgers.map((l: (typeof ledgers)[number]) => {
+  const mapped = ledgers.map((l: (typeof ledgers)[number]) => {
     const balance = Number(l.balance);
     const { debit, credit } = trialBalanceFromSignedBalance(balance);
     return {
@@ -2273,14 +2316,20 @@ export async function getTrialBalance() {
       accountCode: l.account.code,
       accountName: l.account.name,
       accountType: l.account.type,
+      isHidden: l.account.isHidden,
       balance,
       debit,
       credit,
     };
   });
 
-  const totalDebit = accounts.reduce((s, a) => s + a.debit, 0);
-  const totalCredit = accounts.reduce((s, a) => s + a.credit, 0);
+  // Totals include hidden control accounts so the books still balance on screen.
+  const totalDebit = mapped.reduce((s, a) => s + a.debit, 0);
+  const totalCredit = mapped.reduce((s, a) => s + a.credit, 0);
+
+  const accounts = mapped
+    .filter((a) => !a.isHidden)
+    .map(({ isHidden: _hidden, ...row }) => row);
 
   return {
     accounts,
@@ -2530,6 +2579,9 @@ export async function updateAccount(
 export async function softDeleteAccount(id: number) {
   const account = await prisma.account.findFirst({ where: { id, isActive: true } });
   if (!account) throw new AppError(404, 'Account not found');
+  if (account.isHidden) {
+    throw new AppError(400, 'System accounts cannot be deleted');
+  }
   if (isInventoryAccountName(account.name)) {
     throw new AppError(400, 'The Inventory account cannot be deleted');
   }

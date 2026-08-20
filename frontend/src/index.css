@@ -990,7 +990,7 @@
 
   .app-field {
 
-    --app-label-h: 1.25rem;
+    --app-label-h: 1.4rem;
 
     --app-control-h: 2.25rem; /* 36px compact */
 
@@ -1028,21 +1028,7 @@
 
     margin: 0;
 
-    color: var(--text-muted);
-
-    font-size: 0.625rem;
-
-    font-weight: 600;
-
-    letter-spacing: 0.03em;
-
-    text-transform: uppercase;
-
-  }
-
-
-
-  .app-field-label-text {
+    color: #000;
 
     display: block;
 
@@ -1430,7 +1416,7 @@
 
     margin: 0 0 0.35rem;
 
-    color: var(--text-muted);
+    color: #000;
 
     font-size: 0.625rem;
 
@@ -1636,7 +1622,7 @@
 
   .app-form-footer-total-label {
 
-    color: var(--text-muted);
+    color: #000;
 
     font-size: 0.625rem;
 

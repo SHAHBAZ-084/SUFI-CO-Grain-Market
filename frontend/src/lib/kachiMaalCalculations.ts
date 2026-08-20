@@ -2,10 +2,21 @@ export const DHARAN_KG = 5;
 export const MAUND_KG = 40;
 
 export const PURCHASE_PARTY_CATEGORIES = ['Int. Purchase Party', 'Ext. Purchase Party'] as const;
-export const DEBIT_ACCOUNT_CATEGORIES = [
+
+/** Int + Ext + Sale Party — upper party / settlement / debit pickers (except Sale Paunch line). */
+export const PARTY_ACCOUNT_CATEGORIES = [
   'Int. Purchase Party',
   'Ext. Purchase Party',
   'Sale Party',
+] as const;
+
+export const DEBIT_ACCOUNT_CATEGORIES = PARTY_ACCOUNT_CATEGORIES;
+
+/** Sale Paunch line account: Maal Khata + Int/Ext purchase parties (not Sale Party). */
+export const SALE_PAUNCH_LINE_ACCOUNT_CATEGORIES = [
+  'Maal Khata',
+  'Int. Purchase Party',
+  'Ext. Purchase Party',
 ] as const;
 
 export type KachiMaalPreferenceRates = {

@@ -21,6 +21,8 @@ productsRouter.post(
       name: z.string().min(1),
       unit: z.string().optional(),
       code: z.string().optional(),
+      openingBalance: z.number().min(0).optional(),
+      openingBalanceSide: z.enum(['DR', 'CR']).optional(),
     }),
   ),
   asyncHandler(async (req, res) => {

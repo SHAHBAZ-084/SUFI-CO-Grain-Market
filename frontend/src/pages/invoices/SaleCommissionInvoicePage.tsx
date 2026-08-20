@@ -24,7 +24,7 @@ import {
   computeSaleCommissionInvoiceTotals,
   computeSaleCommissionRow,
   parseNum,
-  PURCHASE_PARTY_CATEGORIES,
+  PARTY_ACCOUNT_CATEGORIES,
   SALE_PARTY_CATEGORIES,
 } from '../../lib/saleCommissionCalculations';
 import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
@@ -365,7 +365,7 @@ export function SaleCommissionInvoicePage() {
                   <div className="app-input-static app-input-static--emphasis tabular-nums">{predictedRef || '…'}</div>
                 </InvoiceField>
                 <InvoiceField>
-                  <FieldLabel>Jins</FieldLabel>
+                  <FieldLabel>جنس</FieldLabel>
                   <TextInput value={jins} onChange={(e) => setJins(e.target.value)} />
                 </InvoiceField>
                 <InvoiceField>
@@ -373,11 +373,11 @@ export function SaleCommissionInvoicePage() {
                   <TextInput value={billNo} onChange={(e) => setBillNo(e.target.value)} />
                 </InvoiceField>
                 <InvoiceField>
-                  <FieldLabel>Gari #</FieldLabel>
+                  <FieldLabel>گاڑی #</FieldLabel>
                   <TextInput value={gariNo} onChange={(e) => setGariNo(e.target.value)} />
                 </InvoiceField>
                 <InvoiceField>
-                  <FieldLabel>Tafseel</FieldLabel>
+                  <FieldLabel>تفصیل</FieldLabel>
                   <TextInput value={tafseel} onChange={(e) => setTafseel(e.target.value)} />
                 </InvoiceField>
               </InvoiceHeaderRow>
@@ -390,7 +390,7 @@ export function SaleCommissionInvoicePage() {
                     <InvoiceField wide>
                       <FlatAccountSelect
                         label="Purchase Party"
-                        categoryNames={PURCHASE_PARTY_CATEGORIES}
+                        categoryNames={PARTY_ACCOUNT_CATEGORIES}
                         categories={categories}
                         accounts={accounts}
                         value={partyAccountId}
@@ -414,15 +414,15 @@ export function SaleCommissionInvoicePage() {
                       <TextInput value={bagCount} onChange={(e) => setBagCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Dharan</FieldLabel>
+                      <FieldLabel>دھارَن</FieldLabel>
                       <TextInput value={dharanCount} onChange={(e) => setDharanCount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Kilo</FieldLabel>
+                      <FieldLabel>کلو</FieldLabel>
                       <TextInput value={looseKg} onChange={(e) => setLooseKg(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Bhartii</FieldLabel>
+                      <FieldLabel>بھرتی</FieldLabel>
                       <TextInput value={bhartii} onChange={(e) => setBhartii(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                   </InvoiceFieldRow>
@@ -431,7 +431,7 @@ export function SaleCommissionInvoicePage() {
                 <InvoiceFieldGroup label="Pricing">
                   <InvoiceFieldRow cols={5}>
                     <InvoiceField>
-                      <FieldLabel>Rate / Maund</FieldLabel>
+                      <FieldLabel>ریٹ / من</FieldLabel>
                       <TextInput value={ratePerMaund} onChange={(e) => setRatePerMaund(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceToggleField
@@ -498,19 +498,19 @@ export function SaleCommissionInvoicePage() {
               </InvoicePreviewGridShell>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Settlement (Sale Party debit)">
+            <InvoiceFormSection label="Settlement (party debit)">
               <InvoiceFieldStack>
-                <InvoiceFieldGroup label="Sale Party & goods">
+                <InvoiceFieldGroup label="Settlement party & goods">
                   <InvoiceFieldRow cols={4}>
                     <InvoiceField wide>
                       <FlatAccountSelect
-                        label="Sale Party"
+                        label="Settlement party"
                         categoryNames={SALE_PARTY_CATEGORIES}
                         categories={categories}
                         accounts={accounts}
                         value={salePartyAccountId}
                         onChange={setSalePartyAccountId}
-                        placeholder="Search sale party…"
+                        placeholder="Search Int / Ext / Sale Party…"
                       />
                     </InvoiceField>
                     <InvoiceReadOnlyField label="Goods total" value={invoiceTotals.totalGoodsAmount} />
@@ -533,11 +533,11 @@ export function SaleCommissionInvoicePage() {
                 <InvoiceFieldGroup label="Manual & bardana">
                   <InvoiceFieldRow cols={4}>
                     <InvoiceField>
-                      <FieldLabel>Munshiana</FieldLabel>
+                      <FieldLabel>منشیانہ</FieldLabel>
                       <TextInput value={munshianaAmount} onChange={(e) => setMunshianaAmount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
-                      <FieldLabel>Misc</FieldLabel>
+                      <FieldLabel>متفرق</FieldLabel>
                       <TextInput value={miscAmount} onChange={(e) => setMiscAmount(e.target.value)} inputMode="decimal" />
                     </InvoiceField>
                     <InvoiceField>
@@ -566,7 +566,7 @@ export function SaleCommissionInvoicePage() {
                 </InvoiceFieldGroup>
               </InvoiceFieldStack>
               <InvoiceFormFooter
-                totalLabel="Sale Party net debit"
+                totalLabel="Settlement net debit"
                 totalValue={invoiceTotals.netSalePartyDebit}
                 error={error}
                 message={message}
