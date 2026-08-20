@@ -1,4 +1,5 @@
 import { forwardRef, ReactNode, RefObject } from 'react';
+import { ClosePageButton } from '../layout/ClosePageButton';
 
 type PageShellProps = {
   title?: ReactNode;
@@ -28,6 +29,7 @@ export function PageShell({
         <div
           className={`app-page-title-band${invoiceTitleBand ? ' app-page-title-band--invoice' : ''}`}
         >
+          <ClosePageButton className="app-page-title-band-close" />
           <h1
             ref={titleRef}
             tabIndex={-1}

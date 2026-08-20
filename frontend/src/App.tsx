@@ -12,7 +12,9 @@ import { BardanaPage } from './pages/inventory/BardanaPage';
 import { InvoiceFormPage } from './pages/invoices/InvoiceFormPage';
 import { ViewInvoicePage } from './pages/invoices/ViewInvoicePage';
 import { LoginPage } from './pages/LoginPage';
+import { BackupPage } from './pages/BackupPage';
 import { PosHomePage } from './pages/PosHomePage';
+import { SectionLandingPage } from './pages/SectionLandingPage';
 import { AccountReportsPage, AccountBalancePage, SalePurchaseReportsPage, StockReportPage, TrialBalancePage, VouchersReportPage } from './pages/reports/ReportPages';
 import { SystemPreferencesPage } from './pages/system/SystemPreferencesPage';
 import { UserInfoPage } from './pages/user/UserInfoPage';
@@ -29,6 +31,13 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route path="/" element={<PosHomePage />} />
+
+              <Route path="/vouchers" element={<SectionLandingPage sectionId="vouchers" />} />
+              <Route path="/invoices" element={<SectionLandingPage sectionId="invoices" />} />
+              <Route path="/accounts" element={<SectionLandingPage sectionId="accounts" />} />
+              <Route path="/products" element={<SectionLandingPage sectionId="products" />} />
+              <Route path="/reports" element={<SectionLandingPage sectionId="reports" />} />
+              <Route path="/system" element={<SectionLandingPage sectionId="system" />} />
 
               <Route path="/accounts/categories/add" element={<CategoryManagePage mode="add" />} />
               <Route path="/accounts/categories/edit" element={<CategoryManagePage mode="edit" />} />
@@ -62,6 +71,7 @@ export default function App() {
               <Route path="/reports/stock" element={<StockReportPage />} />
 
               <Route path="/system/preferences" element={<SystemPreferencesPage />} />
+              <Route path="/backup" element={<BackupPage />} />
               <Route path="/user" element={<UserInfoPage />} />
             </Route>
           </Route>

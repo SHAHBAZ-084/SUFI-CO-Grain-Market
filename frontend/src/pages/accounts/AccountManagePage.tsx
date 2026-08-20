@@ -19,6 +19,24 @@ function defaultOpeningSideForCategory(categoryId: number, accounts: Account[]):
   return 'DR';
 }
 
+const DELETE_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(timeoutMessage)), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        window.clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 export function AccountManagePage({ mode }: { mode: Mode }) {
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -29,6 +47,7 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
   const [selectedId, setSelectedId] = useState<number | ''>('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.listCategories().then(setCategories).catch(() => setCategories([]));
@@ -62,6 +81,7 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
     event.preventDefault();
     setError('');
     setMessage('');
+    setSaving(true);
     try {
       if (mode === 'add') {
         if (!categoryId) throw new Error('Select a category');
@@ -95,13 +115,19 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
         setName('');
       } else {
         if (!selectedId) throw new Error('Select an account');
-        await api.removeAccount(Number(selectedId));
+        await withTimeout(
+          api.removeAccount(Number(selectedId)),
+          DELETE_TIMEOUT_MS,
+          'Delete failed, please try again',
+        );
         setMessage('Account removed.');
         setSelectedId('');
       }
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -189,8 +215,10 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
           {error ? <p className="text-sm text-danger">{error}</p> : null}
           {message ? <p className="text-sm text-success">{message}</p> : null}
           <div className="flex gap-2">
-            <PrimaryButton type="submit">{mode === 'remove' ? 'Remove' : 'Save'}</PrimaryButton>
-            <SecondaryButton type="button" onClick={() => { setCategoryId(''); setName(''); setOpeningBalance(''); setSelectedId(''); }}>Clear</SecondaryButton>
+            <PrimaryButton type="submit" disabled={saving}>
+              {saving ? (mode === 'remove' ? 'Removing…' : 'Saving…') : mode === 'remove' ? 'Remove' : 'Save'}
+            </PrimaryButton>
+            <SecondaryButton type="button" disabled={saving} onClick={() => { setCategoryId(''); setName(''); setOpeningBalance(''); setSelectedId(''); }}>Clear</SecondaryButton>
           </div>
         </form>
       </Panel>

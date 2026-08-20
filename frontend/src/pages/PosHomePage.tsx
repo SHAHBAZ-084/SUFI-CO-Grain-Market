@@ -1,57 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { LucideIcon } from 'lucide-react';
-import {
-  ArrowDownCircle,
-  ArrowUpCircle,
-  BarChart3,
-  BookOpen,
-  Eye,
-  FileText,
-  Package,
-  Receipt,
-  Scale,
-  ScrollText,
-  ShoppingCart,
-  TrendingUp,
-  Wallet,
-  Wheat,
-} from 'lucide-react';
 import { INVOICE_QUICK_LINKS, REPORT_QUICK_LINKS, VOUCHER_QUICK_LINKS } from '../config/navigation';
+import { defaultCardDescription, QuickLinkCard } from '../components/ui/QuickLinkCard';
 import { LegacyTable, PageShell, Tile } from '../components/ui/PageShell';
 import { api } from '../lib/api';
 import { formatLedgerAmount, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../lib/format';
 
 type DashboardSummary = Awaited<ReturnType<typeof api.getDashboardSummary>>;
-
-type QuickLinkVariant =
-  | 'payment'
-  | 'receipt'
-  | 'journal'
-  | 'sale-commission'
-  | 'sale-paunch'
-  | 'purchase-maal'
-  | 'kachi-maal'
-  | 'view'
-  | 'report';
-
-const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideIcon }> = {
-  '/vouchers/payment': { variant: 'payment', icon: ArrowUpCircle },
-  '/vouchers/receipt': { variant: 'receipt', icon: ArrowDownCircle },
-  '/vouchers/journal': { variant: 'journal', icon: BookOpen },
-  '/invoices/sale-commission': { variant: 'sale-commission', icon: FileText },
-  '/invoices/sale-paunch': { variant: 'sale-paunch', icon: Scale },
-  '/invoices/purchase-maal': { variant: 'purchase-maal', icon: ShoppingCart },
-  '/invoices/kachi-maal': { variant: 'kachi-maal', icon: Wheat },
-  '/invoices/view-invoice': { variant: 'view', icon: Eye },
-  '/reports/accounts': { variant: 'report', icon: ScrollText },
-  '/reports/account-balance': { variant: 'report', icon: Wallet },
-  '/reports/vouchers': { variant: 'report', icon: Receipt },
-  '/reports/trial-balance': { variant: 'report', icon: BarChart3 },
-  '/reports/sale-purchase': { variant: 'report', icon: TrendingUp },
-  '/reports/stock': { variant: 'report', icon: Package },
-  '/inventory/bardana': { variant: 'report', icon: Package },
-};
 
 function StatBox({ label, value }: { label: string; value: string }) {
   return (
@@ -59,31 +14,6 @@ function StatBox({ label, value }: { label: string; value: string }) {
       <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-textMuted">{label}</p>
       <p className="mt-1 text-xl font-semibold tabular-nums text-financial">{value}</p>
     </Tile>
-  );
-}
-
-function QuickLink({
-  to,
-  title,
-  description,
-}: {
-  to: string;
-  title: string;
-  description: string;
-}) {
-  const meta = QUICK_LINK_META[to] ?? { variant: 'view' as const, icon: Package };
-  const Icon = meta.icon;
-
-  return (
-    <Link to={to} className={`quick-link-card quick-link-card--${meta.variant}`}>
-      <div className="quick-link-card-inner">
-        <Icon className="quick-link-icon h-4 w-4" strokeWidth={2} aria-hidden="true" />
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-financial">{title}</h3>
-          <p className="mt-0.5 text-xs text-textSecondary">{description}</p>
-        </div>
-      </div>
-    </Link>
   );
 }
 
@@ -155,26 +85,27 @@ export function PosHomePage() {
 
       <div>
         <h2 className="legacy-section-title">New Voucher</h2>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           {VOUCHER_QUICK_LINKS.map((link) => (
-            <QuickLink key={link.to} to={link.to} title={link.label} description="Open voucher form" />
+            <QuickLinkCard
+              key={link.to}
+              to={link.to}
+              title={link.label}
+              description={defaultCardDescription(link.to)}
+            />
           ))}
         </div>
       </div>
 
       <div>
         <h2 className="legacy-section-title">Invoices</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {INVOICE_QUICK_LINKS.map((link) => (
-            <QuickLink
+            <QuickLinkCard
               key={link.to}
               to={link.to}
               title={link.label}
-              description={
-                link.to === '/invoices/view-invoice'
-                  ? 'Look up a posted invoice by type and number'
-                  : 'Open invoice form'
-              }
+              description={defaultCardDescription(link.to)}
             />
           ))}
         </div>
@@ -182,9 +113,14 @@ export function PosHomePage() {
 
       <div>
         <h2 className="legacy-section-title">Reports</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {REPORT_QUICK_LINKS.map((link) => (
-            <QuickLink key={link.to} to={link.to} title={link.label} description="Open report" />
+            <QuickLinkCard
+              key={link.to}
+              to={link.to}
+              title={link.label}
+              description={defaultCardDescription(link.to)}
+            />
           ))}
         </div>
       </div>

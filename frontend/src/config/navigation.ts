@@ -25,6 +25,11 @@ export type SidebarSection = {
   items: NavItem[];
 };
 
+/** Card shown on a section landing page. */
+export type SectionCard = NavLink & {
+  group?: string;
+};
+
 export const SIDEBAR_NAV: SidebarSection[] = [
   {
     id: 'vouchers',
@@ -113,6 +118,78 @@ export const SIDEBAR_NAV: SidebarSection[] = [
   },
 ];
 
+export function getSectionLandingPath(sectionId: string): string {
+  return `/${sectionId}`;
+}
+
+export function getSectionById(sectionId: string): SidebarSection | undefined {
+  return SIDEBAR_NAV.find((section) => section.id === sectionId);
+}
+
+/** Flatten a section's nav items into landing-page cards (submenu label stored as group). */
+export function getSectionCards(sectionId: string): SectionCard[] {
+  const section = getSectionById(sectionId);
+  if (!section) return [];
+
+  const cards: SectionCard[] = [];
+  for (const item of section.items) {
+    if (item.kind === 'link') {
+      cards.push({ label: item.label, to: item.to, description: item.description });
+    } else {
+      for (const child of item.children) {
+        cards.push({ ...child, group: item.label });
+      }
+    }
+  }
+  return cards;
+}
+
+export type SectionCardGroup = {
+  group: string | null;
+  cards: SectionCard[];
+};
+
+/** Group cards when a section has more than ~8 links; otherwise return one flat group. */
+export function getSectionCardGroups(sectionId: string): SectionCardGroup[] {
+  const cards = getSectionCards(sectionId);
+  const useGroups = cards.length > 8;
+
+  if (!useGroups) {
+    return [{ group: null, cards }];
+  }
+
+  const grouped = new Map<string | null, SectionCard[]>();
+  for (const card of cards) {
+    const key = card.group ?? null;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(card);
+  }
+
+  return Array.from(grouped.entries()).map(([group, groupCards]) => ({
+    group,
+    cards: groupCards,
+  }));
+}
+
+export function linkMatchesPath(pathname: string, to: string): boolean {
+  return pathname === to || (to !== '/' && pathname.startsWith(`${to}/`));
+}
+
+export function sectionHasActive(pathname: string, items: NavItem[]): boolean {
+  for (const item of items) {
+    if (item.kind === 'link' && linkMatchesPath(pathname, item.to)) return true;
+    if (item.kind === 'submenu' && item.children.some((child) => linkMatchesPath(pathname, child.to))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function sectionIsActive(pathname: string, section: SidebarSection): boolean {
+  if (linkMatchesPath(pathname, getSectionLandingPath(section.id))) return true;
+  return sectionHasActive(pathname, section.items);
+}
+
 /** Flat links for dashboard invoice shortcuts. */
 export const INVOICE_QUICK_LINKS: NavLink[] = (
   SIDEBAR_NAV.find((section) => section.id === 'invoices')?.items ?? []
@@ -132,6 +209,7 @@ export const REPORT_QUICK_LINKS: NavLink[] = (
 const ROUTE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/user': 'User Information',
+  '/backup': 'Database Backup',
 };
 
 function collectRouteTitles(items: NavItem[], titles: Record<string, string>) {
@@ -147,6 +225,7 @@ function collectRouteTitles(items: NavItem[], titles: Record<string, string>) {
 }
 
 for (const section of SIDEBAR_NAV) {
+  ROUTE_TITLES[getSectionLandingPath(section.id)] = section.label;
   collectRouteTitles(section.items, ROUTE_TITLES);
 }
 

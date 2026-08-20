@@ -960,8 +960,10 @@ export async function ensureCustomerAccount(
   const category = await ensureCategoryInTx(tx, 'Sale Party');
   const code = `C${String(customer.id).padStart(4, '0')}`;
 
+  // Include inactive rows: soft-delete leaves the unique `code` occupied, so sync must
+  // reactivate instead of create (otherwise listAccounts dead-ends with P2002 forever).
   const existing = await tx.account.findFirst({
-    where: { isActive: true, code },
+    where: { code },
     include: { ledger: true },
   });
   if (existing) {
@@ -969,6 +971,7 @@ export async function ensureCustomerAccount(
       await tx.ledger.create({ data: { accountId: existing.id, balance: 0 } });
     }
     const updates: Prisma.AccountUpdateInput = {};
+    if (!existing.isActive) updates.isActive = true;
     if (existing.name !== customer.name) updates.name = customer.name;
     if (existing.categoryId !== category.id) {
       updates.category = { connect: { id: category.id } };
@@ -999,8 +1002,9 @@ export async function ensureSupplierAccount(
   const category = await ensureCategoryInTx(tx, 'Ext. Purchase Party');
   const code = `S${String(supplier.id).padStart(4, '0')}`;
 
+  // Include inactive rows — same unique-code trap as ensureCustomerAccount after soft-delete.
   const existing = await tx.account.findFirst({
-    where: { isActive: true, code },
+    where: { code },
     include: { ledger: true },
   });
   if (existing) {
@@ -1008,6 +1012,7 @@ export async function ensureSupplierAccount(
       await tx.ledger.create({ data: { accountId: existing.id, balance: 0 } });
     }
     const updates: Prisma.AccountUpdateInput = {};
+    if (!existing.isActive) updates.isActive = true;
     if (existing.name !== supplier.name) updates.name = supplier.name;
     if (existing.categoryId !== category.id) {
       updates.category = { connect: { id: category.id } };

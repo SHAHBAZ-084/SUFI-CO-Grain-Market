@@ -6,7 +6,7 @@
   "main": "dist-electron/main.js",
   "author": "SUFI CO",
   "scripts": {
-    "dev": "concurrently -k \"npm run dev -w backend\" \"npm run dev -w frontend\" \"npm run electron:dev\"",
+    "dev": "concurrently -k \"npm run dev -w backend\" \"cross-env ELECTRON_DEV=1 npm run dev -w frontend\" \"npm run electron:dev\"",
     "dev:web": "concurrently -k \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "electron:dev": "npm run build:electron && wait-on http://127.0.0.1:5173 http://127.0.0.1:3847/api/health && cross-env NODE_ENV=development electron .",
     "electron:build": "npm run build -w backend && npm run build -w frontend && npm run build:electron",

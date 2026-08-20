@@ -1,12 +1,67 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import fs from 'fs';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
+import { formatBackupFilename, getDatabaseFilePath } from './database-path';
 
 const isDev = process.env.NODE_ENV === 'development';
 const BACKEND_PORT = process.env.PORT ?? '3847';
 const APP_ICON = path.join(__dirname, '../build/icon.png');
 
 let mainWindow: BrowserWindow | null = null;
+
+function registerIpcHandlers(): void {
+  ipcMain.handle('dialog:pick-backup-folder', async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    const result = win
+      ? await dialog.showOpenDialog(win, {
+          title: 'Choose backup folder',
+          properties: ['openDirectory', 'createDirectory'],
+        })
+      : await dialog.showOpenDialog({
+          title: 'Choose backup folder',
+          properties: ['openDirectory', 'createDirectory'],
+        });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { ok: false, path: null };
+    }
+
+    return { ok: true, path: result.filePaths[0] };
+  });
+
+  ipcMain.handle('db:backup', async (_event, destFolder: unknown) => {
+    if (typeof destFolder !== 'string' || !destFolder.trim()) {
+      return { ok: false, error: 'No backup folder selected.' };
+    }
+
+    const folder = destFolder.trim();
+
+    try {
+      const stat = await fs.promises.stat(folder).catch(() => null);
+      if (!stat?.isDirectory()) {
+        return { ok: false, error: 'Backup folder does not exist or is not accessible.' };
+      }
+
+      const dbPath = getDatabaseFilePath();
+      if (!fs.existsSync(dbPath)) {
+        return {
+          ok: false,
+          error: 'Database file not found. Use the app at least once before backing up.',
+        };
+      }
+
+      const filename = formatBackupFilename(new Date());
+      const destPath = path.join(folder, filename);
+      await fs.promises.copyFile(dbPath, destPath);
+
+      return { ok: true, path: destPath };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Backup failed';
+      return { ok: false, error: message };
+    }
+  });
+}
 
 async function startBackend(): Promise<void> {
   if (isDev) {
@@ -34,8 +89,12 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Keep the renderer (and Vite HMR websocket) alive while minimized on Windows.
+      backgroundThrottling: false,
     },
   });
+
+  mainWindow.webContents.setBackgroundThrottling(false);
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
     console.error('Window failed to load:', errorCode, errorDescription);
@@ -107,6 +166,7 @@ function configureAutoUpdater(): void {
 
 app.whenReady().then(async () => {
   try {
+    registerIpcHandlers();
     await startBackend();
 
     if (!isDev) {

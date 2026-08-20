@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { getPageTitle } from '../../config/navigation';
+import { ClosePageButton } from './ClosePageButton';
 
 /** Invoice / voucher forms render their own centered PageShell title. */
 function hidesContentHeaderTitle(pathname: string) {
@@ -37,6 +38,7 @@ export function ContentHeader() {
         ) : null}
         <h1 className="app-content-title">{title}</h1>
       </div>
+      {!isDashboard ? <ClosePageButton /> : null}
     </header>
   );
 }

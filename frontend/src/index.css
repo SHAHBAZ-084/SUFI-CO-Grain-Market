@@ -774,6 +774,60 @@
 
 
 
+  .app-close-page-btn {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 0.375rem;
+
+    flex-shrink: 0;
+
+    border: 1px solid var(--border);
+
+    border-radius: 0.375rem;
+
+    background: var(--surface-1);
+
+    padding: 0.375rem 0.625rem;
+
+    color: var(--text-secondary);
+
+    font-size: 0.75rem;
+
+    font-weight: 500;
+
+    line-height: 1;
+
+    cursor: pointer;
+
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+
+  }
+
+
+
+  .app-close-page-btn:hover {
+
+    border-color: var(--text-accent);
+
+    background: var(--surface-2);
+
+    color: var(--text-primary);
+
+  }
+
+
+
+  .app-close-page-btn:active {
+
+    transform: scale(0.97);
+
+  }
+
+
+
   .app-content-user-label {
 
     display: block;
@@ -1914,6 +1968,8 @@
 
   .app-page-title-band {
 
+    position: relative;
+
     display: flex;
 
     flex-direction: column;
@@ -1929,6 +1985,18 @@
     background: var(--surface-2);
 
     padding: 1.25rem 1.25rem 1rem;
+
+  }
+
+
+
+  .app-page-title-band-close {
+
+    position: absolute;
+
+    top: 0.75rem;
+
+    right: 1rem;
 
   }
 
@@ -2016,17 +2084,23 @@
 
     border: 1px solid var(--border);
 
-    border-left-width: 4px;
-
-    border-left-color: var(--ql-accent, var(--fill-financial));
+    border-radius: 0.75rem;
 
     background: var(--ql-bg, var(--surface-2));
 
-    padding: 0.625rem 0.75rem;
+    padding: 0.875rem 1rem;
 
     text-decoration: none;
 
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+
+    box-shadow: 0 1px 2px rgba(10, 46, 92, 0.06);
+
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.15s ease;
 
   }
 
@@ -2036,7 +2110,21 @@
 
     background: var(--ql-hover, var(--surface-1));
 
-    box-shadow: 0 1px 4px rgba(10, 46, 92, 0.12);
+    border-color: var(--ql-accent, var(--fill-financial));
+
+    box-shadow: 0 6px 16px rgba(10, 46, 92, 0.12);
+
+    transform: translateY(-2px);
+
+  }
+
+
+
+  .quick-link-card:active {
+
+    transform: translateY(0) scale(0.98);
+
+    box-shadow: 0 2px 6px rgba(10, 46, 92, 0.1);
 
   }
 
@@ -2048,7 +2136,29 @@
 
     align-items: flex-start;
 
-    gap: 0.625rem;
+    gap: 0.75rem;
+
+  }
+
+
+
+  .quick-link-icon-badge {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    width: 2.25rem;
+
+    height: 2.25rem;
+
+    border-radius: 0.5rem;
+
+    background: color-mix(in srgb, var(--ql-accent, var(--fill-financial)) 14%, transparent);
 
   }
 
@@ -2056,11 +2166,37 @@
 
   .quick-link-icon {
 
-    flex-shrink: 0;
-
-    margin-top: 0.125rem;
-
     color: var(--ql-accent, var(--fill-financial));
+
+  }
+
+
+
+  .quick-link-title {
+
+    margin: 0;
+
+    font-size: 0.875rem;
+
+    font-weight: 600;
+
+    color: var(--text-primary);
+
+    line-height: 1.3;
+
+  }
+
+
+
+  .quick-link-description {
+
+    margin: 0.25rem 0 0;
+
+    font-size: 0.75rem;
+
+    color: var(--text-secondary);
+
+    line-height: 1.4;
 
   }
 
@@ -2074,25 +2210,21 @@
 
     --ql-hover: #FAD4D4;
 
-    border-left-color: #B42318;
+  }
 
-    background: #FDECEC;
+
+
+  .quick-link-card--payment .quick-link-icon-badge {
+
+    background: color-mix(in srgb, #B42318 16%, transparent);
 
   }
 
 
 
-  .quick-link-card--payment .quick-link-icon {
+  .quick-link-card--payment .quick-link-title {
 
-    color: #B42318;
-
-  }
-
-
-
-  .quick-link-card--payment h3 {
-
-    color: #B42318;
+    color: #9B1C12;
 
   }
 
@@ -2106,25 +2238,21 @@
 
     --ql-hover: #D2EFDF;
 
-    border-left-color: #0F7A4F;
+  }
 
-    background: #E8F7EF;
+
+
+  .quick-link-card--receipt .quick-link-icon-badge {
+
+    background: color-mix(in srgb, #0F7A4F 16%, transparent);
 
   }
 
 
 
-  .quick-link-card--receipt .quick-link-icon {
+  .quick-link-card--receipt .quick-link-title {
 
-    color: #0F7A4F;
-
-  }
-
-
-
-  .quick-link-card--receipt h3 {
-
-    color: #0F7A4F;
+    color: #0A6040;
 
   }
 
@@ -2138,25 +2266,21 @@
 
     --ql-hover: #EEE6D4;
 
-    border-left-color: #8A7340;
+  }
 
-    background: #F7F3E8;
+
+
+  .quick-link-card--journal .quick-link-icon-badge {
+
+    background: color-mix(in srgb, #8A7340 16%, transparent);
 
   }
 
 
 
-  .quick-link-card--journal .quick-link-icon {
+  .quick-link-card--journal .quick-link-title {
 
-    color: #8A7340;
-
-  }
-
-
-
-  .quick-link-card--journal h3 {
-
-    color: #8A7340;
+    color: #6B5830;
 
   }
 
