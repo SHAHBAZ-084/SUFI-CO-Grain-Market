@@ -9,10 +9,11 @@
     "dev": "concurrently -k \"npm run dev -w backend\" \"cross-env ELECTRON_DEV=1 npm run dev -w frontend\" \"npm run electron:dev\"",
     "dev:web": "concurrently -k \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "electron:dev": "npm run build:electron && wait-on http://127.0.0.1:5173 http://127.0.0.1:3847/api/health && cross-env NODE_ENV=development electron .",
-    "electron:build": "npm run build -w backend && npm run build -w frontend && npm run build:electron",
-    "build:electron": "tsc -p electron/tsconfig.json",
-    "dist": "npm run electron:build && electron-builder",
-    "dist:win": "npm run electron:build && electron-builder --win",
+    "electron:build": "npm run db:generate -w backend && npm run build -w backend && npm run build -w frontend && npm run build:electron",
+    "build:electron": "npm run prepare:icons && tsc -p electron/tsconfig.json",
+    "prepare:icons": "node scripts/generate-icons.js",
+    "dist": "npm run electron:build && electron-builder --publish never",
+    "dist:win": "npm run electron:build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
     "start": "cross-env NODE_ENV=production electron .",
     "postinstall": "npm run db:generate -w backend"
   },
@@ -27,35 +28,44 @@
     "directories": {
       "output": "release"
     },
+    "afterPack": "./scripts/after-pack.js",
     "files": [
       "dist-electron/**/*",
       "backend/dist/**/*",
-      "backend/prisma/**/*",
+      "backend/prisma/schema.prisma",
+      "backend/prisma/migrations/**/*",
       "backend/package.json",
       "frontend/dist/**/*",
-      "package.json"
+      "build/icon.png",
+      "build/icon.ico",
+      "package.json",
+      "node_modules/.prisma/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/.prisma/**/*",
+      "node_modules/@prisma/client/**/*",
+      "node_modules/prisma/**/*"
     ],
     "extraResources": [
       {
-        "from": "backend/node_modules/.prisma",
+        "from": "node_modules/.prisma",
         "to": "backend/node_modules/.prisma"
-      },
-      {
-        "from": "backend/node_modules/@prisma/client",
-        "to": "backend/node_modules/@prisma/client"
       }
     ],
     "win": {
       "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
       "target": [
         "nsis"
       ]
     },
-    "publish": {
-      "provider": "github",
-      "owner": "SHAHBAZ-084",
-      "repo": "SUFI-CO-Grain-Market"
-    }
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": null
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
@@ -63,10 +73,20 @@
     "electron": "^34.0.0",
     "electron-builder": "^25.1.8",
     "png-to-ico": "^3.0.2",
+    "rcedit": "^4.0.1",
     "typescript": "^5.7.3",
     "wait-on": "^8.0.1"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "@prisma/client": "^6.3.1",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "electron-updater": "^6.3.9",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "prisma": "^6.3.1",
+    "zod": "^3.24.1"
   }
 }

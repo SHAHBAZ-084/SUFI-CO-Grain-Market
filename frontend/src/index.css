@@ -14,9 +14,9 @@
 
   html {
 
-    background-color: var(--surface-3, #f5f6f8);
+    background-color: var(--surface-3, #E3E3E8);
 
-    color: var(--text-primary, #0a2e5c);
+    color: var(--text-primary, #1E1E24);
 
   }
 
@@ -28,15 +28,15 @@
 
     min-height: 100vh;
 
-    background-color: var(--surface-3, #f5f6f8);
+    background-color: var(--surface-3, #E3E3E8);
 
-    color: var(--text-primary, #0a2e5c);
+    color: var(--text-primary, #1E1E24);
 
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 
-    font-size: 13px;
+    font-size: var(--font-size-base, 1rem);
 
-    line-height: 1.4;
+    line-height: 1.5;
 
   }
 
@@ -88,6 +88,8 @@
 
     display: flex;
 
+    flex-direction: column;
+
     min-height: 100vh;
 
     background: var(--surface-3);
@@ -106,8 +108,6 @@
 
     flex-direction: column;
 
-    margin-left: var(--sidebar-width, 240px);
-
   }
 
 
@@ -120,6 +120,174 @@
 
     background: var(--surface-3);
 
+  }
+
+
+
+  /* ── Top navigation ── */
+
+  .app-topnav {
+
+    position: sticky;
+
+    top: 0;
+
+    z-index: 50;
+
+    flex-shrink: 0;
+
+    border-bottom: 1px solid var(--nav-border);
+
+    background: var(--nav-bg);
+
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+
+  }
+
+
+
+  .app-topnav-inner {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 0.5rem;
+
+    min-height: 4.25rem;
+
+    padding: 0 1rem;
+
+  }
+
+
+
+  .app-topnav-brand {
+
+    display: inline-flex;
+
+    flex-shrink: 0;
+
+    align-items: center;
+
+    gap: 0.625rem;
+
+    margin-right: 0.5rem;
+
+    padding-right: 0.75rem;
+
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+
+    color: var(--nav-text-hover);
+
+    text-decoration: none;
+
+  }
+
+
+
+  .app-topnav-brand-logo {
+
+    display: block;
+
+    height: 2rem;
+
+    width: auto;
+
+  }
+
+
+
+  .app-topnav-brand-text {
+
+    font-size: var(--font-size-md, 1.0625rem);
+
+    font-weight: 600;
+
+    letter-spacing: 0.01em;
+
+    white-space: nowrap;
+
+  }
+
+
+
+  .app-topnav-nav {
+
+    display: flex;
+
+    min-width: 0;
+
+    flex: 1;
+
+    flex-wrap: wrap;
+
+    align-items: center;
+
+    gap: 0.5rem;
+
+  }
+
+
+
+  .app-topnav-link {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    border: none;
+
+    border-radius: var(--radius-sm, 2px);
+
+    background: transparent;
+
+    padding: 0.6rem 1rem;
+
+    color: var(--nav-text);
+
+    font-size: var(--font-size-md, 1.0625rem);
+
+    font-weight: 500;
+
+    line-height: 1.25;
+
+    text-decoration: none;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+
+    transition: background-color 0.12s ease, color 0.12s ease;
+
+  }
+
+
+
+  .app-topnav-link:hover {
+
+    background: var(--nav-hover-bg);
+
+    color: var(--nav-text-hover);
+
+  }
+
+
+
+  .app-topnav-link.is-active {
+
+    background: var(--nav-active-bg);
+
+    box-shadow: inset 0 -2px 0 var(--nav-active-border);
+
+    color: var(--nav-text-hover);
+
+  }
+
+
+
+  .app-topnav-link--trailing {
+    margin-left: auto;
   }
 
 
@@ -260,7 +428,7 @@
 
     color: var(--text-muted);
 
-    font-size: 0.625rem;
+    font-size: var(--font-size-xs, 0.8125rem);
 
     font-weight: 600;
 
@@ -280,7 +448,7 @@
 
     white-space: nowrap;
 
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 600;
 
@@ -406,7 +574,7 @@
 
     font-family: Georgia, 'Times New Roman', Times, serif;
 
-    font-size: 1.125rem;
+    font-size: var(--font-size-lg, 1.1875rem);
 
     font-weight: 700;
 
@@ -436,7 +604,7 @@
 
     color: var(--nav-text);
 
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs, 0.8125rem);
 
     letter-spacing: 0.08em;
 
@@ -528,7 +696,7 @@
 
     padding: 0.5rem 0.625rem;
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 600;
 
@@ -568,7 +736,7 @@
 
     color: var(--nav-text);
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     line-height: 1.3;
 
@@ -584,7 +752,7 @@
 
     padding-left: 1.25rem;
 
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
   }
 
@@ -640,7 +808,7 @@
 
     cursor: pointer;
 
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 600;
 
@@ -710,7 +878,7 @@
 
     font-family: Georgia, 'Times New Roman', Times, serif;
 
-    font-size: 1.125rem;
+    font-size: var(--font-size-lg, 1.1875rem);
 
     font-weight: 600;
 
@@ -726,7 +894,7 @@
 
     color: var(--text-muted);
 
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs, 0.8125rem);
 
     text-transform: uppercase;
 
@@ -794,7 +962,7 @@
 
     color: var(--text-secondary);
 
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 500;
 
@@ -834,7 +1002,7 @@
 
     color: var(--text-muted);
 
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs, 0.8125rem);
 
     text-transform: uppercase;
 
@@ -848,7 +1016,7 @@
 
     color: var(--text-primary);
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 600;
 
@@ -882,7 +1050,7 @@
 
     padding: 0.4375rem 0.875rem;
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 600;
 
@@ -892,9 +1060,9 @@
 
   .btn-primary:hover:not(:disabled) {
 
-    background-color: var(--nav-bg-light, #1b3a6b);
+    background-color: var(--nav-bg-light, #2A2A32);
 
-    border-color: var(--nav-bg-light, #1b3a6b);
+    border-color: var(--nav-bg-light, #2A2A32);
 
   }
 
@@ -922,7 +1090,7 @@
 
     padding: 0.4375rem 0.875rem;
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 600;
 
@@ -932,7 +1100,7 @@
 
   .btn-financial:hover:not(:disabled) {
 
-    background-color: var(--nav-bg-light, #1b3a6b);
+    background-color: var(--nav-bg-light, #2A2A32);
 
   }
 
@@ -960,7 +1128,7 @@
 
     padding: 0.4375rem 0.875rem;
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 600;
 
@@ -989,10 +1157,6 @@
   /* ── Shared form field / input sizing (invoice + app-wide) ── */
 
   .app-field {
-
-    --app-label-h: 1.4rem;
-
-    --app-control-h: 2.25rem; /* 36px compact */
 
     display: grid;
 
@@ -1029,6 +1193,20 @@
     margin: 0;
 
     color: #000;
+
+    font-size: var(--font-size-sm, 0.9375rem);
+
+    font-weight: 700;
+
+    letter-spacing: 0.02em;
+
+    text-transform: uppercase;
+
+  }
+
+
+
+  .app-field-label-text {
 
     display: block;
 
@@ -1070,9 +1248,9 @@
 
     display: block;
 
-    height: var(--app-control-h, 2.25rem);
+    height: var(--app-control-h);
 
-    min-height: var(--app-control-h, 2.25rem);
+    min-height: var(--app-control-h);
 
     width: 100%;
 
@@ -1086,11 +1264,11 @@
 
     background-color: #ffffff;
 
-    padding: 0 0.5rem;
+    padding: 0 0.625rem;
 
     color: var(--text-primary);
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-md, 1.0625rem);
 
     line-height: 1.25;
 
@@ -1142,9 +1320,9 @@
 
     gap: 0.375rem;
 
-    height: var(--app-control-h, 2.25rem);
+    height: var(--app-control-h);
 
-    min-height: var(--app-control-h, 2.25rem);
+    min-height: var(--app-control-h);
 
     width: 100%;
 
@@ -1160,7 +1338,7 @@
 
     color: var(--text-secondary);
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     line-height: 1.25;
 
@@ -1198,7 +1376,7 @@
 
     color: var(--fill-financial);
 
-    font-size: 0.9375rem;
+    font-size: var(--font-size-md, 1.0625rem);
 
     font-weight: 700;
 
@@ -1214,9 +1392,9 @@
 
     align-items: stretch;
 
-    height: var(--app-control-h, 2.25rem);
+    height: var(--app-control-h);
 
-    min-height: var(--app-control-h, 2.25rem);
+    min-height: var(--app-control-h);
 
     width: 100%;
 
@@ -1246,7 +1424,7 @@
 
     color: var(--text-secondary);
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 500;
 
@@ -1286,9 +1464,9 @@
 
     box-sizing: border-box;
 
-    height: var(--app-control-h, 2.25rem);
+    height: var(--app-control-h);
 
-    min-height: var(--app-control-h, 2.25rem);
+    min-height: var(--app-control-h);
 
   }
 
@@ -1352,7 +1530,7 @@
 
     color: var(--text-primary);
 
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     font-weight: 700;
 
@@ -1418,7 +1596,7 @@
 
     color: #000;
 
-    font-size: 0.625rem;
+    font-size: var(--font-size-xs, 0.8125rem);
 
     font-weight: 600;
 
@@ -1574,7 +1752,7 @@
 
     color: var(--text-muted);
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
   }
 
@@ -1624,7 +1802,7 @@
 
     color: #000;
 
-    font-size: 0.625rem;
+    font-size: var(--font-size-xs, 0.8125rem);
 
     font-weight: 700;
 
@@ -1640,7 +1818,7 @@
 
     color: var(--fill-financial);
 
-    font-size: 1.25rem;
+    font-size: var(--font-size-xl, 1.375rem);
 
     font-weight: 700;
 
@@ -1702,7 +1880,7 @@
 
     color: var(--text-muted);
 
-    font-size: 0.625rem;
+    font-size: var(--font-size-xs, 0.8125rem);
 
     font-weight: 700;
 
@@ -1718,7 +1896,7 @@
 
     color: var(--fill-financial);
 
-    font-size: 1.25rem;
+    font-size: var(--font-size-xl, 1.375rem);
 
     font-weight: 700;
 
@@ -1760,7 +1938,7 @@
 
     border-collapse: collapse;
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
   }
 
@@ -1848,7 +2026,7 @@
 
     padding: 0.4375rem 0.75rem;
 
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     color: var(--text-primary);
 
@@ -1890,7 +2068,7 @@
 
     font-family: Georgia, 'Times New Roman', Times, serif;
 
-    font-size: 0.875rem;
+    font-size: var(--font-size-base, 1rem);
 
     font-weight: 600;
 
@@ -1988,7 +2166,7 @@
 
 
 
-  /* Full-width white → soft navy → white; mid stays light enough for navy title text */
+  /* Full-width white → soft gray → white */
 
   .app-page-title-band--invoice {
 
@@ -1998,11 +2176,11 @@
 
       #ffffff 0%,
 
-      #e8eef6 22%,
+      #E3E3E8 22%,
 
-      #b8c9dc 50%,
+      #c4c4c8 50%,
 
-      #e8eef6 78%,
+      #E3E3E8 78%,
 
       #ffffff 100%
 
@@ -2020,7 +2198,7 @@
 
     font-family: Georgia, 'Times New Roman', Times, serif;
 
-    font-size: 1.5rem;
+    font-size: var(--font-size-2xl, 1.625rem);
 
     font-weight: 700;
 
@@ -2162,7 +2340,7 @@
 
     margin: 0;
 
-    font-size: 0.875rem;
+    font-size: var(--font-size-base, 1rem);
 
     font-weight: 600;
 
@@ -2178,7 +2356,7 @@
 
     margin: 0.25rem 0 0;
 
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm, 0.9375rem);
 
     color: var(--text-secondary);
 
@@ -2333,7 +2511,7 @@
 }
 
 @media print {
-  .app-sidebar,
+  .app-topnav,
   .print\:hidden {
     display: none !important;
   }

@@ -9,6 +9,17 @@ export type User = {
   id: number;
   username: string;
   displayName: string;
+  role: 'ADMIN' | 'USER';
+};
+
+export type FinancialYear = {
+  id: number;
+  label: string;
+  startDate: string;
+  endDate: string | null;
+  status: 'ACTIVE' | 'CLOSED';
+  closedAt?: string | null;
+  closedBy?: { id: number; displayName: string; username: string } | null;
 };
 
 export type AccountCategory = {
@@ -205,7 +216,16 @@ export type Voucher = {
   deletedBy?: VoucherUser | null;
 };
 
-type ApiError = { error: string };
+type ApiError = { error: string; code?: string };
+
+export class ApiRequestError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.code = code;
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -214,7 +234,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'include',
   });
   const data = (await response.json().catch(() => ({}))) as T & ApiError;
-  if (!response.ok) throw new Error(data.error ?? 'Request failed');
+  if (!response.ok) throw new ApiRequestError(data.error ?? 'Request failed', data.code);
   return data;
 }
 
@@ -464,6 +484,7 @@ export const api = {
     fromDate?: string;
     toDate?: string;
     type?: string;
+    financialYearId?: number;
     limit?: number;
     offset?: number;
   }) {
@@ -471,6 +492,7 @@ export const api = {
     if (params?.fromDate) query.set('fromDate', params.fromDate);
     if (params?.toDate) query.set('toDate', params.toDate);
     if (params?.type) query.set('type', params.type);
+    if (params?.financialYearId != null) query.set('financialYearId', String(params.financialYearId));
     if (params?.limit != null) query.set('limit', String(params.limit));
     if (params?.offset != null) query.set('offset', String(params.offset));
     const suffix = query.toString() ? `?${query}` : '';
@@ -558,10 +580,12 @@ export const api = {
     return request<Account>(`/api/accounting/accounts/${id}`, { method: 'DELETE' });
   },
 
-  getLedger(accountId: number, params?: { fromDate?: string; toDate?: string }) {
-    const query = params?.fromDate || params?.toDate
-      ? `?${new URLSearchParams({ ...(params.fromDate ? { fromDate: params.fromDate } : {}), ...(params.toDate ? { toDate: params.toDate } : {}) })}`
-      : '';
+  getLedger(accountId: number, params?: { fromDate?: string; toDate?: string; financialYearId?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params?.fromDate) queryParams.set('fromDate', params.fromDate);
+    if (params?.toDate) queryParams.set('toDate', params.toDate);
+    if (params?.financialYearId != null) queryParams.set('financialYearId', String(params.financialYearId));
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return request<{
       account: { id: number; name: string; code: string; type: string };
       balance: number;
@@ -580,18 +604,55 @@ export const api = {
     }>(`/api/accounting/ledger/${accountId}${query}`);
   },
 
-  getTrialBalance() {
+  listFinancialYears() {
+    return request<FinancialYear[]>('/api/accounting/financial-years');
+  },
+  getActiveFinancialYear() {
+    return request<Pick<FinancialYear, 'id' | 'label' | 'startDate' | 'endDate' | 'status'>>(
+      '/api/accounting/financial-years/active',
+    );
+  },
+  closeFinancialYear(data: { confirm: true; password: string }) {
+    return request<{
+      closedYear: FinancialYear;
+      newYear: FinancialYear;
+      snapshot: {
+        closedLabel: string;
+        accountCount: number;
+        totalDebit: number;
+        totalCredit: number;
+        closedAt: string | null;
+        endDate: string | null;
+      };
+    }>('/api/accounting/financial-year/close', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getTrialBalance(params?: { financialYearId?: number }) {
+    const query = new URLSearchParams();
+    if (params?.financialYearId != null) query.set('financialYearId', String(params.financialYearId));
+    const suffix = query.toString() ? `?${query}` : '';
     return request<{
       accounts: { accountName: string; debit: number; credit: number }[];
       totalDebit: number;
       totalCredit: number;
       isBalanced: boolean;
-    }>('/api/accounting/trial-balance');
+      financialYearId?: number;
+      financialYearLabel?: string;
+    }>(`/api/accounting/trial-balance${suffix}`);
   },
 
-  getAccountBalanceReport(params: { date: string; categoryId?: number; side?: 'debit' | 'credit' | 'both' }) {
+  getAccountBalanceReport(params: {
+    date: string;
+    categoryId?: number;
+    side?: 'debit' | 'credit' | 'both';
+    financialYearId?: number;
+  }) {
     const query = new URLSearchParams({ date: params.date, side: params.side ?? 'both' });
     if (params.categoryId != null) query.set('categoryId', String(params.categoryId));
+    if (params.financialYearId != null) query.set('financialYearId', String(params.financialYearId));
     return request<{
       date: string;
       side: 'debit' | 'credit' | 'both';

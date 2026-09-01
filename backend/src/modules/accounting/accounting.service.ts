@@ -45,6 +45,14 @@ export async function getActiveFinancialYearId(db: DbClient): Promise<number> {
   return year.id;
 }
 
+export async function getActiveFinancialYear() {
+  const year = await prisma.financialYear.findFirst({
+    where: { status: FinancialYearStatus.ACTIVE },
+  });
+  if (!year) throw new AppError(400, 'No active financial year');
+  return year;
+}
+
 export async function assertActiveFinancialYear(
   db: DbClient,
   financialYearId: number | null | undefined,
@@ -189,6 +197,57 @@ export async function closeFinancialYear(userId: number) {
 
     return { closedYear, newYear };
   });
+}
+
+/**
+ * Auth/confirmation/trial-balance wrapper around closeFinancialYear.
+ * Does not change the snapshot / year-creation transaction itself.
+ */
+export async function closeActiveFinancialYear(params: {
+  userId: number;
+  confirm: boolean;
+  password: string;
+}) {
+  if (!params.confirm) {
+    throw new AppError(
+      400,
+      'Closing a financial year is irreversible and locks past vouchers for editing. Send confirm: true to proceed.',
+    );
+  }
+
+  const { verifyPasswordByUserId } = await import('../auth/auth.service');
+  const passwordOk = await verifyPasswordByUserId(params.userId, params.password);
+  if (!passwordOk) {
+    throw new AppError(401, 'Password is incorrect');
+  }
+
+  const trialBalance = await getTrialBalance();
+  if (!trialBalance.isBalanced) {
+    const mismatch = Math.abs(trialBalance.totalDebit - trialBalance.totalCredit);
+    throw new AppError(
+      400,
+      `Trial balance is not balanced. Debits ${trialBalance.totalDebit.toFixed(2)} vs credits ${trialBalance.totalCredit.toFixed(2)} (mismatch ${mismatch.toFixed(2)}). Correct the books before closing the year.`,
+      'TRIAL_BALANCE_MISMATCH',
+    );
+  }
+
+  const { closedYear, newYear } = await closeFinancialYear(params.userId);
+  const accountCount = await prisma.financialYearClosingBalance.count({
+    where: { financialYearId: closedYear.id },
+  });
+
+  return {
+    closedYear,
+    newYear,
+    snapshot: {
+      closedLabel: closedYear.label,
+      accountCount,
+      totalDebit: trialBalance.totalDebit,
+      totalCredit: trialBalance.totalCredit,
+      closedAt: closedYear.closedAt,
+      endDate: closedYear.endDate,
+    },
+  };
 }
 
 function isBankOrCashCategory(name: string) {
@@ -1974,14 +2033,20 @@ export async function listVouchers(
     fromDate?: string;
     toDate?: string;
     type?: VoucherType;
+    financialYearId?: number;
   },
   pagination?: { limit: number; offset: number },
 ): Promise<PaginatedResult<Awaited<ReturnType<typeof fetchVoucherListPage>>[number]>> {
-  let financialYearId: number | undefined;
-  try {
-    financialYearId = await getActiveFinancialYearId(prisma);
-  } catch {
-    financialYearId = undefined;
+  let financialYearId = filters?.financialYearId;
+  if (financialYearId == null) {
+    try {
+      financialYearId = await getActiveFinancialYearId(prisma);
+    } catch {
+      financialYearId = undefined;
+    }
+  } else {
+    const year = await prisma.financialYear.findFirst({ where: { id: financialYearId } });
+    if (!year) throw new AppError(404, 'Financial year not found');
   }
 
   const where: Prisma.VoucherWhereInput = {
@@ -2171,10 +2236,16 @@ export async function getAccountBalancesAsOf(params: {
   date: string;
   categoryId?: number;
   side?: 'debit' | 'credit' | 'both';
+  financialYearId?: number;
 }) {
   const side = params.side ?? 'both';
   const asOf = parseDateEnd(params.date);
-  const financialYearId = await getActiveFinancialYearId(prisma);
+  const financialYearId =
+    params.financialYearId != null
+      ? params.financialYearId
+      : await getActiveFinancialYearId(prisma);
+  const year = await prisma.financialYear.findFirst({ where: { id: financialYearId } });
+  if (!year) throw new AppError(404, 'Financial year not found');
   const { yearStart, yearEnd } = await loadFinancialYearBounds(prisma, financialYearId);
 
   const accounts = await prisma.account.findMany({
@@ -2301,7 +2372,59 @@ export async function getAccountBalancesAsOf(params: {
   };
 }
 
-export async function getTrialBalance() {
+export async function getTrialBalance(financialYearId?: number) {
+  let yearId = financialYearId;
+  let activeId: number | null = null;
+  try {
+    activeId = await getActiveFinancialYearId(prisma);
+  } catch {
+    activeId = null;
+  }
+  if (yearId == null) yearId = activeId ?? undefined;
+  if (yearId == null) throw new AppError(400, 'No active financial year');
+
+  const year = await prisma.financialYear.findFirst({ where: { id: yearId } });
+  if (!year) throw new AppError(404, 'Financial year not found');
+
+  // Closed years: use closing-balance snapshots. Active year: live ledger balances.
+  if (year.status === FinancialYearStatus.CLOSED) {
+    const snapshots = await prisma.financialYearClosingBalance.findMany({
+      where: { financialYearId: yearId },
+      include: { account: true },
+      orderBy: [{ account: { type: 'asc' } }, { account: { code: 'asc' } }],
+    });
+
+    const mapped = snapshots.map((s) => {
+      const balance = Number(s.balance);
+      const { debit, credit } = trialBalanceFromSignedBalance(balance);
+      return {
+        accountId: s.accountId,
+        accountCode: s.account.code,
+        accountName: s.account.name,
+        accountType: s.account.type,
+        isHidden: s.account.isHidden,
+        balance,
+        debit,
+        credit,
+      };
+    });
+
+    const totalDebit = mapped.reduce((sum, a) => sum + a.debit, 0);
+    const totalCredit = mapped.reduce((sum, a) => sum + a.credit, 0);
+    const accounts = mapped
+      .filter((a) => !a.isHidden)
+      .map(({ isHidden: _hidden, ...row }) => row);
+
+    return {
+      accounts,
+      totalDebit,
+      totalCredit,
+      isBalanced: isTrialBalanceBalanced(totalDebit, totalCredit),
+      financialYearId: yearId,
+      financialYearLabel: year.label,
+    };
+  }
+
   const ledgers = await prisma.ledger.findMany({
     where: {},
     include: { account: true },
@@ -2336,6 +2459,8 @@ export async function getTrialBalance() {
     totalDebit,
     totalCredit,
     isBalanced: isTrialBalanceBalanced(totalDebit, totalCredit),
+    financialYearId: yearId,
+    financialYearLabel: year.label,
   };
 }
 

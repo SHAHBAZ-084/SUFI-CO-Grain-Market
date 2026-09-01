@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { INVOICE_QUICK_LINKS, REPORT_QUICK_LINKS, VOUCHER_QUICK_LINKS } from '../config/navigation';
-import { defaultCardDescription, QuickLinkCard } from '../components/ui/QuickLinkCard';
 import { LegacyTable, PageShell, Tile } from '../components/ui/PageShell';
 import { api } from '../lib/api';
 import { formatLedgerAmount, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../lib/format';
@@ -11,7 +9,7 @@ type DashboardSummary = Awaited<ReturnType<typeof api.getDashboardSummary>>;
 function StatBox({ label, value }: { label: string; value: string }) {
   return (
     <Tile className="min-h-[4.5rem]">
-      <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-textMuted">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-textMuted">{label}</p>
       <p className="mt-1 text-xl font-semibold tabular-nums text-financial">{value}</p>
     </Tile>
   );
@@ -39,7 +37,7 @@ export function PosHomePage() {
         />
         <Tile className="min-h-[4.5rem] sm:col-span-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-textMuted">
+            <p className="text-xs font-semibold uppercase tracking-wide text-textMuted">
               Stock bags
             </p>
             <Link to="/reports/stock" className="text-xs font-medium text-financial hover:underline">
@@ -81,48 +79,6 @@ export function PosHomePage() {
           label="Vouchers Today"
           value={summary ? String(summary.vouchersToday) : '—'}
         />
-      </div>
-
-      <div>
-        <h2 className="legacy-section-title">New Voucher</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {VOUCHER_QUICK_LINKS.map((link) => (
-            <QuickLinkCard
-              key={link.to}
-              to={link.to}
-              title={link.label}
-              description={defaultCardDescription(link.to)}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h2 className="legacy-section-title">Invoices</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {INVOICE_QUICK_LINKS.map((link) => (
-            <QuickLinkCard
-              key={link.to}
-              to={link.to}
-              title={link.label}
-              description={defaultCardDescription(link.to)}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h2 className="legacy-section-title">Reports</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {REPORT_QUICK_LINKS.map((link) => (
-            <QuickLinkCard
-              key={link.to}
-              to={link.to}
-              title={link.label}
-              description={defaultCardDescription(link.to)}
-            />
-          ))}
-        </div>
       </div>
 
       <PanelSection summary={summary} />

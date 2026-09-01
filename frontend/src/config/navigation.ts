@@ -114,7 +114,10 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     id: 'system',
     label: 'System',
     icon: Settings,
-    items: [{ kind: 'link', label: 'System Preference', to: '/system/preferences' }],
+    items: [
+      { kind: 'link', label: 'System Preference', to: '/system/preferences' },
+      { kind: 'link', label: 'Financial Year', to: '/settings/financial-year' },
+    ],
   },
 ];
 
@@ -186,7 +189,6 @@ export function sectionHasActive(pathname: string, items: NavItem[]): boolean {
 }
 
 export function sectionIsActive(pathname: string, section: SidebarSection): boolean {
-  if (linkMatchesPath(pathname, getSectionLandingPath(section.id))) return true;
   return sectionHasActive(pathname, section.items);
 }
 

@@ -1,15 +1,30 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
 import { formatBackupFilename, getDatabaseFilePath } from './database-path';
 
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_DEV === '1';
 const BACKEND_PORT = process.env.PORT ?? '3847';
-const APP_ICON = path.join(__dirname, '../build/icon.png');
+
+/** Resolve Sufi & Co icon for window/taskbar (prefer .ico on Windows). */
+function resolveAppIcon(): string | undefined {
+  const names = process.platform === 'win32' ? ['icon.ico', 'icon.png'] : ['icon.png', 'icon.ico'];
+  const roots = [
+    path.join(__dirname, '..', 'build'),
+    path.join(app.getAppPath(), 'build'),
+    path.join(process.cwd(), 'build'),
+  ];
+  for (const name of names) {
+    for (const root of roots) {
+      const candidate = path.join(root, name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return undefined;
+}
 
 let mainWindow: BrowserWindow | null = null;
-
 function registerIpcHandlers(): void {
   ipcMain.handle('dialog:pick-backup-folder', async () => {
     const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
@@ -63,36 +78,99 @@ function registerIpcHandlers(): void {
   });
 }
 
+/** Writable DB + env for packaged Electron (asar is read-only). */
+function prepareProductionEnvironment(): void {
+  process.env.GRAIN_POS_ELECTRON = '1';
+  process.env.GRAIN_POS_USER_DATA = app.getPath('userData');
+  process.env.NODE_ENV = 'production';
+  process.env.PORT = BACKEND_PORT;
+  process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'sufi-co-grain-market-pos';
+  process.env.DEFAULT_ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USERNAME || 'admin';
+  process.env.DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+
+  const dataDir = path.join(app.getPath('userData'), 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  const dbFile = path.join(dataDir, 'grain-pos.db');
+  // Prisma on Windows: file:C:/... (avoid file:/// which some path parsers mishandle)
+  process.env.DATABASE_URL = `file:${dbFile.replace(/\\/g, '/')}`;
+
+  // Make `require('.prisma/client/default')` resolve outside the asar.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Module = require('module') as typeof import('module') & {
+    globalPaths: string[];
+    _initPaths: () => void;
+  };
+  const prismaRoots = [
+    path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules'),
+    path.join(process.resourcesPath, 'node_modules'),
+    path.join(process.resourcesPath, 'backend', 'node_modules'),
+  ].filter((dir) => fs.existsSync(path.join(dir, '.prisma', 'client')));
+
+  if (prismaRoots.length > 0) {
+    process.env.NODE_PATH = [...prismaRoots, process.env.NODE_PATH].filter(Boolean).join(path.delimiter);
+    Module._initPaths();
+  }
+
+  const engineCandidates = prismaRoots.map((root) =>
+    path.join(root, '.prisma', 'client', 'query_engine-windows.dll.node'),
+  );
+  for (const engine of engineCandidates) {
+    if (fs.existsSync(engine)) {
+      process.env.PRISMA_QUERY_ENGINE_LIBRARY = engine;
+      break;
+    }
+  }
+}
+
 async function startBackend(): Promise<void> {
   if (isDev) {
     return;
   }
 
-  process.env.PORT = BACKEND_PORT;
-  process.env.NODE_ENV = 'production';
+  prepareProductionEnvironment();
 
   const backendEntry = path.join(__dirname, '../backend/dist/index.js');
-  await import(backendEntry);
+  if (!fs.existsSync(backendEntry)) {
+    throw new Error(`Backend entry not found: ${backendEntry}`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const backend = require(backendEntry) as {
+    startGrainPosServer: () => Promise<{ ok: boolean; error?: string }>;
+  };
+
+  if (typeof backend.startGrainPosServer !== 'function') {
+    throw new Error('Backend startGrainPosServer() export missing — rebuild backend.');
+  }
+
+  const result = await backend.startGrainPosServer();
+  if (!result.ok) {
+    throw new Error(result.error || 'Backend failed to start');
+  }
 }
 
 function createWindow(): void {
+  const icon = resolveAppIcon();
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 1024,
     minHeight: 700,
     title: 'Grain Market POS',
-    icon: APP_ICON,
+    icon,
     show: false,
-    backgroundColor: '#f4f5f7',
+    autoHideMenuBar: true,
+    backgroundColor: '#E3E3E8',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // Keep the renderer (and Vite HMR websocket) alive while minimized on Windows.
       backgroundThrottling: false,
     },
   });
+
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.removeMenu();
 
   mainWindow.webContents.setBackgroundThrottling(false);
 
@@ -123,6 +201,18 @@ function createWindow(): void {
 }
 
 async function showStartupError(message: string): Promise<void> {
+  try {
+    const logPath = path.join(app.getPath('userData'), 'startup-error.log');
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.writeFileSync(
+      logPath,
+      `[${new Date().toISOString()}]\n${message}\n\nDATABASE_URL=${process.env.DATABASE_URL ?? ''}\nPRISMA_QUERY_ENGINE_LIBRARY=${process.env.PRISMA_QUERY_ENGINE_LIBRARY ?? ''}\n`,
+      'utf8',
+    );
+  } catch {
+    // ignore log failures
+  }
+
   await dialog.showMessageBox({
     type: 'error',
     title: 'Grain Market POS — Startup failed',
@@ -135,30 +225,14 @@ async function showStartupError(message: string): Promise<void> {
 function configureAutoUpdater(): void {
   if (isDev) return;
 
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on('update-downloaded', () => {
-    const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
-    const options = {
-      type: 'info' as const,
-      title: 'Update ready',
-      message: 'A new version has been downloaded.',
-      detail: 'Restart the app to apply the update.',
-      buttons: ['Restart now', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-    };
-    const promise = win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options);
-    promise.then(({ response }) => {
-      if (response === 0) autoUpdater.quitAndInstall();
-    });
-  });
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on('error', (err: Error) => {
     console.warn('Auto-update check failed:', err.message);
   });
 
+  // Publish is disabled for local builds — ignore failures quietly.
   autoUpdater.checkForUpdatesAndNotify().catch((err: unknown) => {
     console.warn('Could not check for updates:', err instanceof Error ? err.message : err);
   });
@@ -166,6 +240,11 @@ function configureAutoUpdater(): void {
 
 app.whenReady().then(async () => {
   try {
+    if (process.platform === 'win32') {
+      app.setAppUserModelId('com.sufico.grainmarket');
+    }
+    Menu.setApplicationMenu(null);
+
     registerIpcHandlers();
     await startBackend();
 
@@ -213,7 +292,7 @@ type HealthResponse = {
   };
 };
 
-async function waitForBackendHealth(maxAttempts = 40): Promise<HealthResponse> {
+async function waitForBackendHealth(maxAttempts = 60): Promise<HealthResponse> {
   const url = `http://127.0.0.1:${BACKEND_PORT}/api/health`;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -229,5 +308,5 @@ async function waitForBackendHealth(maxAttempts = 40): Promise<HealthResponse> {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
-  throw new Error('Backend failed to start');
+  throw new Error('Backend failed to start (health check timed out on port ' + BACKEND_PORT + ')');
 }

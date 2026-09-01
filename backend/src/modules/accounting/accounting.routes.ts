@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { AccountType, VoucherType } from '@prisma/client';
 import { z } from 'zod';
-import { requireAuth } from '../../middleware/auth';
+import { requireAdmin, requireAuth } from '../../middleware/auth';
 import { asyncHandler, param, validateBody } from '../../utils/helpers';
 import { parsePagination } from '../../utils/pagination';
 import * as accountingService from './accounting.service';
@@ -94,9 +94,19 @@ accountingRouter.get(
       typeParam && Object.values(VoucherType).includes(typeParam as VoucherType)
         ? (typeParam as VoucherType)
         : undefined;
+    const financialYearIdParam = req.query.financialYearId as string | undefined;
+    const financialYearId =
+      financialYearIdParam && financialYearIdParam.trim() !== ''
+        ? parseInt(financialYearIdParam, 10)
+        : undefined;
 
     const vouchers = await accountingService.listVouchers(
-      { fromDate, toDate, type },
+      {
+        fromDate,
+        toDate,
+        type,
+        financialYearId: Number.isFinite(financialYearId) ? financialYearId : undefined,
+      },
       parsePagination(req.query, { limit: 500, max: 500 }),
     );
     res.json(vouchers);
@@ -124,10 +134,17 @@ accountingRouter.get(
         ? sideParam
         : 'both';
 
+    const financialYearIdParam = req.query.financialYearId as string | undefined;
+    const financialYearId =
+      financialYearIdParam && financialYearIdParam.trim() !== ''
+        ? parseInt(financialYearIdParam, 10)
+        : undefined;
+
     const report = await accountingService.getAccountBalancesAsOf({
       date,
       categoryId: Number.isFinite(categoryId) ? categoryId : undefined,
       side,
+      financialYearId: Number.isFinite(financialYearId) ? financialYearId : undefined,
     });
     res.json(report);
   }),
@@ -181,8 +198,15 @@ accountingRouter.delete(
 
 accountingRouter.get(
   '/trial-balance',
-  asyncHandler(async (_req, res) => {
-    const trialBalance = await accountingService.getTrialBalance();
+  asyncHandler(async (req, res) => {
+    const financialYearIdParam = req.query.financialYearId as string | undefined;
+    const financialYearId =
+      financialYearIdParam && financialYearIdParam.trim() !== ''
+        ? parseInt(financialYearIdParam, 10)
+        : undefined;
+    const trialBalance = await accountingService.getTrialBalance(
+      Number.isFinite(financialYearId) ? financialYearId : undefined,
+    );
     res.json(trialBalance);
   }),
 );
@@ -215,10 +239,40 @@ accountingRouter.get(
   }),
 );
 
+accountingRouter.get(
+  '/financial-years/active',
+  asyncHandler(async (_req, res) => {
+    const year = await accountingService.getActiveFinancialYear();
+    res.json({
+      id: year.id,
+      label: year.label,
+      startDate: year.startDate,
+      endDate: year.endDate,
+      status: year.status,
+    });
+  }),
+);
+
 accountingRouter.post(
   '/financial-year/close',
+  requireAdmin,
+  validateBody(
+    z.object({
+      confirm: z.literal(true, {
+        errorMap: () => ({
+          message:
+            'Closing a financial year is irreversible. Set confirm to true after reviewing the warning.',
+        }),
+      }),
+      password: z.string().min(1, 'Password is required'),
+    }),
+  ),
   asyncHandler(async (req, res) => {
-    const result = await accountingService.closeFinancialYear(req.session.userId!);
+    const result = await accountingService.closeActiveFinancialYear({
+      userId: req.session.userId!,
+      confirm: req.body.confirm,
+      password: req.body.password,
+    });
     res.status(201).json(result);
   }),
 );

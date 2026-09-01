@@ -3,6 +3,10 @@ import { api, type Account, type AccountCategory, type Voucher } from '../../lib
 import { BILL_LETTERHEAD } from '../../config/billPrint';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
 import { downloadExcel, downloadPdf } from '../../lib/reportExport';
+import {
+  ReportFinancialYearSelect,
+  useReportFinancialYears,
+} from '../../components/reports/ReportFinancialYearSelect';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
@@ -10,6 +14,8 @@ import { VoucherDetailCard } from '../vouchers/VoucherPages';
 
 type LedgerResult = Awaited<ReturnType<typeof api.getLedger>>;
 type AccountBalanceResult = Awaited<ReturnType<typeof api.getAccountBalanceReport>>;
+type BalanceSideFilter = 'debit' | 'credit' | 'both';
+type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | 'PURCHASE_MAAL';
 
 function todayInputValue() {
   const d = new Date();
@@ -43,6 +49,13 @@ function voucherToAccount(voucher: Voucher) {
 }
 
 export function AccountReportsPage() {
+  const {
+    years,
+    financialYearId,
+    setFinancialYearId,
+    financialYearIdNum,
+    selectedYear,
+  } = useReportFinancialYears();
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categoryId, setCategoryId] = useState('');
@@ -101,6 +114,7 @@ export function AccountReportsPage() {
       const result = await api.getLedger(Number(accountId), {
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
+        financialYearId: financialYearIdNum,
       });
       setLedger(result);
       setLoaded(true);
@@ -115,8 +129,9 @@ export function AccountReportsPage() {
   function exportLedger(format: 'pdf' | 'excel') {
     if (!ledger) return;
     const accountName = ledger.account.name;
+    const fyLabel = selectedYear?.label;
     const period = [fromDate, toDate].filter(Boolean).join(' to ') || 'All dates';
-    const title = `Account Ledger — ${accountName} (${period})`;
+    const title = `Account Ledger — ${accountName}${fyLabel ? ` · FY ${fyLabel}` : ''} (${period})`;
     const headers = ['Date', 'Voucher#', 'Ref#', 'Type', 'Description', 'Debit', 'Credit', 'Balance'];
     const rows = ledger.rows.map((r) => [
       formatDate(r.date),
@@ -151,7 +166,17 @@ export function AccountReportsPage() {
     <PageShell title="Account Ledger" subtitle="View ledger entries for any account">
       <Panel className="overflow-visible">
         <h2 className="mb-4 text-lg font-semibold text-textPrimary">Account Ledger</h2>
-        <div className="mb-4 grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
+        <div className="mb-4 grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] xl:items-end">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={(next) => {
+              setFinancialYearId(next);
+              setLoaded(false);
+              setLedger(null);
+              setError('');
+            }}
+          />
           <div>
             <FieldLabel>Category</FieldLabel>
             <SearchSelect
@@ -179,7 +204,7 @@ export function AccountReportsPage() {
             <FieldLabel>To date</FieldLabel>
             <TextInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
           </div>
-          <PrimaryButton type="button" onClick={loadLedger} disabled={loading}>
+          <PrimaryButton type="button" onClick={loadLedger} disabled={loading || !financialYearId}>
             {loading ? 'Loading…' : 'Load Ledger'}
           </PrimaryButton>
         </div>
@@ -239,7 +264,7 @@ export function AccountReportsPage() {
                     <td className="py-2" colSpan={5}>Total / Closing</td>
                     <td className={`py-2 text-right ${ledgerDebitColorClass(ledger.summary.totalDebit)}`}>{formatLedgerAmount(ledger.summary.totalDebit)}</td>
                     <td className={`py-2 text-right ${ledgerCreditColorClass(ledger.summary.totalCredit)}`}>{formatLedgerAmount(ledger.summary.totalCredit)}</td>
-                    <td className={`py-2 text-right ${ledgerBalanceColorClass(ledger.summary.closingBalance)}`}>{formatLedgerBalance(ledger.summary.closingBalance)}</td>
+                    <td className={`py-2 text-right font-medium tabular-nums ${ledgerBalanceColorClass(ledger.summary.closingBalance)}`}>{formatLedgerBalance(ledger.summary.closingBalance)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -252,11 +277,25 @@ export function AccountReportsPage() {
 }
 
 export function TrialBalancePage() {
+  const { years, financialYearId, setFinancialYearId, financialYearIdNum, selectedYear } =
+    useReportFinancialYears();
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getTrialBalance>> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api.getTrialBalance().then(setData).catch(() => setData(null));
-  }, []);
+    if (financialYearIdNum == null) return;
+    setLoading(true);
+    setError('');
+    api
+      .getTrialBalance({ financialYearId: financialYearIdNum })
+      .then(setData)
+      .catch((err) => {
+        setData(null);
+        setError(err instanceof Error ? err.message : 'Failed to load trial balance');
+      })
+      .finally(() => setLoading(false));
+  }, [financialYearIdNum]);
 
   function exportTrialBalance(format: 'pdf' | 'excel') {
     if (!data) return;
@@ -267,7 +306,8 @@ export function TrialBalancePage() {
       row.credit.toFixed(2),
     ]);
     rows.push(['Total', data.totalDebit.toFixed(2), data.totalCredit.toFixed(2)]);
-    const title = `Detail Trial Balance${data.isBalanced ? '' : ' (Out of balance)'}`;
+    const fy = selectedYear?.label ? ` — FY ${selectedYear.label}` : '';
+    const title = `Detail Trial Balance${fy}${data.isBalanced ? '' : ' (Out of balance)'}`;
     if (format === 'excel') {
       downloadExcel('trial-balance.xlsx', 'Trial Balance', headers, rows);
     } else {
@@ -278,7 +318,17 @@ export function TrialBalancePage() {
   return (
     <PageShell title="Detail Trial Balance" subtitle="Debit and credit totals by account">
       <Panel>
-        {data ? (
+        <div className="mb-4 max-w-sm">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={setFinancialYearId}
+          />
+        </div>
+        {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
+        {loading ? (
+          <p className="text-sm text-textSecondary">Loading…</p>
+        ) : data ? (
           <>
             <div className="mb-4 flex flex-wrap gap-2">
               <SecondaryButton type="button" onClick={() => exportTrialBalance('pdf')}>Download PDF</SecondaryButton>
@@ -316,7 +366,7 @@ export function TrialBalancePage() {
             </p>
           </>
         ) : (
-          <p className="text-sm text-textSecondary">Loading…</p>
+          <p className="text-sm text-textSecondary">Select a financial year</p>
         )}
       </Panel>
     </PageShell>
@@ -788,8 +838,8 @@ export function StockReportPage() {
   );
 }
 
-type BalanceSideFilter = 'both' | 'debit' | 'credit';
-type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | 'PURCHASE_MAAL';
+
+
 
 function BalanceTable({
   rows,
@@ -842,6 +892,8 @@ function BalanceTable({
 }
 
 export function AccountBalancePage() {
+  const { years, financialYearId, setFinancialYearId, financialYearIdNum, selectedYear } =
+    useReportFinancialYears();
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [datedOn, setDatedOn] = useState(todayInputValue);
   const [categoryId, setCategoryId] = useState('');
@@ -857,9 +909,24 @@ export function AccountBalancePage() {
       .catch(() => setCategories([]));
   }, []);
 
+  useEffect(() => {
+    if (!selectedYear) return;
+    if (selectedYear.status === 'CLOSED' && selectedYear.endDate) {
+      setDatedOn(selectedYear.endDate.slice(0, 10));
+    } else if (selectedYear.status === 'ACTIVE') {
+      setDatedOn(todayInputValue());
+    }
+    setLoaded(false);
+    setReport(null);
+  }, [selectedYear?.id, selectedYear?.status, selectedYear?.endDate]);
+
   async function loadReport() {
     if (!datedOn) {
       setError('Select a date');
+      return;
+    }
+    if (financialYearIdNum == null) {
+      setError('Select a financial year');
       return;
     }
     setError('');
@@ -869,6 +936,7 @@ export function AccountBalancePage() {
         date: datedOn,
         categoryId: categoryId ? Number(categoryId) : undefined,
         side,
+        financialYearId: financialYearIdNum,
       });
       setReport(result);
       setLoaded(true);
@@ -887,7 +955,8 @@ export function AccountBalancePage() {
       row.accountName,
       formatLedgerBalance(row.balance),
     ]);
-    const title = `Account Balance as of ${formatDate(datedOn)}`;
+    const fy = selectedYear?.label ? ` · FY ${selectedYear.label}` : '';
+    const title = `Account Balance as of ${formatDate(datedOn)}${fy}`;
     const safeDate = datedOn.replace(/[^\d-]/g, '');
     const base = `account-balance-${safeDate}`;
     if (format === 'excel') {
@@ -902,7 +971,12 @@ export function AccountBalancePage() {
   return (
     <PageShell title="Account Balance" subtitle="Balances as of a selected date">
       <Panel className="overflow-visible">
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={setFinancialYearId}
+          />
           <div>
             <FieldLabel>Dated On</FieldLabel>
             <TextInput type="date" value={datedOn} onChange={(e) => setDatedOn(e.target.value)} />
@@ -933,7 +1007,7 @@ export function AccountBalancePage() {
               ]}
             />
           </div>
-          <FinancialButton type="button" onClick={loadReport} disabled={loading}>
+          <FinancialButton type="button" onClick={loadReport} disabled={loading || !financialYearId}>
             {loading ? 'Loading…' : 'View'}
           </FinancialButton>
         </div>
@@ -965,6 +1039,8 @@ export function AccountBalancePage() {
 }
 
 export function VouchersReportPage() {
+  const { years, financialYearId, setFinancialYearId, financialYearIdNum, selectedYear } =
+    useReportFinancialYears();
   const [fromDate, setFromDate] = useState(monthStartInputValue);
   const [toDate, setToDate] = useState(monthEndInputValue);
   const [voucherType, setVoucherType] = useState<VoucherTypeFilter>('all');
@@ -994,9 +1070,19 @@ export function VouchersReportPage() {
     return { totalAmount, byType };
   }, [vouchers]);
 
+  useEffect(() => {
+    setLoaded(false);
+    setVouchers([]);
+    setSelected(null);
+  }, [financialYearId]);
+
   async function loadReport() {
     if (!fromDate || !toDate) {
       setError('Select from and to dates');
+      return;
+    }
+    if (financialYearIdNum == null) {
+      setError('Select a financial year');
       return;
     }
     setError('');
@@ -1007,6 +1093,7 @@ export function VouchersReportPage() {
         fromDate,
         toDate,
         type: voucherType === 'all' ? undefined : voucherType,
+        financialYearId: financialYearIdNum,
         limit: 500,
         offset: 0,
       });
@@ -1064,7 +1151,8 @@ export function VouchersReportPage() {
       v.status === 'CANCELLED' ? 'Cancelled' : 'Active',
     ]);
     rows.push(['Total', '', '', '', '', formatLedgerAmount(totals.totalAmount), '', '']);
-    const title = `Vouchers ${fromDate} to ${toDate}`;
+    const fy = selectedYear?.label ? ` · FY ${selectedYear.label}` : '';
+    const title = `Vouchers ${fromDate} to ${toDate}${fy}`;
     const base = `vouchers-${fromDate}-to-${toDate}`;
     if (format === 'excel') {
       downloadExcel(`${base}.xlsx`, 'Vouchers', headers, rows);
@@ -1076,7 +1164,12 @@ export function VouchersReportPage() {
   return (
     <PageShell title="Vouchers Report" subtitle="Filter and review posted vouchers">
       <Panel>
-        <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+        <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={setFinancialYearId}
+          />
           <div>
             <FieldLabel>From Date</FieldLabel>
             <TextInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
@@ -1101,7 +1194,7 @@ export function VouchersReportPage() {
               ]}
             />
           </div>
-          <FinancialButton type="button" onClick={loadReport} disabled={loading}>
+          <FinancialButton type="button" onClick={loadReport} disabled={loading || !financialYearId}>
             {loading ? 'Loading…' : 'View'}
           </FinancialButton>
         </div>

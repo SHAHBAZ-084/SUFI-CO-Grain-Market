@@ -3,6 +3,14 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontSize: {
+        xs: ['var(--font-size-xs)', { lineHeight: '1.25rem' }],
+        sm: ['var(--font-size-sm)', { lineHeight: '1.375rem' }],
+        base: ['var(--font-size-base)', { lineHeight: '1.5rem' }],
+        lg: ['var(--font-size-lg)', { lineHeight: '1.625rem' }],
+        xl: ['var(--font-size-xl)', { lineHeight: '1.75rem' }],
+        '2xl': ['var(--font-size-2xl)', { lineHeight: '2rem' }],
+      },
       colors: {
         surface1: 'var(--surface-1)',
         surface2: 'var(--surface-2)',

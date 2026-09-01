@@ -14,8 +14,15 @@ import { ViewInvoicePage } from './pages/invoices/ViewInvoicePage';
 import { LoginPage } from './pages/LoginPage';
 import { BackupPage } from './pages/BackupPage';
 import { PosHomePage } from './pages/PosHomePage';
-import { SectionLandingPage } from './pages/SectionLandingPage';
-import { AccountReportsPage, AccountBalancePage, SalePurchaseReportsPage, StockReportPage, TrialBalancePage, VouchersReportPage } from './pages/reports/ReportPages';
+import {
+  AccountReportsPage,
+  AccountBalancePage,
+  SalePurchaseReportsPage,
+  StockReportPage,
+  TrialBalancePage,
+  VouchersReportPage,
+} from './pages/reports/ReportPages';
+import { FinancialYearPage } from './pages/system/FinancialYearPage';
 import { SystemPreferencesPage } from './pages/system/SystemPreferencesPage';
 import { UserInfoPage } from './pages/user/UserInfoPage';
 import { VoucherFormPage, VoucherListPage } from './pages/vouchers/VoucherPages';
@@ -26,60 +33,61 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <BrowserRouter>
-          <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route element={<AppShell />}>
-              <Route path="/" element={<PosHomePage />} />
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppShell />}>
+                  <Route path="/" element={<PosHomePage />} />
 
-              <Route path="/vouchers" element={<SectionLandingPage sectionId="vouchers" />} />
-              <Route path="/invoices" element={<SectionLandingPage sectionId="invoices" />} />
-              <Route path="/accounts" element={<SectionLandingPage sectionId="accounts" />} />
-              <Route path="/products" element={<SectionLandingPage sectionId="products" />} />
-              <Route path="/reports" element={<SectionLandingPage sectionId="reports" />} />
-              <Route path="/system" element={<SectionLandingPage sectionId="system" />} />
+                  <Route path="/vouchers" element={<Navigate to="/vouchers/payment" replace />} />
+                  <Route path="/invoices" element={<Navigate to="/invoices/sale-commission" replace />} />
+                  <Route path="/accounts" element={<Navigate to="/accounts/manage/add" replace />} />
+                  <Route path="/products" element={<Navigate to="/accounts/products/add" replace />} />
+                  <Route path="/reports" element={<Navigate to="/reports/accounts" replace />} />
+                  <Route path="/system" element={<Navigate to="/system/preferences" replace />} />
+                  <Route path="/settings/financial-year" element={<FinancialYearPage />} />
 
-              <Route path="/accounts/categories/add" element={<CategoryManagePage mode="add" />} />
-              <Route path="/accounts/categories/edit" element={<CategoryManagePage mode="edit" />} />
-              <Route path="/accounts/categories/remove" element={<CategoryManagePage mode="remove" />} />
-              <Route path="/accounts/manage/add" element={<AccountManagePage mode="add" />} />
-              <Route path="/accounts/manage/edit" element={<AccountManagePage mode="edit" />} />
-              <Route path="/accounts/manage/remove" element={<AccountManagePage mode="remove" />} />
-              <Route path="/accounts/products/add" element={<ProductAddPage />} />
-              <Route path="/accounts/products/remove" element={<ProductRemovePage />} />
-              <Route path="/accounts/sale-parties" element={<SalePartiesPage />} />
-              <Route path="/accounts/purchase-parties" element={<PurchasePartiesPage />} />
+                  <Route path="/accounts/categories/add" element={<CategoryManagePage mode="add" />} />
+                  <Route path="/accounts/categories/edit" element={<CategoryManagePage mode="edit" />} />
+                  <Route path="/accounts/categories/remove" element={<CategoryManagePage mode="remove" />} />
+                  <Route path="/accounts/manage/add" element={<AccountManagePage mode="add" />} />
+                  <Route path="/accounts/manage/edit" element={<AccountManagePage mode="edit" />} />
+                  <Route path="/accounts/manage/remove" element={<AccountManagePage mode="remove" />} />
+                  <Route path="/accounts/products/add" element={<ProductAddPage />} />
+                  <Route path="/accounts/products/remove" element={<ProductRemovePage />} />
+                  <Route path="/accounts/sale-parties" element={<SalePartiesPage />} />
+                  <Route path="/accounts/purchase-parties" element={<PurchasePartiesPage />} />
 
-              <Route path="/invoices/sale-commission" element={<InvoiceFormPage slug="sale-commission" />} />
-              <Route path="/invoices/sale-paunch" element={<InvoiceFormPage slug="sale-paunch" />} />
-              <Route path="/invoices/purchase-maal" element={<InvoiceFormPage slug="purchase-maal" />} />
-              <Route path="/invoices/kachi-maal" element={<InvoiceFormPage slug="kachi-maal" />} />
-              <Route path="/invoices/view-invoice" element={<ViewInvoicePage />} />
+                  <Route path="/invoices/sale-commission" element={<InvoiceFormPage slug="sale-commission" />} />
+                  <Route path="/invoices/sale-paunch" element={<InvoiceFormPage slug="sale-paunch" />} />
+                  <Route path="/invoices/purchase-maal" element={<InvoiceFormPage slug="purchase-maal" />} />
+                  <Route path="/invoices/kachi-maal" element={<InvoiceFormPage slug="kachi-maal" />} />
+                  <Route path="/invoices/view-invoice" element={<ViewInvoicePage />} />
 
-              <Route path="/inventory/bardana" element={<BardanaPage />} />
+                  <Route path="/inventory/bardana" element={<BardanaPage />} />
 
-              <Route path="/vouchers/payment" element={<VoucherFormPage kind="payment" />} />
-              <Route path="/vouchers/journal" element={<VoucherFormPage kind="journal" />} />
-              <Route path="/vouchers/receipt" element={<VoucherFormPage kind="receipt" />} />
-              <Route path="/vouchers/view" element={<VoucherListPage />} />
+                  <Route path="/vouchers/payment" element={<VoucherFormPage kind="payment" />} />
+                  <Route path="/vouchers/journal" element={<VoucherFormPage kind="journal" />} />
+                  <Route path="/vouchers/receipt" element={<VoucherFormPage kind="receipt" />} />
+                  <Route path="/vouchers/view" element={<VoucherListPage />} />
 
-              <Route path="/reports/accounts" element={<AccountReportsPage />} />
-              <Route path="/reports/account-balance" element={<AccountBalancePage />} />
-              <Route path="/reports/vouchers" element={<VouchersReportPage />} />
-              <Route path="/reports/trial-balance" element={<TrialBalancePage />} />
-              <Route path="/reports/sale-purchase" element={<SalePurchaseReportsPage />} />
-              <Route path="/reports/stock" element={<StockReportPage />} />
+                  <Route path="/reports/accounts" element={<AccountReportsPage />} />
+                  <Route path="/reports/account-balance" element={<AccountBalancePage />} />
+                  <Route path="/reports/vouchers" element={<VouchersReportPage />} />
+                  <Route path="/reports/trial-balance" element={<TrialBalancePage />} />
+                  <Route path="/reports/sale-purchase" element={<SalePurchaseReportsPage />} />
+                  <Route path="/reports/stock" element={<StockReportPage />} />
 
-              <Route path="/system/preferences" element={<SystemPreferencesPage />} />
-              <Route path="/backup" element={<BackupPage />} />
-              <Route path="/user" element={<UserInfoPage />} />
-            </Route>
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
+                  <Route path="/system/preferences" element={<SystemPreferencesPage />} />
+                  <Route path="/backup" element={<BackupPage />} />
+                  <Route path="/user" element={<UserInfoPage />} />
+                </Route>
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

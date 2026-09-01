@@ -15,6 +15,10 @@ export function UserInfoPage() {
           <p className="text-xs uppercase tracking-wide text-textSecondary">Username</p>
           <p className="text-textPrimary">{user?.username}</p>
         </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-textSecondary">Role</p>
+          <p className="text-textPrimary">{user?.role ?? '—'}</p>
+        </div>
         <SecondaryButton onClick={() => logout()}>Sign out</SecondaryButton>
       </Panel>
     </PageShell>

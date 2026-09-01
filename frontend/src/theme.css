@@ -1,24 +1,28 @@
 :root,
 [data-theme='light'] {
-  /* Legacy business palette — navy + white */
-  --surface-1: #F5F6F8;
+  /* Brand palette — charcoal #1E1E24 */
+  --brand: #1E1E24;
+  --brand-light: #2A2A32;
+  --brand-dark: #141418;
+
+  --surface-1: #E3E3E8;
   --surface-2: #FFFFFF;
-  --surface-3: #F5F6F8;
+  --surface-3: #E3E3E8;
 
-  --text-primary: #0A2E5C;
-  --text-secondary: #3D4F63;
-  --text-muted: #5B6B7C;
+  --text-primary: #1E1E24;
+  --text-secondary: #4A4A54;
+  --text-muted: #6B6B76;
   --border: #C5CCD4;
-  --border-strong: #1B3A6B;
+  --border-strong: #1E1E24;
 
-  --fill-accent: #1B3A6B;
+  --fill-accent: #1E1E24;
   --on-accent: #FFFFFF;
-  --bg-accent: #E8EDF4;
-  --text-accent: #0A2E5C;
+  --bg-accent: #E3E3E8;
+  --text-accent: #1E1E24;
 
-  --fill-financial: #0A2E5C;
+  --fill-financial: #1E1E24;
   --on-financial: #FFFFFF;
-  --text-financial: #0A2E5C;
+  --text-financial: #1E1E24;
 
   --text-success: #1E5C4A;
   --text-danger: #A32D2D;
@@ -30,26 +34,26 @@
 
   --voucher-payment: #A32D2D;
   --voucher-receipt: #1E5C4A;
-  --voucher-journal: #1B3A6B;
+  --voucher-journal: #1E1E24;
   --voucher-kachi: #7D5A00;
 
   --metric-cash-bg: #FFFFFF;
-  --metric-cash-accent: #0A2E5C;
+  --metric-cash-accent: #1E1E24;
   --metric-receivables-bg: #FFFFFF;
-  --metric-receivables-accent: #0A2E5C;
+  --metric-receivables-accent: #1E1E24;
   --metric-payables-bg: #FFFFFF;
-  --metric-payables-accent: #0A2E5C;
+  --metric-payables-accent: #1E1E24;
   --metric-vouchers-bg: #FFFFFF;
-  --metric-vouchers-accent: #0A2E5C;
+  --metric-vouchers-accent: #1E1E24;
 
-  --card-sale-commission-bg: #E8EDF4;
-  --card-sale-commission-accent: #0A2E5C;
-  --card-sale-paunch-bg: #E8EDF4;
-  --card-sale-paunch-accent: #0A2E5C;
-  --card-purchase-maal-bg: #E8EDF4;
-  --card-purchase-maal-accent: #0A2E5C;
-  --card-kachi-maal-bg: #E8EDF4;
-  --card-kachi-maal-accent: #0A2E5C;
+  --card-sale-commission-bg: #E3E3E8;
+  --card-sale-commission-accent: #1E1E24;
+  --card-sale-paunch-bg: #E3E3E8;
+  --card-sale-paunch-accent: #1E1E24;
+  --card-purchase-maal-bg: #E3E3E8;
+  --card-purchase-maal-accent: #1E1E24;
+  --card-kachi-maal-bg: #E3E3E8;
+  --card-kachi-maal-accent: #1E1E24;
 
   /* Dashboard quick-link accents */
   --ql-payment: #B42318;
@@ -69,20 +73,20 @@
   --ql-purchase-maal-hover: #F4F0FA;
   --ql-kachi-maal: #9A7B1A;
   --ql-kachi-maal-hover: #FBF6E8;
-  --ql-view: #1B3A6B;
-  --ql-view-hover: #EEF2F8;
-  --ql-report: #2E5984;
-  --ql-report-hover: #ECF1F7;
+  --ql-view: #1E1E24;
+  --ql-view-hover: #E3E3E8;
+  --ql-report: #1E1E24;
+  --ql-report-hover: #E3E3E8;
 
   --dropdown-bg: #FFFFFF;
-  --dropdown-border: #1B3A6B;
+  --dropdown-border: #1E1E24;
   --dropdown-shadow: none;
 
   --sidebar-width: 240px;
-  --nav-bg: #0A2E5C;
-  --nav-bg-light: #1B3A6B;
-  --nav-border: #071E3D;
-  --nav-text: #D8E2EE;
+  --nav-bg: #1E1E24;
+  --nav-bg-light: #2A2A32;
+  --nav-border: #141418;
+  --nav-text: #D8D8DC;
   --nav-text-hover: #FFFFFF;
   --nav-hover-bg: rgba(255, 255, 255, 0.08);
   --nav-active-bg: rgba(255, 255, 255, 0.14);
@@ -90,27 +94,42 @@
 
   --radius-sm: 2px;
   --radius-md: 4px;
+
+  --app-control-h: 2.75rem;
+  --app-label-h: 1.5625rem;
+
+  --font-size-xs: 0.8125rem;
+  --font-size-sm: 0.9375rem;
+  --font-size-base: 1rem;
+  --font-size-md: 1.0625rem;
+  --font-size-lg: 1.1875rem;
+  --font-size-xl: 1.375rem;
+  --font-size-2xl: 1.625rem;
 }
 
 [data-theme='dark'] {
-  --surface-1: #1A2433;
-  --surface-2: #222D3D;
-  --surface-3: #141C28;
+  --brand: #1E1E24;
+  --brand-light: #2A2A32;
+  --brand-dark: #141418;
 
-  --text-primary: #E8EDF4;
-  --text-secondary: #B8C4D4;
-  --text-muted: #8A98A8;
-  --border: #3D4F63;
-  --border-strong: #6B7F96;
+  --surface-1: #1A1A20;
+  --surface-2: #222228;
+  --surface-3: #141418;
 
-  --fill-accent: #3D5F8F;
+  --text-primary: #ECECEF;
+  --text-secondary: #B8B8C0;
+  --text-muted: #8A8A94;
+  --border: #3A3A44;
+  --border-strong: #6B6B76;
+
+  --fill-accent: #2A2A32;
   --on-accent: #FFFFFF;
-  --bg-accent: #1A3050;
-  --text-accent: #C8D4E4;
+  --bg-accent: #2A2A32;
+  --text-accent: #ECECEF;
 
-  --fill-financial: #1B3A6B;
+  --fill-financial: #1E1E24;
   --on-financial: #FFFFFF;
-  --text-financial: #C8D4E4;
+  --text-financial: #ECECEF;
 
   --text-success: #6BC4A8;
   --text-danger: #E88888;
@@ -122,26 +141,26 @@
 
   --voucher-payment: #E88888;
   --voucher-receipt: #6BC4A8;
-  --voucher-journal: #8BB4E8;
+  --voucher-journal: #C8C8D0;
   --voucher-kachi: #D4A843;
 
-  --metric-cash-bg: #222D3D;
-  --metric-cash-accent: #C8D4E4;
-  --metric-receivables-bg: #222D3D;
-  --metric-receivables-accent: #C8D4E4;
-  --metric-payables-bg: #222D3D;
-  --metric-payables-accent: #C8D4E4;
-  --metric-vouchers-bg: #222D3D;
-  --metric-vouchers-accent: #C8D4E4;
+  --metric-cash-bg: #222228;
+  --metric-cash-accent: #ECECEF;
+  --metric-receivables-bg: #222228;
+  --metric-receivables-accent: #ECECEF;
+  --metric-payables-bg: #222228;
+  --metric-payables-accent: #ECECEF;
+  --metric-vouchers-bg: #222228;
+  --metric-vouchers-accent: #ECECEF;
 
-  --card-sale-commission-bg: #222D3D;
-  --card-sale-commission-accent: #C8D4E4;
-  --card-sale-paunch-bg: #222D3D;
-  --card-sale-paunch-accent: #C8D4E4;
-  --card-purchase-maal-bg: #222D3D;
-  --card-purchase-maal-accent: #C8D4E4;
-  --card-kachi-maal-bg: #222D3D;
-  --card-kachi-maal-accent: #C8D4E4;
+  --card-sale-commission-bg: #222228;
+  --card-sale-commission-accent: #ECECEF;
+  --card-sale-paunch-bg: #222228;
+  --card-sale-paunch-accent: #ECECEF;
+  --card-purchase-maal-bg: #222228;
+  --card-purchase-maal-accent: #ECECEF;
+  --card-kachi-maal-bg: #222228;
+  --card-kachi-maal-accent: #ECECEF;
 
   --ql-payment: #E88888;
   --ql-payment-bg: #3A2224;
@@ -160,19 +179,19 @@
   --ql-purchase-maal-hover: #241E30;
   --ql-kachi-maal: #D4A843;
   --ql-kachi-maal-hover: #2A2418;
-  --ql-view: #8BB4E8;
-  --ql-view-hover: #1A2433;
-  --ql-report: #7BA3C9;
-  --ql-report-hover: #1A2430;
+  --ql-view: #ECECEF;
+  --ql-view-hover: #1A1A20;
+  --ql-report: #ECECEF;
+  --ql-report-hover: #1A1A20;
 
-  --dropdown-bg: #222D3D;
-  --dropdown-border: #6B7F96;
+  --dropdown-bg: #222228;
+  --dropdown-border: #6B6B76;
   --dropdown-shadow: none;
 
-  --nav-bg: #071E3D;
-  --nav-bg-light: #0A2E5C;
-  --nav-border: #051220;
-  --nav-text: #C8D4E4;
+  --nav-bg: #1E1E24;
+  --nav-bg-light: #2A2A32;
+  --nav-border: #141418;
+  --nav-text: #C8C8D0;
   --nav-text-hover: #FFFFFF;
   --nav-hover-bg: rgba(255, 255, 255, 0.08);
   --nav-active-bg: rgba(255, 255, 255, 0.12);

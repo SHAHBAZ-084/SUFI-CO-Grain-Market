@@ -9,24 +9,56 @@ import { logger } from './lib/logger';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 let startupStatus: Awaited<ReturnType<typeof initializeDatabase>> | null = null;
+let httpServer: ReturnType<ReturnType<typeof createApp>['listen']> | null = null;
 
-async function main() {
+/** Start API + static UI. Used by Electron production and by `node backend/dist/index.js`. */
+export async function startGrainPosServer(): Promise<{
+  ok: boolean;
+  error?: string;
+  port: number;
+}> {
   startupStatus = await initializeDatabase(prisma);
   if (!startupStatus.ok) {
     logger.error('Startup aborted — database not ready', startupStatus);
-    process.exit(1);
+    return {
+      ok: false,
+      error: startupStatus.error ?? 'Database not ready',
+      port: env.port,
+    };
   }
 
   const app = createApp(() => startupStatus);
 
-  const server = app.listen(env.port, '127.0.0.1', () => {
-    logger.info(`Grain Market POS API listening on http://127.0.0.1:${env.port}`);
+  await new Promise<void>((resolve, reject) => {
+    httpServer = app.listen(env.port, '127.0.0.1', () => {
+      logger.info(`Grain Market POS API listening on http://127.0.0.1:${env.port}`);
+      resolve();
+    });
+    httpServer.on('error', (err) => reject(err));
   });
+
+  return { ok: true, port: env.port };
+}
+
+export async function stopGrainPosServer(): Promise<void> {
+  if (httpServer) {
+    await new Promise<void>((resolve) => {
+      httpServer?.close(() => resolve());
+    });
+    httpServer = null;
+  }
+  await shutdownDatabase(prisma);
+}
+
+async function main() {
+  const result = await startGrainPosServer();
+  if (!result.ok) {
+    process.exit(1);
+  }
 
   const shutdown = async (signal: string) => {
     logger.info(`Received ${signal}, shutting down…`);
-    server.close();
-    await shutdownDatabase(prisma);
+    await stopGrainPosServer();
     process.exit(0);
   };
 
@@ -34,9 +66,12 @@ async function main() {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
-main().catch((err) => {
-  logger.error('Fatal startup error', { err: String(err) });
-  process.exit(1);
-});
+// Only auto-start when run directly (not when Electron imports this module).
+if (require.main === module && process.env.GRAIN_POS_ELECTRON !== '1') {
+  main().catch((err) => {
+    logger.error('Fatal startup error', { err: String(err) });
+    process.exit(1);
+  });
+}
 
 export default createApp;

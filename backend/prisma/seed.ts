@@ -20,6 +20,7 @@ async function main() {
         username,
         passwordHash,
         displayName: 'Shop Owner',
+        role: 'ADMIN',
       },
     });
     console.log(`Created default user "${username}". Change the password after first login.`);

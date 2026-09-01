@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
+import { fileURLToPath } from 'url';
 
 function readDatabaseUrlFromEnv(backendRoot: string): string {
   const envPath = path.join(backendRoot, '.env');
@@ -13,13 +14,35 @@ function readDatabaseUrlFromEnv(backendRoot: string): string {
   return match?.[1] ?? match?.[2] ?? match?.[3] ?? 'file:./data/grain-pos.db';
 }
 
+function resolveSqliteFileUrl(url: string): string {
+  if (url.startsWith('file:')) {
+    try {
+      return fileURLToPath(url);
+    } catch {
+      const raw = url.replace(/^file:/, '');
+      if (path.isAbsolute(raw) || /^[A-Za-z]:[\\/]/.test(raw)) return raw;
+      return path.resolve(raw);
+    }
+  }
+  if (path.isAbsolute(url) || /^[A-Za-z]:[\\/]/.test(url)) return url;
+  return path.resolve(url);
+}
+
 /** Resolve the on-disk SQLite file (mirrors backend/src/lib/database-path.ts). */
 export function getDatabaseFilePath(): string {
+  if (process.env.DATABASE_URL) {
+    return resolveSqliteFileUrl(process.env.DATABASE_URL);
+  }
+
+  if (app.isPackaged) {
+    return path.join(app.getPath('userData'), 'data', 'grain-pos.db');
+  }
+
   const backendRoot = path.join(app.getAppPath(), 'backend');
   const url = readDatabaseUrlFromEnv(backendRoot);
   const raw = url.replace(/^file:/, '');
 
-  if (path.isAbsolute(raw)) {
+  if (path.isAbsolute(raw) || /^[A-Za-z]:[\\/]/.test(raw)) {
     return raw;
   }
 

@@ -1,14 +1,31 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 /** Resolve the on-disk SQLite file from DATABASE_URL (file:…). */
 export function getDatabaseFilePath(): string {
   const url = process.env.DATABASE_URL ?? 'file:./data/grain-pos.db';
-  const raw = url.replace(/^file:/, '');
-  if (path.isAbsolute(raw)) return raw;
-  // Resolve relative to backend package root (works for src/ and dist/).
+
+  if (url.startsWith('file:')) {
+    try {
+      // Handles file:///C:/... and file:/C:/... correctly on Windows.
+      return fileURLToPath(url);
+    } catch {
+      const raw = url.replace(/^file:/, '');
+      if (path.isAbsolute(raw) || /^[A-Za-z]:[\\/]/.test(raw)) {
+        return path.normalize(raw);
+      }
+      const backendRoot = path.resolve(__dirname, '../..');
+      return path.resolve(backendRoot, raw);
+    }
+  }
+
+  if (path.isAbsolute(url) || /^[A-Za-z]:[\\/]/.test(url)) {
+    return path.normalize(url);
+  }
+
   const backendRoot = path.resolve(__dirname, '../..');
-  return path.resolve(backendRoot, raw);
+  return path.resolve(backendRoot, url);
 }
 
 export function getBackupDirectory(): string {

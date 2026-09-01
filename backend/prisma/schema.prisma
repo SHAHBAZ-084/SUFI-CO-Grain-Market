@@ -45,6 +45,11 @@ enum FinancialYearStatus {
   CLOSED
 }
 
+enum UserRole {
+  ADMIN
+  USER
+}
+
 enum InvoiceType {
   SALE_COMMISSION
   SALE_PAUNCH
@@ -63,6 +68,7 @@ model User {
   username     String   @unique
   passwordHash String
   displayName  String?
+  role         UserRole @default(ADMIN)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
