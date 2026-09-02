@@ -26,7 +26,10 @@ productsRouter.post(
     }),
   ),
   asyncHandler(async (req, res) => {
-    const product = await productsService.createProduct(req.body);
+    const product = await productsService.createProduct({
+      ...req.body,
+      createdById: req.session.userId!,
+    });
     res.status(201).json(product);
   }),
 );

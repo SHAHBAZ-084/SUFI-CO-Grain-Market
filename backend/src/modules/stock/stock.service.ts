@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import { USER_VISIBLE_PRODUCT_STATUS } from '../approvals/record-status';
 import {
   STOCK_TRACKING_STARTED_AT,
   bagTypeFromMode,
@@ -154,7 +155,7 @@ export async function getStockReport(params: {
   bagType: 'BORI' | 'THELA';
 }) {
   const product = await prisma.product.findFirst({
-    where: { id: params.productId, isActive: true },
+    where: { id: params.productId, isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
   });
   if (!product) throw new AppError(404, 'Product not found');
 
@@ -211,7 +212,7 @@ export async function getStockReport(params: {
 /** Net Bori/Thela bag balances per product for dashboard glance. */
 export async function getProductStockBalances() {
   const products = await prisma.product.findMany({
-    where: { isActive: true },
+    where: { isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
     select: { id: true, name: true, code: true },
     orderBy: { name: 'asc' },
   });

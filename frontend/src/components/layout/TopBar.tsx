@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SIDEBAR_NAV, NavItem, sectionIsActive } from '../../config/navigation';
+import { api } from '../../lib/api';
+import { APPROVALS_CHANGED_EVENT } from '../../lib/approvals';
 import { voucherTypeColorClass } from '../../lib/format';
 
 function voucherNavLabelClass(label: string) {
@@ -103,9 +105,47 @@ function NavDropdown({
   );
 }
 
+function PendingApprovalsNavLink({ active }: { active: boolean }) {
+  const location = useLocation();
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() {
+      try {
+        const rows = await api.listPendingApprovals();
+        if (!cancelled) setCount(rows.length);
+      } catch {
+        if (!cancelled) setCount(0);
+      }
+    }
+    void refresh();
+    window.addEventListener(APPROVALS_CHANGED_EVENT, refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(APPROVALS_CHANGED_EVENT, refresh);
+    };
+  }, [location.pathname]);
+
+  return (
+    <Link
+      to="/approvals"
+      className={`app-topnav-link ${active ? 'is-active' : ''}`}
+    >
+      Approvals
+      {count > 0 ? (
+        <span className="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+          {count > 99 ? '99+' : count}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
 export function TopBar() {
   const location = useLocation();
   const dashboardActive = location.pathname === '/';
+  const approvalsActive = location.pathname === '/approvals';
 
   return (
     <header className="app-topnav">
@@ -128,6 +168,8 @@ export function TopBar() {
               active={sectionIsActive(location.pathname, section)}
             />
           ))}
+
+          <PendingApprovalsNavLink active={approvalsActive} />
 
           <Link
             to="/backup"

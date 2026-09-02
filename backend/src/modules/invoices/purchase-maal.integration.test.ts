@@ -1,4 +1,4 @@
-import { AccountType, BoriThelaMode } from '@prisma/client';
+import { AccountType, BoriThelaMode, RecordStatus } from '@prisma/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import {
@@ -8,6 +8,7 @@ import {
 } from '../accounting/accounting.service';
 import { createProduct, MAAL_KHATA_CATEGORY_NAME } from '../products/products.service';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
+import { approveInvoice, approveProduct, loadInvoiceWithVouchers } from '../../test-helpers/approval';
 import { updateSystemPreferences } from '../preferences/preferences.service';
 import { createPurchaseMaalInvoice } from './purchase-maal.service';
 
@@ -23,7 +24,7 @@ async function ensureAccountInCategory(categoryName: string, accountName: string
   });
   if (!account) {
     account = await prisma.account.create({
-      data: { categoryId: category.id, name: accountName, code, type },
+      data: { categoryId: category.id, name: accountName, code, type, status: RecordStatus.ACTIVE },
       include: { ledger: true },
     });
     await prisma.ledger.create({ data: { accountId: account.id, balance: 0 } });
@@ -75,6 +76,7 @@ describe('Purchase Maal posting', () => {
     )).id;
 
     const wheat = await createProduct({ name: `Wheat PM Test ${Date.now()}` });
+    await approveProduct(wheat.id);
     expect(wheat.account.categoryId).toBeTruthy();
     const category = await prisma.accountCategory.findUnique({ where: { id: wheat.account.categoryId } });
     expect(category?.name).toBe(MAAL_KHATA_CATEGORY_NAME);
@@ -83,7 +85,7 @@ describe('Purchase Maal posting', () => {
   });
 
   it('posts dammi to the purchase party (not Commission) and Maal Khata absorbs the buyer dammi debit', async () => {
-    const invoice = await createPurchaseMaalInvoice({
+    const pending = await createPurchaseMaalInvoice({
       invoiceDate,
       billNo: 'PM-BILL-1',
       productId: wheatProductId,
@@ -106,6 +108,8 @@ describe('Purchase Maal posting', () => {
       ],
       createdById: userId,
     });
+    await approveInvoice(pending.id);
+    const invoice = await loadInvoiceWithVouchers(pending.id);
 
     expect(invoice.reference).toMatch(/^PM-/);
     expect(Number(invoice.total)).toBe(50_800);

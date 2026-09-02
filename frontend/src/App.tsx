@@ -25,6 +25,9 @@ import {
 import { FinancialYearPage } from './pages/system/FinancialYearPage';
 import { SystemPreferencesPage } from './pages/system/SystemPreferencesPage';
 import { UserInfoPage } from './pages/user/UserInfoPage';
+import { AccountAdjustmentPage } from './pages/adjustments/AccountAdjustmentPage';
+import { StockAdjustmentPage } from './pages/adjustments/StockAdjustmentPage';
+import { PendingApprovalsPage } from './pages/approvals/PendingApprovalsPage';
 import { UserManagementPage } from './pages/user/UserManagementPage';
 import { VoucherFormPage, VoucherListPage } from './pages/vouchers/VoucherPages';
 
@@ -58,6 +61,8 @@ export default function App() {
                   <Route path="/accounts/products/remove" element={<ProductRemovePage />} />
                   <Route path="/accounts/sale-parties" element={<SalePartiesPage />} />
                   <Route path="/accounts/purchase-parties" element={<PurchasePartiesPage />} />
+                  <Route path="/accounts/adjustment" element={<AccountAdjustmentPage />} />
+                  <Route path="/accounts/products/stock-adjustment" element={<StockAdjustmentPage />} />
 
                   <Route path="/invoices/sale-commission" element={<InvoiceFormPage slug="sale-commission" />} />
                   <Route path="/invoices/sale-paunch" element={<InvoiceFormPage slug="sale-paunch" />} />
@@ -81,6 +86,7 @@ export default function App() {
 
                   <Route path="/system/preferences" element={<SystemPreferencesPage />} />
                   <Route path="/system/users" element={<UserManagementPage />} />
+                  <Route path="/approvals" element={<PendingApprovalsPage />} />
                   <Route path="/backup" element={<BackupPage />} />
                   <Route path="/user" element={<UserInfoPage />} />
                 </Route>

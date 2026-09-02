@@ -1,4 +1,4 @@
-import { AccountType, BoriThelaMode } from '@prisma/client';
+import { AccountType, BoriThelaMode, RecordStatus } from '@prisma/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import {
@@ -8,7 +8,9 @@ import {
 } from '../accounting/accounting.service';
 import { createProduct, MAAL_KHATA_CATEGORY_NAME } from '../products/products.service';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
+import { approveInvoice, approveProduct, loadInvoiceWithVouchers } from '../../test-helpers/approval';
 import { updateSystemPreferences } from '../preferences/preferences.service';
+import { createPurchaseMaalInvoice } from './purchase-maal.service';
 import { createSalePaunchInvoice } from './sale-paunch.service';
 
 async function ensureAccountInCategory(categoryName: string, accountName: string, type: AccountType, code: string) {
@@ -23,7 +25,7 @@ async function ensureAccountInCategory(categoryName: string, accountName: string
   });
   if (!account) {
     account = await prisma.account.create({
-      data: { categoryId: category.id, name: accountName, code, type },
+      data: { categoryId: category.id, name: accountName, code, type, status: RecordStatus.ACTIVE },
       include: { ledger: true },
     });
     await prisma.ledger.create({ data: { accountId: account.id, balance: 0 } });
@@ -44,6 +46,14 @@ async function voucherLegs(voucherId: number) {
     type: entry.type,
     amount: Number(entry.amount),
   }));
+}
+
+async function createApprovedSalePaunchInvoice(
+  data: Parameters<typeof createSalePaunchInvoice>[0],
+) {
+  const pending = await createSalePaunchInvoice(data);
+  await approveInvoice(pending.id);
+  return loadInvoiceWithVouchers(pending.id);
 }
 
 describe('Sale Paunch posting', () => {
@@ -74,14 +84,46 @@ describe('Sale Paunch posting', () => {
     )).id;
 
     const wheat = await createProduct({ name: `Wheat SP Test ${Date.now()}` });
+    await approveProduct(wheat.id);
     expect(wheat.account.categoryId).toBeTruthy();
     const category = await prisma.accountCategory.findUnique({ where: { id: wheat.account.categoryId } });
     expect(category?.name).toBe(MAAL_KHATA_CATEGORY_NAME);
     wheatMaalKhataId = wheat.accountId;
+
+    const purchasePartyId = (await ensureAccountInCategory(
+      KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE,
+      'PM Party SP Stock Seed',
+      AccountType.LIABILITY,
+      `SP-PM-SEED-${Date.now()}`,
+    )).id;
+
+    const pmSeed = await createPurchaseMaalInvoice({
+      invoiceDate,
+      billNo: `SP-STOCK-SEED-${Date.now()}`,
+      productId: wheat.id,
+      marketFeeEnabled: false,
+      mazduriEnabled: false,
+      lowerBardanaMode: null,
+      lowerBardanaQty: null,
+      lowerBardanaRate: null,
+      lines: [
+        {
+          partyAccountId: purchasePartyId,
+          boriOrThelaMode: BoriThelaMode.BORI,
+          bagCount: 100,
+          bhartii: 100,
+          dharanCount: 0,
+          looseKg: 0,
+          ratePerMaund: 2000,
+        },
+      ],
+      createdById: userId,
+    });
+    await approveInvoice(pmSeed.id);
   });
 
   it('posts balanced SALE_PAUNCH voucher with maal khata credit, paunch revenue, and sale party debit', async () => {
-    const invoice = await createSalePaunchInvoice({
+    const invoice = await createApprovedSalePaunchInvoice({
       invoiceDate,
       salePartyAccountId: salePartyId,
       billNo: 'SP-BILL-1',
@@ -132,7 +174,7 @@ describe('Sale Paunch posting', () => {
       miscId = (await ensureSalePaunchAccounts(tx)).misc.id;
     });
 
-    const invoice = await createSalePaunchInvoice({
+    const invoice = await createApprovedSalePaunchInvoice({
       invoiceDate,
       salePartyAccountId: salePartyId,
       miscAmount: 200,

@@ -79,6 +79,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
       },
       { kind: 'link', label: 'Sale Party', to: '/accounts/sale-parties' },
       { kind: 'link', label: 'Purchase Party', to: '/accounts/purchase-parties' },
+      { kind: 'link', label: 'Account Adjustment', to: '/accounts/adjustment' },
     ],
   },
   {
@@ -88,6 +89,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     items: [
       { kind: 'link', label: 'Add Product', to: '/accounts/products/add' },
       { kind: 'link', label: 'Remove Product', to: '/accounts/products/remove' },
+      { kind: 'link', label: 'Stock Adjustment', to: '/accounts/products/stock-adjustment' },
     ],
   },
   {
@@ -115,6 +117,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     label: 'System',
     icon: Settings,
     items: [
+      { kind: 'link', label: 'Pending Approvals', to: '/approvals' },
       { kind: 'link', label: 'User Management', to: '/system/users' },
       { kind: 'link', label: 'System Preference', to: '/system/preferences' },
       { kind: 'link', label: 'Financial Year', to: '/settings/financial-year' },
@@ -213,6 +216,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/user': 'User Information',
   '/backup': 'Database Backup',
+  '/approvals': 'Pending Approvals',
 };
 
 function collectRouteTitles(items: NavItem[], titles: Record<string, string>) {

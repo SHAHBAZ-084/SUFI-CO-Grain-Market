@@ -187,6 +187,31 @@ export type InvoiceDetail = Invoice & {
 export type VoucherAccount = { id: number; name: string; code: string };
 export type VoucherUser = { id: number; displayName: string; username: string };
 
+export type ApprovalKind =
+  | 'account'
+  | 'product'
+  | 'voucher'
+  | 'invoice'
+  | 'account-adjustment'
+  | 'stock-adjustment';
+
+export type PendingApprovalItem = {
+  kind: ApprovalKind;
+  id: number;
+  label: string;
+  sublabel?: string | null;
+  amount?: number | null;
+  reference?: string | null;
+  recordType?: string | null;
+  createdAt: string;
+  createdBy?: VoucherUser | null;
+};
+
+export type PendingApprovalDetail = {
+  kind: ApprovalKind;
+  record: Record<string, unknown>;
+};
+
 export type VoucherLedgerEntry = {
   id: number;
   type: string;
@@ -830,5 +855,57 @@ export const api = {
         netBill: number;
       };
     }>(`/api/reports/sale-purchase?${query.toString()}`);
+  },
+
+  listPendingApprovals() {
+    return request<PendingApprovalItem[]>('/api/approvals/pending');
+  },
+  getPendingApprovalDetail(kind: ApprovalKind, id: number) {
+    return request<PendingApprovalDetail>(`/api/approvals/${kind}/${id}`);
+  },
+  patchPendingApproval(kind: ApprovalKind, id: number, data: Record<string, unknown>) {
+    return request<Record<string, unknown>>(`/api/approvals/${kind}/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+  approvePendingRecord(kind: ApprovalKind, id: number) {
+    return request<{ ok: boolean; record: Record<string, unknown> }>(
+      `/api/approvals/${kind}/${id}/approve`,
+      { method: 'POST' },
+    );
+  },
+  rejectPendingRecord(kind: ApprovalKind, id: number) {
+    return request<{ ok: boolean; record: Record<string, unknown> }>(
+      `/api/approvals/${kind}/${id}/reject`,
+      { method: 'POST' },
+    );
+  },
+
+  createAccountAdjustment(data: {
+    accountId: number;
+    amount: number;
+    side: 'DR' | 'CR';
+    adjustmentDate: string;
+    notes?: string;
+  }) {
+    return request<Record<string, unknown>>('/api/adjustments/account', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  createStockAdjustment(data: {
+    productId: number;
+    bagType: 'BORI' | 'THELA';
+    direction: 'IN' | 'OUT';
+    bags: number;
+    amount: number;
+    adjustmentDate: string;
+    notes?: string;
+  }) {
+    return request<Record<string, unknown>>('/api/adjustments/stock', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };

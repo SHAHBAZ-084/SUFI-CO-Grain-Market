@@ -1,9 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { RecordStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import {
   activeFinancialYearStartDate,
   voucherDateInActiveYear,
 } from '../../test-helpers/financial-year';
+import { approveVoucher } from '../../test-helpers/approval';
 import {
   bootstrapChartOfAccounts,
   createVoucher,
@@ -25,6 +27,12 @@ async function ledgerBalance(accountId: number) {
   return Number(ledger.balance);
 }
 
+async function createApprovedVoucher(data: Parameters<typeof createVoucher>[0]) {
+  const pending = await createVoucher(data);
+  await approveVoucher(pending.id);
+  return pending;
+}
+
 describe('voucher posting (PART 7 scenarios)', () => {
   let userId: number;
   let cashId: number;
@@ -32,8 +40,10 @@ describe('voucher posting (PART 7 scenarios)', () => {
   let customerAccountId: number;
   let bankId: number;
   let voucherDate: string;
+  let refStamp: number;
 
   beforeAll(async () => {
+    refStamp = Date.now();
     voucherDate = await voucherDateInActiveYear();
     await bootstrapChartOfAccounts();
     const user = await prisma.user.findFirst();
@@ -43,24 +53,19 @@ describe('voucher posting (PART 7 scenarios)', () => {
     const cash = await accountByName('Cash in Hand');
     cashId = cash.id;
 
-    const accounts = await listAccounts();
-    let expense = accounts.find((a) => a.name.toLowerCase().includes('electricity'));
-    if (!expense) {
-      const expenseCat = await prisma.accountCategory.findFirst({ where: { name: 'Expenses' } });
-      if (!expenseCat) throw new Error('Expenses category missing');
-      const created = await prisma.account.create({
-        data: {
-          categoryId: expenseCat.id,
-          name: 'Electricity Expense',
-          code: 'EXP-ELEC',
-          type: 'EXPENSE',
-        },
-      });
-      await prisma.ledger.create({ data: { accountId: created.id, balance: 0 } });
-      electricityId = created.id;
-    } else {
-      electricityId = expense.id;
-    }
+    const expenseCat = await prisma.accountCategory.findFirst({ where: { name: 'Expenses' } });
+    if (!expenseCat) throw new Error('Expenses category missing');
+    const expense = await prisma.account.create({
+      data: {
+        categoryId: expenseCat.id,
+        name: `Electricity Expense ${refStamp}`,
+        code: `EXP-${refStamp}`,
+        type: 'EXPENSE',
+        status: RecordStatus.ACTIVE,
+      },
+    });
+    await prisma.ledger.create({ data: { accountId: expense.id, balance: 0 } });
+    electricityId = expense.id;
 
     let customerParty = await prisma.customer.findFirst({ where: { isActive: true } });
     if (!customerParty) {
@@ -80,7 +85,13 @@ describe('voucher posting (PART 7 scenarios)', () => {
     let bank = await prisma.account.findFirst({ where: { categoryId: bankCat.id, isActive: true } });
     if (!bank) {
       bank = await prisma.account.create({
-        data: { categoryId: bankCat.id, name: 'Test Bank', code: 'BNK-TEST', type: 'ASSET' },
+        data: {
+          categoryId: bankCat.id,
+          name: 'Test Bank',
+          code: 'BNK-TEST',
+          type: 'ASSET',
+          status: RecordStatus.ACTIVE,
+        },
       });
       await prisma.ledger.create({ data: { accountId: bank.id, balance: 0 } });
     }
@@ -91,7 +102,7 @@ describe('voucher posting (PART 7 scenarios)', () => {
     const cashBefore = await ledgerBalance(cashId);
     const expBefore = await ledgerBalance(electricityId);
 
-    await createVoucher({
+    await createApprovedVoucher({
       type: 'PAYMENT',
       debitAccountId: electricityId,
       creditAccountId: cashId,
@@ -99,7 +110,7 @@ describe('voucher posting (PART 7 scenarios)', () => {
       date: voucherDate,
       createdById: userId,
       description: 'Electricity bill',
-      reference: 'ELEC-BILL',
+      reference: `ELEC-BILL-${refStamp}`,
     });
 
     expect(await ledgerBalance(cashId)).toBe(cashBefore - 10000);
@@ -115,14 +126,14 @@ describe('voucher posting (PART 7 scenarios)', () => {
     const cashBefore = await ledgerBalance(cashId);
     const custBefore = await ledgerBalance(customerAccountId);
 
-    await createVoucher({
+    await createApprovedVoucher({
       type: 'RECEIPT',
       debitAccountId: cashId,
       creditAccountId: customerAccountId,
       amount: 50000,
       date: voucherDate,
       createdById: userId,
-      reference: 'RCPT-001',
+      reference: `RCPT-${refStamp}`,
     });
 
     expect(await ledgerBalance(cashId)).toBe(cashBefore + 50000);
@@ -137,7 +148,7 @@ describe('voucher posting (PART 7 scenarios)', () => {
     const bankBefore = await ledgerBalance(bankId);
     const cashBefore = await ledgerBalance(cashId);
 
-    await createVoucher({
+    await createApprovedVoucher({
       type: 'JOURNAL',
       debitAccountId: cashId,
       creditAccountId: bankId,
@@ -145,7 +156,7 @@ describe('voucher posting (PART 7 scenarios)', () => {
       date: voucherDate,
       createdById: userId,
       description: 'Bank to Cash transfer',
-      reference: 'BNK-XFER',
+      reference: `BNK-XFER-${refStamp}`,
     });
 
     expect(await ledgerBalance(bankId)).toBe(bankBefore - 20000);
@@ -160,14 +171,14 @@ describe('voucher posting (PART 7 scenarios)', () => {
 
   it('Backdated voucher sorts before later-dated entries in ledger report', async () => {
     const pastDate = await activeFinancialYearStartDate();
-    const voucher = await createVoucher({
+    const voucher = await createApprovedVoucher({
       type: 'JOURNAL',
       debitAccountId: cashId,
       creditAccountId: bankId,
       amount: 1000,
       date: pastDate,
       createdById: userId,
-      reference: 'BACKDATE-TEST',
+      reference: `BACKDATE-${refStamp}`,
     });
 
     const entries = await prisma.ledgerEntry.findMany({
@@ -184,14 +195,14 @@ describe('voucher posting (PART 7 scenarios)', () => {
     const cashBefore = await ledgerBalance(cashId);
     const bankBefore = await ledgerBalance(bankId);
 
-    const voucher = await createVoucher({
+    const voucher = await createApprovedVoucher({
       type: 'JOURNAL',
       debitAccountId: cashId,
       creditAccountId: bankId,
       amount: 3333,
       date: voucherDate,
       createdById: userId,
-      reference: 'CANCEL-TEST',
+      reference: `CANCEL-${refStamp}`,
     });
 
     expect(await ledgerBalance(cashId)).toBe(cashBefore + 3333);

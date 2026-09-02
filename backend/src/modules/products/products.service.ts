@@ -1,7 +1,7 @@
-import { AccountType } from '@prisma/client';
+import { AccountType, Prisma, RecordStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
-import { postOpeningBalanceForLedger } from '../accounting/accounting.service';
+import { USER_VISIBLE_PRODUCT_STATUS } from '../approvals/record-status';
 import {
   ensureMaalKhataCategoryInTx,
   generateNextMaalKhataCodeInTx,
@@ -12,7 +12,7 @@ export { MAAL_KHATA_CATEGORY_NAME, maalKhataAccountName } from './maal-khata';
 
 export async function listProducts() {
   return prisma.product.findMany({
-    where: { isActive: true },
+    where: { isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
     include: { account: { include: { ledger: true } } },
     orderBy: { name: 'asc' },
   });
@@ -24,6 +24,7 @@ export async function createProduct(data: {
   code?: string;
   openingBalance?: number;
   openingBalanceSide?: 'DR' | 'CR';
+  createdById?: number;
 }) {
   const name = data.name.trim();
   if (!name) throw new AppError(400, 'Product name is required');
@@ -58,19 +59,14 @@ export async function createProduct(data: {
         name: accountName,
         code,
         type: AccountType.ASSET,
+        status: RecordStatus.PENDING_APPROVAL,
+        createdById: data.createdById,
+        pendingOpeningBalance: amount > 0 ? amount : null,
+        pendingOpeningBalanceSide: amount > 0 ? side : null,
       },
     });
 
-    const ledger = await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
-
-    if (amount > 0) {
-      await postOpeningBalanceForLedger(tx, {
-        ledgerId: ledger.id,
-        accountName,
-        amount,
-        side,
-      });
-    }
+    await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
 
     const product = await tx.product.create({
       data: {
@@ -78,6 +74,8 @@ export async function createProduct(data: {
         code,
         unit: data.unit?.trim() || null,
         accountId: account.id,
+        status: RecordStatus.PENDING_APPROVAL,
+        createdById: data.createdById,
       },
       include: { account: { include: { ledger: true } } },
     });
@@ -102,5 +100,28 @@ export async function removeProduct(id: number) {
     await tx.product.update({ where: { id }, data: { isActive: false } });
     await tx.account.update({ where: { id: product.accountId }, data: { isActive: false } });
     return { ok: true };
+  });
+}
+
+export async function approvePendingProductInTx(
+  tx: Prisma.TransactionClient,
+  productId: number,
+) {
+  const product = await tx.product.findFirst({
+    where: { id: productId, status: RecordStatus.PENDING_APPROVAL },
+    include: { account: { include: { ledger: true } } },
+  });
+  if (!product) throw new AppError(404, 'Pending product not found');
+
+  const { approvePendingAccountInTx } = await import('../accounting/accounting.service');
+  await approvePendingAccountInTx(tx, product.accountId);
+
+  return tx.product.update({
+    where: { id: product.id },
+    data: { status: RecordStatus.ACTIVE },
+    include: {
+      account: { include: { ledger: true, category: true } },
+      createdBy: { select: { id: true, displayName: true, username: true } },
+    },
   });
 }

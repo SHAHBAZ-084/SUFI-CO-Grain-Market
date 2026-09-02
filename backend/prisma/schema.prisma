@@ -24,6 +24,8 @@ enum BoriThelaMode {
 
 enum VoucherStatus {
   ACTIVE
+  PENDING_APPROVAL
+  REJECTED
   CANCELLED
 }
 
@@ -59,8 +61,28 @@ enum InvoiceType {
 
 enum InvoiceStatus {
   DRAFT
+  PENDING_APPROVAL
   POSTED
+  REJECTED
   CANCELLED
+}
+
+/** Approval gate for Account and Product (separate from isActive soft-delete). */
+enum RecordStatus {
+  ACTIVE
+  PENDING_APPROVAL
+  REJECTED
+}
+
+enum OpeningBalanceSide {
+  DR
+  CR
+}
+
+enum AdjustmentStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
 }
 
 model User {
@@ -78,6 +100,10 @@ model User {
   financialYearsClosed FinancialYear[]    @relation("FinancialYearClosedBy")
   trialBalanceApprovals TrialBalanceApproval[]
   invoicesCreated       Invoice[]
+  accountsCreated       Account[]              @relation("AccountCreatedBy")
+  productsCreated       Product[]              @relation("ProductCreatedBy")
+  accountAdjustmentsCreated AccountAdjustment[] @relation("AccountAdjustmentCreatedBy")
+  stockAdjustmentsCreated   StockAdjustment[]   @relation("StockAdjustmentCreatedBy")
 }
 
 model Supplier {
@@ -125,11 +151,17 @@ model Account {
   code       String      @unique
   type       AccountType
   isActive   Boolean     @default(true)
+  status     RecordStatus @default(PENDING_APPROVAL)
+  /** Opening balance to post when status becomes ACTIVE (approve step). */
+  pendingOpeningBalance     Decimal?
+  pendingOpeningBalanceSide OpeningBalanceSide?
+  createdById Int?
   /** System/control accounts (e.g. Opening Balance Equity) — excluded from UI lists and TB rows. */
   isHidden   Boolean     @default(false)
   createdAt  DateTime    @default(now())
 
   category        AccountCategory               @relation(fields: [categoryId], references: [id])
+  createdBy       User?                         @relation("AccountCreatedBy", fields: [createdById], references: [id])
   ledger          Ledger?
   debitVouchers   Voucher[]                     @relation("DebitAccount")
   creditVouchers  Voucher[]                     @relation("CreditAccount")
@@ -140,9 +172,12 @@ model Account {
   salePaunchLines          SalePaunchLine[]   @relation("SalePaunchMaalKhataAccount")
   saleCommissionLines      SaleCommissionLine[] @relation("SaleCommissionPartyAccount")
   kachiMaalDebitInvoices   Invoice[]         @relation("KachiMaalDebitAccount")
+  accountAdjustments       AccountAdjustment[]
 
   @@index([categoryId])
   @@index([isHidden])
+  @@index([status])
+  @@index([createdById])
 }
 
 model Ledger {
@@ -260,14 +295,21 @@ model Product {
   unit      String?
   accountId Int      @unique
   isActive  Boolean  @default(true)
+  status    RecordStatus @default(PENDING_APPROVAL)
+  createdById Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   account         Account          @relation(fields: [accountId], references: [id])
+  createdBy       User?            @relation("ProductCreatedBy", fields: [createdById], references: [id])
   invoiceItems    InvoiceItem[]
   invoices        Invoice[]
   stockMovements  StockMovement[]
   stockRemainders StockRemainder[]
+  stockAdjustments StockAdjustment[]
+
+  @@index([status])
+  @@index([createdById])
 }
 
 model Invoice {
@@ -553,14 +595,60 @@ model StockMovement {
   bags             Decimal
   date             DateTime
   invoiceId        Int?
-  invoiceType      InvoiceType
+  invoiceType      InvoiceType?
   invoiceReference String
   description      String?
+  stockAdjustmentId Int?          @unique
   createdAt        DateTime       @default(now())
 
-  product Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  invoice         Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  stockAdjustment StockAdjustment? @relation(fields: [stockAdjustmentId], references: [id], onDelete: SetNull)
 
   @@index([productId, bagType, date, id])
   @@index([invoiceId])
+}
+
+model AccountAdjustment {
+  id             Int                @id @default(autoincrement())
+  accountId      Int
+  amount         Decimal
+  side           OpeningBalanceSide
+  adjustmentDate DateTime
+  notes          String?
+  status         AdjustmentStatus   @default(PENDING_APPROVAL)
+  createdById    Int
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  account   Account @relation(fields: [accountId], references: [id])
+  createdBy User    @relation("AccountAdjustmentCreatedBy", fields: [createdById], references: [id])
+
+  @@index([status])
+  @@index([accountId])
+  @@index([createdById])
+}
+
+model StockAdjustment {
+  id             Int                @id @default(autoincrement())
+  productId      Int
+  bagType        StockBagType
+  direction      StockDirection
+  bags           Decimal
+  amount         Decimal
+  side           OpeningBalanceSide
+  adjustmentDate DateTime
+  notes          String?
+  status         AdjustmentStatus   @default(PENDING_APPROVAL)
+  createdById    Int
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  product       Product        @relation(fields: [productId], references: [id])
+  createdBy     User           @relation("StockAdjustmentCreatedBy", fields: [createdById], references: [id])
+  stockMovement StockMovement?
+
+  @@index([status])
+  @@index([productId])
+  @@index([createdById])
 }

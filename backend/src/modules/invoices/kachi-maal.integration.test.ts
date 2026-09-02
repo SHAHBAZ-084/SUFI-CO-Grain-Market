@@ -1,4 +1,4 @@
-import { AccountType, BoriThelaMode } from '@prisma/client';
+import { AccountType, BoriThelaMode, RecordStatus } from '@prisma/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import {
@@ -8,9 +8,9 @@ import {
   getLedgerEntries,
   getTrialBalance,
   KACHI_MAAL_CATEGORY_NAMES,
-  previewNextVoucherNumber,
 } from '../accounting/accounting.service';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
+import { approveInvoice, loadInvoiceWithVouchers } from '../../test-helpers/approval';
 import { updateSystemPreferences } from '../preferences/preferences.service';
 import {
   computeKachiMaalInvoiceTotals,
@@ -30,7 +30,7 @@ async function ensureAccountInCategory(categoryName: string, accountName: string
   });
   if (!account) {
     account = await prisma.account.create({
-      data: { categoryId: category.id, name: accountName, code, type },
+      data: { categoryId: category.id, name: accountName, code, type, status: RecordStatus.ACTIVE },
       include: { ledger: true },
     });
     await prisma.ledger.create({ data: { accountId: account.id, balance: 0 } });
@@ -64,6 +64,25 @@ async function voucherLegs(voucherId: number) {
     type: entry.type,
     amount: Number(entry.amount),
   }));
+}
+
+async function createApprovedKachiInvoice(
+  data: Parameters<typeof createKachiMaalInvoice>[0],
+) {
+  const pending = await createKachiMaalInvoice(data);
+  await approveInvoice(pending.id);
+  return loadInvoiceWithVouchers(pending.id);
+}
+
+async function nextNumberForType(
+  financialYearId: number,
+  type: 'JOURNAL' | 'KACHI' | 'PAYMENT' | 'RECEIPT',
+) {
+  const { _max } = await prisma.voucher.aggregate({
+    where: { financialYearId, type },
+    _max: { number: true },
+  });
+  return (_max.number ?? 0) + 1;
 }
 
 function entriesPerAccount(legs: { accountId: number }[]) {
@@ -158,7 +177,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
   });
 
   it('posts one KACHI voucher with five merged ledger entries; debits = credits = 50,800; trial balance balanced', async () => {
-    const invoice = await createKachiMaalInvoice({
+    const invoice = await createApprovedKachiInvoice({
       invoiceDate,
       billNo: 'KM-BILL-1',
       debitAccountId: traderXId,
@@ -354,7 +373,7 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
   });
 
   it('posts one KACHI voucher with twelve merged ledger entries; all legs sum to 76,580.42; trial balance balanced', async () => {
-    const invoice = await createKachiMaalInvoice({
+    const invoice = await createApprovedKachiInvoice({
       invoiceDate,
       billNo: 'KM-BILL-2',
       debitAccountId: traderXId,
@@ -514,7 +533,13 @@ describe('Kachi Maal voucher numbering and cancel', () => {
     let bank = await prisma.account.findFirst({ where: { categoryId: bankCat.id, isActive: true } });
     if (!bank) {
       bank = await prisma.account.create({
-        data: { categoryId: bankCat.id, name: 'Test Bank Kachi', code: 'BNK-KM', type: AccountType.ASSET },
+        data: {
+          categoryId: bankCat.id,
+          name: 'Test Bank Kachi',
+          code: 'BNK-KM',
+          type: AccountType.ASSET,
+          status: RecordStatus.ACTIVE,
+        },
       });
       await prisma.ledger.create({ data: { accountId: bank.id, balance: 0 } });
     }
@@ -522,9 +547,12 @@ describe('Kachi Maal voucher numbering and cancel', () => {
   });
 
   it('uses an independent KACHI sequence that does not affect Journal numbering', async () => {
-    const preview = await previewNextVoucherNumber();
+    const journalBefore = await nextNumberForType(
+      (await prisma.financialYear.findFirst({ where: { status: 'ACTIVE' } }))!.id,
+      'JOURNAL',
+    );
 
-    const invoice = await createKachiMaalInvoice({
+    const invoice = await createApprovedKachiInvoice({
       invoiceDate,
       debitAccountId: traderXId,
       miscAmount: 0,
@@ -558,10 +586,10 @@ describe('Kachi Maal voucher numbering and cancel', () => {
       amount: 100,
       date: invoiceDate,
       createdById: userId,
-      reference: 'KM-NUM-JRN',
+      reference: `KM-NUM-JRN-${Date.now()}`,
     });
 
-    expect(journal.number).toBe(preview.number);
+    expect(journal.number).toBe(journalBefore);
   });
 
   it('cancelling a Kachi Maal voucher reverses every leg and restores all affected balances', async () => {
@@ -578,7 +606,7 @@ describe('Kachi Maal voucher numbering and cancel', () => {
     ];
     const before = await snapshotBalances(trackedAccounts);
 
-    const invoice = await createKachiMaalInvoice({
+    const invoice = await createApprovedKachiInvoice({
       invoiceDate,
       debitAccountId: traderXId,
       miscAmount: 200,

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, RecordStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
 
@@ -53,7 +53,7 @@ export async function resolveMaalKhataAccountForProduct(
   productId: number,
 ) {
   const product = await tx.product.findFirst({
-    where: { id: productId, isActive: true },
+    where: { id: productId, isActive: true, status: RecordStatus.ACTIVE },
     include: {
       account: {
         include: { category: true, ledger: true },
@@ -85,7 +85,7 @@ export async function resolveMaalKhataAccountForProduct(
 
 export async function assertMaalKhataAccount(tx: Prisma.TransactionClient, accountId: number) {
   const account = await tx.account.findFirst({
-    where: { id: accountId, isActive: true },
+    where: { id: accountId, isActive: true, status: RecordStatus.ACTIVE },
     include: { category: true, ledger: true },
   });
   if (!account) throw new AppError(400, 'Invalid Maal Khata account');

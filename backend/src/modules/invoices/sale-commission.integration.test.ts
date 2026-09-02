@@ -1,7 +1,8 @@
-import { AccountType, BoriThelaMode } from '@prisma/client';
+import { AccountType, BoriThelaMode, RecordStatus } from '@prisma/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
+import { approveInvoice, loadInvoiceWithVouchers } from '../../test-helpers/approval';
 import {
   ensureSaleCommissionAccounts,
   getTrialBalance,
@@ -28,7 +29,7 @@ async function ensureAccountInCategory(
   });
   if (!account) {
     account = await prisma.account.create({
-      data: { categoryId: category.id, name: accountName, code, type },
+      data: { categoryId: category.id, name: accountName, code, type, status: RecordStatus.ACTIVE },
       include: { ledger: true },
     });
     await prisma.ledger.create({ data: { accountId: account.id, balance: 0 } });
@@ -51,6 +52,14 @@ async function voucherLegs(voucherId: number) {
     amount: Number(entry.amount),
     description: entry.notes,
   }));
+}
+
+async function createApprovedSaleCommissionInvoice(
+  data: Parameters<typeof createSaleCommissionInvoice>[0],
+) {
+  const pending = await createSaleCommissionInvoice(data);
+  await approveInvoice(pending.id);
+  return loadInvoiceWithVouchers(pending.id);
 }
 
 describe('Sale on Commission posting', () => {
@@ -125,7 +134,7 @@ describe('Sale on Commission posting', () => {
 
   it('balances: one Sale Party net debit equals all purchase + fee credits', async () => {
     // Sample-verified goods: 6000kg @ 4275 → 641250 + dammi 10260
-    const invoice = await createSaleCommissionInvoice({
+    const invoice = await createApprovedSaleCommissionInvoice({
       invoiceDate,
       salePartyAccountId: salePartyId,
       billNo: 'SC-BILL-1',
@@ -211,7 +220,7 @@ describe('Sale on Commission posting', () => {
   });
 
   it('posts one Sale Party debit and combined purchase-party credits per row', async () => {
-    const invoice = await createSaleCommissionInvoice({
+    const invoice = await createApprovedSaleCommissionInvoice({
       invoiceDate,
       salePartyAccountId: salePartyId,
       billNo: 'SC-BILL-2',
@@ -270,7 +279,7 @@ describe('Sale on Commission posting', () => {
   });
 
   it('posts row bardana as Dr Bardana (Bori/Thela) and Cr purchase party', async () => {
-    const invoice = await createSaleCommissionInvoice({
+    const invoice = await createApprovedSaleCommissionInvoice({
       invoiceDate,
       salePartyAccountId: salePartyId,
       billNo: 'SC-BILL-3',

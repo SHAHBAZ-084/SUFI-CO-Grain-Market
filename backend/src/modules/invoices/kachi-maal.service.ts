@@ -4,6 +4,7 @@ import {
   InvoiceType,
   LedgerEntryType,
   Prisma,
+  RecordStatus,
 } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
@@ -81,7 +82,7 @@ function bardanaAccountId(
 
 async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountId: number) {
   const account = await tx.account.findFirst({
-    where: { id: accountId, isActive: true },
+    where: { id: accountId, isActive: true, status: RecordStatus.ACTIVE },
     include: { category: true },
   });
   if (!account) throw new AppError(400, 'Invalid purchase party account');
@@ -101,7 +102,7 @@ async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountI
 
 async function assertDebitAccount(tx: Prisma.TransactionClient, accountId: number) {
   const account = await tx.account.findFirst({
-    where: { id: accountId, isActive: true },
+    where: { id: accountId, isActive: true, status: RecordStatus.ACTIVE },
     include: { category: true },
   });
   if (!account) throw new AppError(400, 'Invalid debit account');
@@ -342,7 +343,7 @@ export async function createKachiMaalInvoice(data: CreateKachiMaalInput) {
     const invoice = await tx.invoice.create({
       data: {
         type: InvoiceType.KACHI_MAAL,
-        status: InvoiceStatus.POSTED,
+        status: InvoiceStatus.PENDING_APPROVAL,
         reference,
         invoiceDate,
         billNo: data.billNo?.trim() || null,
@@ -383,24 +384,10 @@ export async function createKachiMaalInvoice(data: CreateKachiMaalInput) {
       },
     });
 
-    const voucher = await createKachiVoucherInTx(tx, {
-      legs,
-      amount: totalDebits,
-      date: data.invoiceDate,
-      description: `Kachi Maal Invoice ${reference}`,
-      reference: voucherReferenceFromBillNo(data.billNo),
-      createdById: data.createdById,
-    });
-
-    await tx.invoiceVoucher.create({
-      data: { invoiceId: invoice.id, voucherId: voucher.id },
-    });
-
     return tx.invoice.findUniqueOrThrow({
       where: { id: invoice.id },
       include: {
         kachiMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
-        vouchers: { include: { voucher: { include: { ledgerEntries: true } } } },
         debitAccount: true,
         createdBy: { select: { id: true, displayName: true, username: true } },
       },
@@ -427,4 +414,94 @@ export async function previewKachiMaalTotals(data: {
     data.lowerBardanaQty,
     data.lowerBardanaRate,
   );
+}
+
+export async function approvePendingKachiMaalInvoice(
+  tx: Prisma.TransactionClient,
+  invoiceId: number,
+) {
+  const invoice = await tx.invoice.findFirst({
+    where: {
+      id: invoiceId,
+      type: InvoiceType.KACHI_MAAL,
+      status: InvoiceStatus.PENDING_APPROVAL,
+    },
+    include: { kachiMaalLines: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!invoice) throw new AppError(404, 'Pending Kachi Maal invoice not found');
+  if (!invoice.debitAccountId) throw new AppError(400, 'Invoice missing debit account');
+
+  const existingLink = await tx.invoiceVoucher.findFirst({ where: { invoiceId } });
+  if (existingLink) throw new AppError(400, 'Invoice already posted');
+
+  const { assertAccountsApprovedForPosting } = await import('../approvals/approval-guards');
+  await assertAccountsApprovedForPosting(tx, [invoice.debitAccountId]);
+
+  const prefs = await getSystemPreferences();
+  const lineInputs: KachiMaalLineInput[] = invoice.kachiMaalLines.map((line) => ({
+    partyAccountId: line.partyAccountId,
+    jins: line.jins ?? undefined,
+    qism: line.qism ?? undefined,
+    boriOrThelaMode: line.boriOrThelaMode,
+    bagCount: Number(line.bagCount),
+    bhartii: Number(line.bhartii),
+    dharanCount: Number(line.dharanCount),
+    looseKg: Number(line.looseKg),
+    ratePerMaund: Number(line.ratePerMaund),
+    bardanaQty: line.bardanaQty != null ? Number(line.bardanaQty) : null,
+    bardanaRate: line.bardanaRate != null ? Number(line.bardanaRate) : null,
+  }));
+
+  const computedLines = buildComputedLines(lineInputs, prefs);
+  const totals = computeKachiMaalInvoiceTotals(
+    computedLines,
+    prefs,
+    Number(invoice.miscAmount),
+    invoice.lowerBardanaQty != null ? Number(invoice.lowerBardanaQty) : null,
+    invoice.lowerBardanaRate != null ? Number(invoice.lowerBardanaRate) : null,
+  );
+
+  const systemAccounts = await ensureKachiMaalAccounts(tx);
+  const voucherHeader: InvoiceVoucherHeader = {
+    tafseel: invoice.tafseel,
+    gariNo: invoice.gariNo,
+  };
+
+  const { legs, totalDebits, totalCredits } = buildLedgerLegs(
+    invoice.debitAccountId,
+    computedLines,
+    totals,
+    systemAccounts,
+    invoice.lowerBardanaMode,
+    voucherHeader,
+    invoice.reference,
+  );
+
+  if (Math.abs(totalDebits - totalCredits) > 0.01) {
+    throw new AppError(500, 'Invoice debits and credits do not balance');
+  }
+
+  const voucher = await createKachiVoucherInTx(tx, {
+    legs,
+    amount: totalDebits,
+    date: invoice.invoiceDate ?? invoice.createdAt,
+    description: `Kachi Maal Invoice ${invoice.reference}`,
+    reference: voucherReferenceFromBillNo(invoice.billNo),
+    createdById: invoice.createdById,
+  });
+
+  await tx.invoiceVoucher.create({
+    data: { invoiceId: invoice.id, voucherId: voucher.id },
+  });
+
+  return tx.invoice.update({
+    where: { id: invoice.id },
+    data: { status: InvoiceStatus.POSTED },
+    include: {
+      kachiMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
+      vouchers: { include: { voucher: { include: { ledgerEntries: true } } } },
+      debitAccount: true,
+      createdBy: { select: { id: true, displayName: true, username: true } },
+    },
+  });
 }

@@ -15,6 +15,8 @@ import { preferencesRouter } from './modules/preferences/preferences.routes';
 import { createSystemHealthHandler, systemRouter } from './modules/system/system.routes';
 import { stockRouter } from './modules/stock/stock.routes';
 import { reportsRouter } from './modules/reports/reports.routes';
+import { approvalsRouter } from './modules/approvals/approvals.routes';
+import { adjustmentsRouter } from './modules/adjustments/adjustments.routes';
 import type { StartupStatus } from './lib/startup';
 
 declare module 'express-session' {
@@ -62,6 +64,8 @@ export function createApp(getStartupStatus?: () => StartupStatus | null) {
   app.use('/api/stock', stockRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/preferences', preferencesRouter);
+  app.use('/api/approvals', approvalsRouter);
+  app.use('/api/adjustments', adjustmentsRouter);
   app.use('/api/system', systemRouter);
 
   if (env.isProduction) {

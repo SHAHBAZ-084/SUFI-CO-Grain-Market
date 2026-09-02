@@ -2,6 +2,7 @@ import { InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
 import { PaginatedResult } from '../../utils/pagination';
+import { USER_VISIBLE_INVOICE_STATUS } from '../approvals/record-status';
 import { getActiveFinancialYearId } from '../accounting/accounting.service';
 import { buildInvoiceReference, INVOICE_TYPE_PREFIX } from './invoice-reference';
 
@@ -20,8 +21,8 @@ export async function listInvoices(
   pagination?: { limit: number; offset: number },
 ): Promise<PaginatedResult<Awaited<ReturnType<typeof fetchInvoiceListPage>>[number]>> {
   const where = {
+    status: filters?.status ?? USER_VISIBLE_INVOICE_STATUS,
     ...(filters?.type && { type: filters.type }),
-    ...(filters?.status && { status: filters.status }),
   };
 
   const limit = pagination?.limit ?? 200;
@@ -91,12 +92,19 @@ const invoiceDetailInclude = {
   createdBy: { select: { id: true, displayName: true, username: true } },
 } as const;
 
+function assertInvoiceVisible(invoice: { status: InvoiceStatus }) {
+  if (invoice.status !== USER_VISIBLE_INVOICE_STATUS) {
+    throw new AppError(404, 'Invoice not found');
+  }
+}
+
 export async function getInvoice(id: number) {
   const invoice = await prisma.invoice.findUnique({
     where: { id },
     include: invoiceDetailInclude,
   });
   if (!invoice) throw new AppError(404, 'Invoice not found');
+  assertInvoiceVisible(invoice);
   return invoice;
 }
 
@@ -111,6 +119,7 @@ export async function getInvoiceByReference(reference: string) {
   if (!invoice) {
     throw new AppError(404, `No invoice found for ${trimmed}.`);
   }
+  assertInvoiceVisible(invoice);
   return invoice;
 }
 

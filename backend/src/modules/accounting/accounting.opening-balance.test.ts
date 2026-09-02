@@ -5,6 +5,8 @@ import {
   getLedgerEntries,
   getTrialBalance,
 } from './accounting.service';
+import { approveAccount } from '../../test-helpers/approval';
+import { prisma } from '../../lib/prisma';
 
 describe('opening balance ledger report (Part 8 regression)', () => {
   it('shows opening balance row and closing balance matches trial balance', async () => {
@@ -16,11 +18,16 @@ describe('opening balance ledger report (Part 8 regression)', () => {
     if (!expenseCat) throw new Error('Expenses category missing');
 
     const uniqueName = `OB Ledger Test ${Date.now()}`;
-    const account = await createAccount({
+    const created = await createAccount({
       categoryId: expenseCat.id,
       name: uniqueName,
       openingBalance: 50000,
       openingBalanceSide: 'DR',
+    });
+    await approveAccount(created.id);
+    const account = await prisma.account.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { category: true, ledger: true },
     });
 
     expect(account.ledger).toBeTruthy();

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, RecordStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
 import { ensureCustomerAccount, ensureSupplierAccount } from '../accounting/accounting.service';
@@ -34,7 +34,7 @@ async function enrichWithLedgerBalance<T extends { id: number; name: string; pho
 
   const codes = parties.map((p) => codeForId(p.id));
   const accounts = await prisma.account.findMany({
-    where: { code: { in: codes }, isActive: true },
+    where: { code: { in: codes }, isActive: true, status: RecordStatus.ACTIVE },
     include: { ledger: true },
   });
   const accountByCode = new Map(accounts.map((a) => [a.code, a]));

@@ -89,19 +89,19 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
         if (openingBalance.trim() && !(parsedOpening >= 0)) {
           throw new Error('Opening balance must be zero or greater');
         }
-        const created = await api.createAccount({
+        await api.createAccount({
           categoryId: Number(categoryId),
           name,
           ...(parsedOpening > 0
             ? { openingBalance: parsedOpening, openingBalanceSide }
             : {}),
         });
-        if (parsedOpening > 0 && created.ledger) {
+        if (parsedOpening > 0) {
           setMessage(
-            `Account created with opening balance ${formatLedgerBalance(created.ledger.balance)}.`,
+            `Account "${name}" submitted for approval with opening balance ${formatLedgerBalance(parsedOpening)} (${openingBalanceSide}).`,
           );
         } else {
-          setMessage('Account created.');
+          setMessage(`Account "${name}" submitted for approval.`);
         }
         setCategoryId('');
         setName('');

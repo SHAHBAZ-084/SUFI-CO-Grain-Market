@@ -32,14 +32,14 @@ export function ProductAddPage() {
           : {}),
       });
 
-      if (parsedOpening > 0 && product.account?.ledger) {
+      if (parsedOpening > 0) {
         setMessage(
-          `Product "${product.name}" created with Maal Khata ${product.account.name} ` +
-            `(opening ${formatLedgerBalance(product.account.ledger.balance)}).`,
+          `Product "${product.name}" submitted for approval with Maal Khata ${product.account?.name ?? ''} ` +
+            `(opening ${formatLedgerBalance(parsedOpening)} ${openingBalanceSide}).`,
         );
       } else {
         setMessage(
-          `Product "${product.name}" created with Maal Khata ledger ${product.account?.name ?? ''}`.trim(),
+          `Product "${product.name}" submitted for approval with Maal Khata ledger ${product.account?.name ?? ''}`.trim(),
         );
       }
       setName('');

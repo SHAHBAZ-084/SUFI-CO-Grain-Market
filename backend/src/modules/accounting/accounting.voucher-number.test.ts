@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { RecordStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
 import {
@@ -59,6 +60,7 @@ describe('per-type voucher numbering', () => {
           name: 'Electricity Expense',
           code: 'EXP-ELEC-NUM',
           type: 'EXPENSE',
+          status: RecordStatus.ACTIVE,
         },
       });
       await prisma.ledger.create({ data: { accountId: created.id, balance: 0 } });
@@ -72,7 +74,13 @@ describe('per-type voucher numbering', () => {
     let bank = await prisma.account.findFirst({ where: { categoryId: bankCat.id, isActive: true } });
     if (!bank) {
       bank = await prisma.account.create({
-        data: { categoryId: bankCat.id, name: 'Test Bank', code: 'BNK-NUM', type: 'ASSET' },
+        data: {
+          categoryId: bankCat.id,
+          name: 'Test Bank',
+          code: 'BNK-NUM',
+          type: 'ASSET',
+          status: RecordStatus.ACTIVE,
+        },
       });
       await prisma.ledger.create({ data: { accountId: bank.id, balance: 0 } });
     }

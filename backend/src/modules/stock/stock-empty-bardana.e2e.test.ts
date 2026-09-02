@@ -5,7 +5,7 @@
  *   "Dharan: 15 kg" → dharanCount = 3 → 15 kg
  *   "Dharan: 10 kg" → dharanCount = 2 → 10 kg
  */
-import { AccountType, BoriThelaMode } from '@prisma/client';
+import { AccountType, BoriThelaMode, RecordStatus } from '@prisma/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import {
@@ -18,6 +18,7 @@ import {
 } from '../inventory/bardana.service';
 import { createProduct, MAAL_KHATA_CATEGORY_NAME } from '../products/products.service';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
+import { approveInvoice, approveProduct } from '../../test-helpers/approval';
 import { updateSystemPreferences } from '../preferences/preferences.service';
 import { createPurchaseMaalInvoice } from '../invoices/purchase-maal.service';
 import { createSalePaunchInvoice } from '../invoices/sale-paunch.service';
@@ -40,7 +41,7 @@ async function ensureAccountInCategory(
   });
   if (!account) {
     account = await prisma.account.create({
-      data: { categoryId: category.id, name: accountName, code, type },
+      data: { categoryId: category.id, name: accountName, code, type, status: RecordStatus.ACTIVE },
       include: { ledger: true },
     });
     await prisma.ledger.create({ data: { accountId: account.id, balance: 0 } });
@@ -48,6 +49,22 @@ async function ensureAccountInCategory(
     await prisma.ledger.create({ data: { accountId: account.id, balance: 0 } });
   }
   return account;
+}
+
+async function createApprovedPurchaseMaalInvoice(
+  data: Parameters<typeof createPurchaseMaalInvoice>[0],
+) {
+  const pending = await createPurchaseMaalInvoice(data);
+  await approveInvoice(pending.id);
+  return pending;
+}
+
+async function createApprovedSalePaunchInvoice(
+  data: Parameters<typeof createSalePaunchInvoice>[0],
+) {
+  const pending = await createSalePaunchInvoice(data);
+  await approveInvoice(pending.id);
+  return pending;
 }
 
 function printStockTable(label: string, report: Awaited<ReturnType<typeof getStockReport>>) {
@@ -125,6 +142,7 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     )).id;
 
     const wheat = await createProduct({ name: `Wheat Stock E2E ${stamp}` });
+    await approveProduct(wheat.id);
     const category = await prisma.accountCategory.findUnique({ where: { id: wheat.account.categoryId } });
     expect(category?.name).toBe(MAAL_KHATA_CATEGORY_NAME);
     wheatProductId = wheat.id;
@@ -148,7 +166,7 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(boriBeforeStep1).toBe(50);
 
     // --- Step 1: PM without bardana, 10 bori, loose 25 kg (dharan 3×5 + kilo 10) ---
-    const pm1 = await createPurchaseMaalInvoice({
+    const pm1 = await createApprovedPurchaseMaalInvoice({
       invoiceDate,
       billNo: `STK-PM1-${stamp}`,
       productId: wheatProductId,
@@ -185,7 +203,7 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(empty.balances.find((b) => b.bagType === 'BORI')!.balance).toBe(50);
 
     // --- Step 2: PM without bardana, 5 bori, loose 15 kg; carried 25+15=40 → +1 bag ---
-    const pm2 = await createPurchaseMaalInvoice({
+    const pm2 = await createApprovedPurchaseMaalInvoice({
       invoiceDate,
       billNo: `STK-PM2-${stamp}`,
       productId: wheatProductId,
@@ -222,7 +240,7 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(empty.balances.find((b) => b.bagType === 'BORI')!.balance).toBe(50);
 
     // --- Step 3: PM WITH bardana qty 8 — stock IN 8, empty bardana unchanged ---
-    const pm3 = await createPurchaseMaalInvoice({
+    const pm3 = await createApprovedPurchaseMaalInvoice({
       invoiceDate,
       billNo: `STK-PM3-${stamp}`,
       productId: wheatProductId,
@@ -259,7 +277,7 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(empty.balances.find((b) => b.bagType === 'BORI')!.balance).toBe(50);
 
     // --- Step 4: Sale Paunch OUT 12 — stock 12, empty bardana −12 only ---
-    const sp1 = await createSalePaunchInvoice({
+    const sp1 = await createApprovedSalePaunchInvoice({
       invoiceDate,
       billNo: `STK-SP1-${stamp}`,
       salePartyAccountId: salePartyId,

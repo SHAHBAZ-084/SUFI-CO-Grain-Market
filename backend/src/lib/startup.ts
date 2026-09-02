@@ -157,6 +157,10 @@ export async function initializeDatabase(db: PrismaClient): Promise<StartupStatu
     status.migrationsApplied = true;
 
     await configureSqlitePragmas(db);
+
+    const { backfillLegacyActiveRecordStatus } = await import('../modules/approvals/approval-backfill');
+    await backfillLegacyActiveRecordStatus(db);
+
     await ensureBootstrapData(db);
 
     if (status.databaseExists && process.env.NODE_ENV === 'production') {

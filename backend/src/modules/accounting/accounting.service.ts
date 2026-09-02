@@ -1,9 +1,10 @@
-import { AccountType, FinancialYearStatus, LedgerEntryType, Prisma, VoucherStatus, VoucherType } from '@prisma/client';
+import { AccountType, FinancialYearStatus, LedgerEntryType, Prisma, RecordStatus, VoucherStatus, VoucherType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { AppError } from '../../utils/helpers';
 import { PaginatedResult } from '../../utils/pagination';
 import { assertNotMaalKhataLinkedAccount, isMaalKhataCategoryName } from '../products/maal-khata';
+import { IMMEDIATE_ACTIVE_STATUS, USER_VISIBLE_ACCOUNT_STATUS, USER_VISIBLE_VOUCHER_STATUS } from '../approvals/record-status';
 import {
   compareLedgerEntries,
   computeLedgerBalance,
@@ -266,11 +267,11 @@ async function loadAccounts(
 
   const [debitAccount, creditAccount] = await Promise.all([
     tx.account.findFirst({
-      where: { id: debitAccountId, isActive: true },
+      where: { id: debitAccountId, isActive: true, status: USER_VISIBLE_ACCOUNT_STATUS },
       include: { category: true },
     }),
     tx.account.findFirst({
-      where: { id: creditAccountId, isActive: true },
+      where: { id: creditAccountId, isActive: true, status: USER_VISIBLE_ACCOUNT_STATUS },
       include: { category: true },
     }),
   ]);
@@ -420,7 +421,12 @@ export async function listAccountCategories() {
   const [categories, customerCount, supplierCount, inventoryAccounts] = await Promise.all([
     prisma.accountCategory.findMany({
       where: { isActive: true },
-      include: { accounts: { where: { isActive: true, isHidden: false }, include: { ledger: true } } },
+      include: {
+        accounts: {
+          where: { isActive: true, isHidden: false, status: USER_VISIBLE_ACCOUNT_STATUS },
+          include: { ledger: true },
+        },
+      },
       orderBy: { name: 'asc' },
     }),
     prisma.customer.count({ where: { isActive: true } }),
@@ -566,6 +572,7 @@ async function findOrCreateOpeningBalanceEquityAccount(
       code: await generateNextAccountCodeInTx(tx),
       type: AccountType.EQUITY,
       isHidden: true,
+      status: IMMEDIATE_ACTIVE_STATUS,
     },
   });
 
@@ -584,26 +591,74 @@ async function postOpeningBalanceOffset(
   accountName: string,
   amount: number,
   side: 'DR' | 'CR',
+  opts?: { isOpeningBalance?: boolean; entryDate?: Date },
 ) {
   const equityAccount = await findOrCreateOpeningBalanceEquityAccount(tx);
   const equityLedger = equityAccount.ledger!;
   const offsetType = side === 'DR' ? LedgerEntryType.CREDIT : LedgerEntryType.DEBIT;
-  const offsetBalance = Number(equityLedger.balance) + (side === 'DR' ? -amount : amount);
+  const isOpeningBalance = opts?.isOpeningBalance ?? true;
+  const offsetNotes = isOpeningBalance
+    ? `Opening Balance — offset for ${accountName}`
+    : `Adjustment — offset for ${accountName}`;
 
   await tx.ledgerEntry.create({
     data: {
       ledgerId: equityLedger.id,
       type: offsetType,
       amount,
-      balance: offsetBalance,
-      notes: `Opening Balance — offset for ${accountName}`,
-      isOpeningBalance: true,
+      balance: 0,
+      notes: offsetNotes,
+      isOpeningBalance,
+      ...(opts?.entryDate ? { createdAt: opts.entryDate } : {}),
     },
   });
-  await tx.ledger.update({
-    where: { id: equityLedger.id },
-    data: { balance: offsetBalance },
+}
+
+/**
+ * Balanced one-sided posting: one entry on the target ledger + offset on hidden
+ * Opening Balance Equity. Used for opening balances and account/stock adjustments.
+ */
+export async function postOneSidedEntryInTx(
+  tx: Prisma.TransactionClient,
+  params: {
+    ledgerId: number;
+    accountName: string;
+    amount: number;
+    side: 'DR' | 'CR';
+    isOpeningBalance: boolean;
+    notes?: string | null;
+    entryDate?: Date;
+    financialYearId: number;
+  },
+) {
+  const amount = Math.abs(params.amount);
+  if (amount <= 0) return;
+
+  const entryDate = params.entryDate ?? new Date();
+  const mainNotes =
+    params.notes?.trim() ||
+    (params.isOpeningBalance ? 'Opening Balance' : 'Account Adjustment');
+
+  await tx.ledgerEntry.create({
+    data: {
+      ledgerId: params.ledgerId,
+      type: params.side === 'DR' ? LedgerEntryType.DEBIT : LedgerEntryType.CREDIT,
+      amount,
+      balance: 0,
+      notes: mainNotes,
+      isOpeningBalance: params.isOpeningBalance,
+      createdAt: entryDate,
+    },
   });
+
+  await postOpeningBalanceOffset(tx, params.accountName, amount, params.side, {
+    isOpeningBalance: params.isOpeningBalance,
+    entryDate,
+  });
+
+  const equityAccount = await findOrCreateOpeningBalanceEquityAccount(tx);
+  await recomputeLedgerRunningBalancesInTx(tx, params.ledgerId, params.financialYearId);
+  await recomputeLedgerRunningBalancesInTx(tx, equityAccount.ledger!.id, params.financialYearId);
 }
 
 /** Post Maal Khata / account opening balance + hidden Opening Balance Equity offset. */
@@ -614,27 +669,17 @@ export async function postOpeningBalanceForLedger(
     accountName: string;
     amount: number;
     side: 'DR' | 'CR';
+    financialYearId: number;
   },
 ) {
-  const amount = Math.abs(params.amount);
-  if (amount <= 0) return;
-
-  const signedBalance = params.side === 'DR' ? amount : -amount;
-  await tx.ledgerEntry.create({
-    data: {
-      ledgerId: params.ledgerId,
-      type: params.side === 'DR' ? LedgerEntryType.DEBIT : LedgerEntryType.CREDIT,
-      amount,
-      balance: signedBalance,
-      notes: 'Opening Balance',
-      isOpeningBalance: true,
-    },
+  await postOneSidedEntryInTx(tx, {
+    ledgerId: params.ledgerId,
+    accountName: params.accountName,
+    amount: params.amount,
+    side: params.side,
+    isOpeningBalance: true,
+    financialYearId: params.financialYearId,
   });
-  await tx.ledger.update({
-    where: { id: params.ledgerId },
-    data: { balance: signedBalance },
-  });
-  await postOpeningBalanceOffset(tx, params.accountName, amount, params.side);
 }
 
 export async function createAccount(data: {
@@ -644,6 +689,7 @@ export async function createAccount(data: {
   type?: AccountType;
   openingBalance?: number;
   openingBalanceSide?: 'DR' | 'CR';
+  createdById?: number;
 }) {
   const trimmedName = await assertUniqueAccountName(data.name);
 
@@ -680,6 +726,8 @@ export async function createAccount(data: {
 
   const amount = Math.abs(data.openingBalance ?? 0);
   const side = data.openingBalanceSide ?? defaultOpeningSide(type);
+  const storePendingOb =
+    amount > 0 && trimmedName.toLowerCase() !== OPENING_BALANCE_EQUITY_ACCOUNT_NAME.toLowerCase();
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const account = await tx.account.create({
@@ -688,21 +736,16 @@ export async function createAccount(data: {
         name: trimmedName,
         code: trimmedCode,
         type,
+        status: RecordStatus.PENDING_APPROVAL,
+        createdById: data.createdById,
+        pendingOpeningBalance: storePendingOb ? amount : null,
+        pendingOpeningBalanceSide: storePendingOb ? side : null,
       },
     });
 
-    const ledger = await tx.ledger.create({
+    await tx.ledger.create({
       data: { accountId: account.id, balance: 0 },
     });
-
-    if (amount > 0 && trimmedName.toLowerCase() !== OPENING_BALANCE_EQUITY_ACCOUNT_NAME.toLowerCase()) {
-      await postOpeningBalanceForLedger(tx, {
-        ledgerId: ledger.id,
-        accountName: trimmedName,
-        amount,
-        side,
-      });
-    }
 
     return tx.account.findUniqueOrThrow({
       where: { id: account.id },
@@ -721,6 +764,10 @@ function ledgerEntriesForYearWhere(
   yearStart: Date,
   yearEnd: Date | null,
 ): Prisma.LedgerEntryWhereInput {
+  const inYearRange = {
+    gte: yearStart,
+    ...(yearEnd ? { lte: yearEnd } : {}),
+  };
   return {
     ledgerId,
     isReversal: false,
@@ -733,10 +780,12 @@ function ledgerEntriesForYearWhere(
       },
       {
         isOpeningBalance: true,
-        createdAt: {
-          gte: yearStart,
-          ...(yearEnd ? { lte: yearEnd } : {}),
-        },
+        createdAt: inYearRange,
+      },
+      {
+        voucherId: null,
+        isOpeningBalance: false,
+        createdAt: inYearRange,
       },
     ],
   };
@@ -979,13 +1028,13 @@ function entryDebitCredit(type: LedgerEntryType, amount: number) {
   return { debit: 0, credit: amount };
 }
 
-/** Reversal rows and cancelled vouchers are bookkeeping only — omit from reports. */
+/** Reversal rows and non-active vouchers are bookkeeping only — omit from reports. */
 function isReportableLedgerEntry(e: {
   isReversal: boolean;
   voucher: { status: VoucherStatus } | null;
 }) {
   if (e.isReversal) return false;
-  if (e.voucher?.status === VoucherStatus.CANCELLED) return false;
+  if (e.voucher && e.voucher.status !== USER_VISIBLE_VOUCHER_STATUS) return false;
   return true;
 }
 
@@ -1007,7 +1056,7 @@ export async function listAccounts() {
   });
 
   const accounts = await prisma.account.findMany({
-    where: { isActive: true, isHidden: false },
+    where: { isActive: true, isHidden: false, status: USER_VISIBLE_ACCOUNT_STATUS },
     include: { category: true, ledger: true },
     orderBy: { code: 'asc' },
   });
@@ -1090,6 +1139,7 @@ export async function ensureCustomerAccount(
       name: customer.name,
       code,
       type: AccountType.ASSET,
+      status: IMMEDIATE_ACTIVE_STATUS,
     },
   });
   await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
@@ -1131,6 +1181,7 @@ export async function ensureSupplierAccount(
       name: supplier.name,
       code,
       type: AccountType.LIABILITY,
+      status: IMMEDIATE_ACTIVE_STATUS,
     },
   });
   await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
@@ -1453,7 +1504,7 @@ async function ensureDefaultAccountInTx(
   if (!code) code = await generateNextAccountCodeInTx(tx);
 
   const account = await tx.account.create({
-    data: { categoryId, name: accountName, code, type },
+    data: { categoryId, name: accountName, code, type, status: IMMEDIATE_ACTIVE_STATUS },
   });
   await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
   return account;
@@ -1656,21 +1707,9 @@ export async function createVoucherInTx(
       reference: trimmedReference,
       createdById: data.createdById,
       financialYearId,
-      status: VoucherStatus.ACTIVE,
+      status: VoucherStatus.PENDING_APPROVAL,
     },
   });
-
-  await postVoucherLedgerEntries(
-    tx,
-    voucher.id,
-    data.debitAccountId,
-    data.creditAccountId,
-    data.amount,
-    data.description,
-    financialYearId,
-  );
-
-  await assertTrialBalanceInDev(tx);
 
   return voucher;
 }
@@ -1691,7 +1730,96 @@ export async function createVoucher(data: {
   });
 }
 
-async function postVoucherLedgerEntries(
+export async function approvePendingAccountInTx(
+  tx: Prisma.TransactionClient,
+  accountId: number,
+) {
+  const account = await tx.account.findFirst({
+    where: { id: accountId, status: RecordStatus.PENDING_APPROVAL },
+    include: { ledger: true },
+  });
+  if (!account) throw new AppError(404, 'Pending account not found');
+
+  let ledger = account.ledger;
+  if (!ledger) {
+    ledger = await tx.ledger.create({ data: { accountId: account.id, balance: 0 } });
+  }
+
+  const pendingAmount =
+    account.pendingOpeningBalance != null ? Number(account.pendingOpeningBalance) : 0;
+  if (pendingAmount > 0 && account.pendingOpeningBalanceSide) {
+    const financialYearId = await getActiveFinancialYearId(tx);
+    await postOpeningBalanceForLedger(tx, {
+      ledgerId: ledger.id,
+      accountName: account.name,
+      amount: pendingAmount,
+      side: account.pendingOpeningBalanceSide,
+      financialYearId,
+    });
+  }
+
+  return tx.account.update({
+    where: { id: account.id },
+    data: {
+      status: RecordStatus.ACTIVE,
+      pendingOpeningBalance: null,
+      pendingOpeningBalanceSide: null,
+    },
+    include: { category: true, ledger: true, createdBy: { select: { id: true, displayName: true, username: true } } },
+  });
+}
+
+export async function approvePendingStandardVoucherInTx(
+  tx: Prisma.TransactionClient,
+  voucherId: number,
+) {
+  const voucher = await tx.voucher.findFirst({
+    where: { id: voucherId, status: VoucherStatus.PENDING_APPROVAL },
+  });
+  if (!voucher) throw new AppError(404, 'Pending voucher not found');
+  if (!isStandardVoucherType(voucher.type)) {
+    throw new AppError(400, 'Only Payment, Receipt, and Journal vouchers are approved here');
+  }
+  if (!voucher.debitAccountId || !voucher.creditAccountId) {
+    throw new AppError(400, 'Voucher is missing debit or credit account');
+  }
+  if (!voucher.financialYearId) {
+    throw new AppError(400, 'Voucher has no financial year');
+  }
+
+  const { assertAccountsApprovedForPosting } = await import('../approvals/approval-guards');
+  await assertAccountsApprovedForPosting(tx, [voucher.debitAccountId, voucher.creditAccountId]);
+
+  const existingEntries = await tx.ledgerEntry.count({ where: { voucherId: voucher.id } });
+  if (existingEntries > 0) {
+    throw new AppError(400, 'Voucher ledger entries already exist');
+  }
+
+  // Recompute only includes ACTIVE voucher entries — activate before posting.
+  await tx.voucher.update({
+    where: { id: voucher.id },
+    data: { status: VoucherStatus.ACTIVE },
+  });
+
+  await postStandardVoucherLedgerEntriesInTx(
+    tx,
+    voucher.id,
+    voucher.debitAccountId,
+    voucher.creditAccountId,
+    Number(voucher.amount),
+    voucher.description,
+    voucher.financialYearId,
+  );
+
+  await assertTrialBalanceInDev(tx);
+
+  return tx.voucher.findUniqueOrThrow({
+    where: { id: voucher.id },
+    include: voucherInclude,
+  });
+}
+
+export async function postStandardVoucherLedgerEntriesInTx(
   tx: Prisma.TransactionClient,
   voucherId: number,
   debitAccountId: number,
@@ -1943,7 +2071,7 @@ export async function getDashboardSummary() {
   }
 
   const accounts = await prisma.account.findMany({
-    where: { isActive: true, isHidden: false },
+    where: { isActive: true, isHidden: false, status: USER_VISIBLE_ACCOUNT_STATUS },
     include: { category: true, ledger: true },
   });
 
@@ -1962,11 +2090,12 @@ export async function getDashboardSummary() {
         prisma.voucher.count({
           where: {
             financialYearId,
+            status: USER_VISIBLE_VOUCHER_STATUS,
             date: { gte: todayStart, lte: todayEnd },
           },
         }),
         prisma.voucher.findMany({
-          where: { financialYearId },
+          where: { financialYearId, status: USER_VISIBLE_VOUCHER_STATUS },
           include: voucherInclude,
           orderBy: [{ date: 'desc' }, { number: 'desc' }],
           take: 10,
@@ -2050,6 +2179,7 @@ export async function listVouchers(
   }
 
   const where: Prisma.VoucherWhereInput = {
+    status: USER_VISIBLE_VOUCHER_STATUS,
     ...(financialYearId != null && { financialYearId }),
   };
 
@@ -2252,6 +2382,7 @@ export async function getAccountBalancesAsOf(params: {
     where: {
       isActive: true,
       isHidden: false,
+      status: USER_VISIBLE_ACCOUNT_STATUS,
       ...(params.categoryId != null ? { categoryId: params.categoryId } : {}),
     },
     include: { category: true, ledger: true },
@@ -2389,7 +2520,10 @@ export async function getTrialBalance(financialYearId?: number) {
   // Closed years: use closing-balance snapshots. Active year: live ledger balances.
   if (year.status === FinancialYearStatus.CLOSED) {
     const snapshots = await prisma.financialYearClosingBalance.findMany({
-      where: { financialYearId: yearId },
+      where: {
+        financialYearId: yearId,
+        account: { status: USER_VISIBLE_ACCOUNT_STATUS },
+      },
       include: { account: true },
       orderBy: [{ account: { type: 'asc' } }, { account: { code: 'asc' } }],
     });
@@ -2426,7 +2560,7 @@ export async function getTrialBalance(financialYearId?: number) {
   }
 
   const ledgers = await prisma.ledger.findMany({
-    where: {},
+    where: { account: { isActive: true, status: USER_VISIBLE_ACCOUNT_STATUS } },
     include: { account: true },
     orderBy: [{ account: { type: 'asc' } }, { account: { code: 'asc' } }],
   });
@@ -2499,7 +2633,7 @@ async function buildLedgerEntriesReport(
 
   if (!ledger) {
     const account = await prisma.account.findFirst({
-      where: { id: accountId, isActive: true },
+      where: { id: accountId, isActive: true, status: USER_VISIBLE_ACCOUNT_STATUS },
       include: { category: true },
     });
     if (!account) throw new AppError(404, 'Ledger not found');
@@ -2511,6 +2645,10 @@ async function buildLedgerEntriesReport(
   }
 
   if (!ledger) throw new AppError(404, 'Ledger not found');
+
+  if (ledger.account.status !== USER_VISIBLE_ACCOUNT_STATUS) {
+    throw new AppError(404, 'Ledger not found');
+  }
 
   const isBardanaAccount =
     ledger.account.category?.name?.trim().toLowerCase() ===

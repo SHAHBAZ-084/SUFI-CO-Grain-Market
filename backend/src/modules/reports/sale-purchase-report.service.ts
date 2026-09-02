@@ -1,6 +1,7 @@
 import { BoriThelaMode, InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import { USER_VISIBLE_PRODUCT_STATUS } from '../approvals/record-status';
 import { endOfDay, startOfDay } from '../accounting/ledger-utils';
 
 export type SalePurchaseMode = 'SALE' | 'PURCHASE';
@@ -182,7 +183,7 @@ export async function getSalePurchaseReport(params: {
   let maalKhataAccountId: number | null = null;
   if (params.productId != null && params.productId > 0) {
     const product = await prisma.product.findFirst({
-      where: { id: params.productId, isActive: true },
+      where: { id: params.productId, isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
       select: { id: true, accountId: true, name: true },
     });
     if (!product) throw new AppError(404, 'Product not found');
