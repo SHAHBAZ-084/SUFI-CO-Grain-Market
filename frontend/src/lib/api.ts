@@ -566,6 +566,58 @@ export const api = {
     });
   },
 
+  getGoogleDriveBackupStatus() {
+    return request<{
+      connected: boolean;
+      needsReconnect: boolean;
+      lastSuccessAt: string | null;
+      lastAttemptAt: string | null;
+      lastError: string | null;
+      oauthConfigured: boolean;
+      oauthClientIdHint: string | null;
+    }>('/api/system/backup-status');
+  },
+
+  getGoogleOAuthConfig() {
+    return request<{ configured: boolean; clientIdHint: string | null }>(
+      '/api/system/google-drive/oauth-config',
+    );
+  },
+
+  saveGoogleOAuthConfig(data: { clientId: string; clientSecret: string }) {
+    return request<{ configured: boolean; clientIdHint: string | null }>(
+      '/api/system/google-drive/oauth-config',
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
+
+  connectGoogleDrive() {
+    return request<{
+      ok: boolean;
+      connected: boolean;
+      needsReconnect: boolean;
+      lastSuccessAt: string | null;
+      lastAttemptAt: string | null;
+      lastError: string | null;
+      oauthConfigured: boolean;
+      oauthClientIdHint: string | null;
+    }>('/api/system/google-drive/connect', {
+      method: 'POST',
+      signal: AbortSignal.timeout(6 * 60 * 1000),
+    });
+  },
+
+  disconnectGoogleDrive() {
+    return request<{ ok: boolean }>('/api/system/google-drive/disconnect', { method: 'POST' });
+  },
+
+  backupToGoogleDrive() {
+    return request<{ ok: boolean; uploadedAt?: string; error?: string }>(
+      '/api/system/google-drive/backup-now',
+      { method: 'POST' },
+    );
+  },
+
   getDashboardSummary() {
     return request<{
       cashBalance: number;

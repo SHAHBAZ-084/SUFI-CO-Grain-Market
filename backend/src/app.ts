@@ -13,6 +13,7 @@ import { invoicesRouter } from './modules/invoices/invoices.routes';
 import { inventoryRouter } from './modules/inventory/inventory.routes';
 import { preferencesRouter } from './modules/preferences/preferences.routes';
 import { createSystemHealthHandler, systemRouter } from './modules/system/system.routes';
+import { googleDriveRouter } from './modules/system/google-drive.routes';
 import { stockRouter } from './modules/stock/stock.routes';
 import { reportsRouter } from './modules/reports/reports.routes';
 import { approvalsRouter } from './modules/approvals/approvals.routes';
@@ -67,6 +68,7 @@ export function createApp(getStartupStatus?: () => StartupStatus | null) {
   app.use('/api/approvals', approvalsRouter);
   app.use('/api/adjustments', adjustmentsRouter);
   app.use('/api/system', systemRouter);
+  app.use('/api/system', googleDriveRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, '../../frontend/dist');
