@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { defaultCardDescription, QuickLinkCard } from '../components/ui/QuickLinkCard';
+import { INVOICE_QUICK_LINKS, REPORT_QUICK_LINKS, VOUCHER_QUICK_LINKS } from '../config/navigation';
 import { APPROVALS_CHANGED_EVENT } from '../lib/approvals';
 import { LegacyTable, PageShell, Tile } from '../components/ui/PageShell';
 import { api } from '../lib/api';
 import { formatLedgerAmount, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../lib/format';
+
+const DASHBOARD_INVOICE_LINKS = INVOICE_QUICK_LINKS.filter(
+  (link) => link.to !== '/invoices/view-invoice',
+);
 
 type DashboardSummary = Awaited<ReturnType<typeof api.getDashboardSummary>>;
 
@@ -13,6 +19,30 @@ function StatBox({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-semibold uppercase tracking-wide text-textMuted">{label}</p>
       <p className="mt-1 text-xl font-semibold tabular-nums text-financial">{value}</p>
     </Tile>
+  );
+}
+
+function QuickLinkSection({
+  title,
+  links,
+}: {
+  title: string;
+  links: Array<{ label: string; to: string; description?: string }>;
+}) {
+  return (
+    <div className="mb-6">
+      <h2 className="legacy-section-title">{title}</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {links.map((link) => (
+          <QuickLinkCard
+            key={link.to}
+            to={link.to}
+            title={link.label}
+            description={link.description ?? defaultCardDescription(link.to)}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -116,6 +146,10 @@ export function PosHomePage() {
           value={summary ? String(summary.vouchersToday) : '—'}
         />
       </div>
+
+      <QuickLinkSection title="Vouchers" links={VOUCHER_QUICK_LINKS} />
+      <QuickLinkSection title="Invoices" links={DASHBOARD_INVOICE_LINKS} />
+      <QuickLinkSection title="Reports" links={REPORT_QUICK_LINKS} />
 
       <PanelSection summary={summary} />
     </PageShell>

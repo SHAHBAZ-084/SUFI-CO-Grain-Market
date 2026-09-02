@@ -151,16 +151,16 @@ export function TopBar() {
   return (
     <header className="app-topnav">
       <div className="app-topnav-inner">
-        <Link to="/" className="app-topnav-brand" aria-label="Sufi & Co — Dashboard">
+        <Link
+          to="/"
+          className={`app-topnav-brand ${dashboardActive ? 'is-active' : ''}`}
+          aria-label={`${APP_BRAND_NAME} — Dashboard`}
+        >
           <img src="/sufi-co-logo.png" alt="" className="app-topnav-brand-logo" />
           <span className="app-topnav-brand-text">{APP_BRAND_NAME}</span>
         </Link>
 
         <nav className="app-topnav-nav">
-          <Link to="/" className={`app-topnav-link ${dashboardActive ? 'is-active' : ''}`}>
-            Dashboard
-          </Link>
-
           <PendingApprovalsNavLink active={approvalsActive} />
 
           {SIDEBAR_NAV.map((section) => (
