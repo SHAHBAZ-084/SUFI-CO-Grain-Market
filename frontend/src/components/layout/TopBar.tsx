@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { SIDEBAR_NAV, NavItem, sectionIsActive } from '../../config/navigation';
+import { SIDEBAR_NAV, NavItem, sectionIsActive, TOP_NAV_SECTION_IDS } from '../../config/navigation';
 import { APP_BRAND_NAME } from '../../config/brand';
 import { api } from '../../lib/api';
 import { APPROVALS_CHANGED_EVENT } from '../../lib/approvals';
@@ -106,7 +106,7 @@ function NavDropdown({
   );
 }
 
-function PendingApprovalsNavLink({ active }: { active: boolean }) {
+function ApprovalNavLink({ active }: { active: boolean }) {
   const location = useLocation();
   const [count, setCount] = useState(0);
 
@@ -133,7 +133,7 @@ function PendingApprovalsNavLink({ active }: { active: boolean }) {
       to="/approvals"
       className={`app-topnav-link ${active ? 'is-active' : ''}`}
     >
-      Pending Approvals
+      Approval
       {count > 0 ? (
         <span className="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
           {count > 99 ? '99+' : count}
@@ -147,6 +147,7 @@ export function TopBar() {
   const location = useLocation();
   const dashboardActive = location.pathname === '/';
   const approvalsActive = location.pathname === '/approvals';
+  const sectionsById = Object.fromEntries(SIDEBAR_NAV.map((section) => [section.id, section]));
 
   return (
     <header className="app-topnav">
@@ -161,16 +162,18 @@ export function TopBar() {
         </Link>
 
         <nav className="app-topnav-nav">
-          <PendingApprovalsNavLink active={approvalsActive} />
-
-          {SIDEBAR_NAV.map((section) => (
-            <NavDropdown
-              key={section.id}
-              label={section.label}
-              children={section.items}
-              active={sectionIsActive(location.pathname, section)}
-            />
-          ))}
+          {TOP_NAV_SECTION_IDS.map((sectionId) => {
+            const section = sectionsById[sectionId];
+            if (!section) return null;
+            return (
+              <NavDropdown
+                key={section.id}
+                label={section.label}
+                children={section.items}
+                active={sectionIsActive(location.pathname, section)}
+              />
+            );
+          })}
 
           <Link
             to="/backup"
@@ -178,6 +181,8 @@ export function TopBar() {
           >
             Backup
           </Link>
+
+          <ApprovalNavLink active={approvalsActive} />
         </nav>
 
         <Link

@@ -509,7 +509,7 @@ export function PendingApprovalsPage() {
 
   return (
     <PageShell
-      title="Pending Approvals"
+      title="Approval"
       subtitle={
         isAdmin
           ? 'Review, edit, approve, or reject records awaiting administrator approval'

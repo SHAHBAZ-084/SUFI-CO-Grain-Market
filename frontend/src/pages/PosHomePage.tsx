@@ -84,7 +84,7 @@ export function PosHomePage() {
         to="/approvals"
         className="mb-4 flex items-center justify-between rounded-sm border border-border bg-surface2 px-4 py-3 text-sm hover:bg-surface1"
       >
-        <span className="font-medium text-textPrimary">Pending Approvals</span>
+        <span className="font-medium text-textPrimary">Approval</span>
         <span className="text-textSecondary">
           {pendingCount > 0 ? (
             <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-bold text-white">

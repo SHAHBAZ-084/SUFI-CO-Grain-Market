@@ -34,29 +34,6 @@ export type SectionCard = NavLink & {
 
 export const SIDEBAR_NAV: SidebarSection[] = [
   {
-    id: 'vouchers',
-    label: 'Vouchers',
-    icon: Receipt,
-    items: [
-      { kind: 'link', label: 'Payment Voucher', to: '/vouchers/payment' },
-      { kind: 'link', label: 'Journal Voucher', to: '/vouchers/journal' },
-      { kind: 'link', label: 'Receipt Voucher', to: '/vouchers/receipt' },
-      { kind: 'link', label: 'View Voucher', to: '/vouchers/view' },
-    ],
-  },
-  {
-    id: 'invoices',
-    label: 'Invoices',
-    icon: FileText,
-    items: [
-      { kind: 'link', label: 'Sale on Commission', to: '/invoices/sale-commission' },
-      { kind: 'link', label: 'Sale on Paunch', to: '/invoices/sale-paunch' },
-      { kind: 'link', label: 'Purchase to Maal', to: '/invoices/purchase-maal' },
-      { kind: 'link', label: 'Kachi Maal', to: '/invoices/kachi-maal' },
-      { kind: 'link', label: 'View Invoice', to: '/invoices/view-invoice' },
-    ],
-  },
-  {
     id: 'accounts',
     label: 'Accounts',
     icon: Wallet,
@@ -95,6 +72,29 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     ],
   },
   {
+    id: 'vouchers',
+    label: 'Vouchers',
+    icon: Receipt,
+    items: [
+      { kind: 'link', label: 'Payment Voucher', to: '/vouchers/payment' },
+      { kind: 'link', label: 'Journal Voucher', to: '/vouchers/journal' },
+      { kind: 'link', label: 'Receipt Voucher', to: '/vouchers/receipt' },
+      { kind: 'link', label: 'View Voucher', to: '/vouchers/view' },
+    ],
+  },
+  {
+    id: 'invoices',
+    label: 'Invoices',
+    icon: FileText,
+    items: [
+      { kind: 'link', label: 'Sale on Commission', to: '/invoices/sale-commission' },
+      { kind: 'link', label: 'Sale on Paunch', to: '/invoices/sale-paunch' },
+      { kind: 'link', label: 'Purchase to Maal', to: '/invoices/purchase-maal' },
+      { kind: 'link', label: 'Kachi Maal', to: '/invoices/kachi-maal' },
+      { kind: 'link', label: 'View Invoice', to: '/invoices/view-invoice' },
+    ],
+  },
+  {
     id: 'reports',
     label: 'Reports',
     icon: BarChart3,
@@ -119,13 +119,22 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     label: 'System',
     icon: Settings,
     items: [
-      { kind: 'link', label: 'Pending Approvals', to: '/approvals' },
       { kind: 'link', label: 'User Management', to: '/system/users' },
       { kind: 'link', label: 'System Preference', to: '/system/preferences' },
       { kind: 'link', label: 'Financial Year', to: '/settings/financial-year' },
     ],
   },
 ];
+
+/** Top navbar section order (Backup and Approval are rendered separately in TopBar). */
+export const TOP_NAV_SECTION_IDS = [
+  'accounts',
+  'products',
+  'vouchers',
+  'invoices',
+  'reports',
+  'system',
+] as const;
 
 export function getSectionLandingPath(sectionId: string): string {
   return `/${sectionId}`;
@@ -218,7 +227,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/user': 'User Information',
   '/backup': 'Database Backup',
-  '/approvals': 'Pending Approvals',
+  '/approvals': 'Approval',
 };
 
 function collectRouteTitles(items: NavItem[], titles: Record<string, string>) {
