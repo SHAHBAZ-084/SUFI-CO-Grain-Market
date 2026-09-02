@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SIDEBAR_NAV, NavItem, sectionIsActive } from '../../config/navigation';
+import { APP_BRAND_NAME } from '../../config/brand';
 import { api } from '../../lib/api';
 import { APPROVALS_CHANGED_EVENT } from '../../lib/approvals';
 import { voucherTypeColorClass } from '../../lib/format';
@@ -152,7 +153,7 @@ export function TopBar() {
       <div className="app-topnav-inner">
         <Link to="/" className="app-topnav-brand" aria-label="Sufi & Co — Dashboard">
           <img src="/sufi-co-logo.png" alt="" className="app-topnav-brand-logo" />
-          <span className="app-topnav-brand-text">Grain Market POS</span>
+          <span className="app-topnav-brand-text">{APP_BRAND_NAME}</span>
         </Link>
 
         <nav className="app-topnav-nav">

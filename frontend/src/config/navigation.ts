@@ -8,6 +8,8 @@ import {
   Wallet,
 } from 'lucide-react';
 
+import { APP_BRAND_NAME } from './brand';
+
 export type NavLink = {
   label: string;
   to: string;
@@ -242,7 +244,7 @@ export function getPageTitle(pathname: string): string {
     .filter(([path]) => path !== '/')
     .sort(([a], [b]) => b.length - a.length)
     .find(([path]) => pathname.startsWith(path));
-  return match?.[1] ?? 'Grain Market POS';
+  return match?.[1] ?? APP_BRAND_NAME;
 }
 
 export const INVOICE_TYPE_LABELS: Record<string, string> = {

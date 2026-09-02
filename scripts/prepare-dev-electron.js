@@ -39,8 +39,8 @@ async function main() {
       await rcedit(destExe, {
         icon: path.resolve(iconPath),
         'version-string': {
-          ProductName: 'Grain Market POS',
-          FileDescription: 'Grain Market POS',
+          ProductName: 'Sufi & Co',
+          FileDescription: 'Sufi & Co',
           CompanyName: 'Sufi and Co',
           InternalName: 'GrainMarketPOS',
           OriginalFilename: 'electron.exe',

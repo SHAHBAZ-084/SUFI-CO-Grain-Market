@@ -32,11 +32,11 @@ async function applyWindowsExeIcon(appOutDir, projectDir, productFilename) {
   await rcedit(exePath, {
     icon: iconPath,
     'version-string': {
-      ProductName: 'Grain Market POS',
-      FileDescription: 'Grain Market POS',
+      ProductName: 'Sufi & Co',
+      FileDescription: 'Sufi & Co',
       CompanyName: 'Sufi & Co',
       InternalName: 'GrainMarketPOS',
-      OriginalFilename: 'Grain Market POS.exe',
+      OriginalFilename: 'Sufi & Co.exe',
     },
   });
   console.log('[afterPack] applied Sufi & Co icon to', exePath);

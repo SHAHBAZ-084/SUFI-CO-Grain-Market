@@ -163,7 +163,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 1024,
     minHeight: 700,
-    title: 'Grain Market POS',
+    title: 'Sufi & Co',
     icon,
     show: false,
     autoHideMenuBar: true,
@@ -228,7 +228,7 @@ async function showStartupError(message: string): Promise<void> {
 
   await dialog.showMessageBox({
     type: 'error',
-    title: 'Grain Market POS — Startup failed',
+    title: 'Sufi & Co — Startup failed',
     message: 'The application could not start safely.',
     detail: message,
   });

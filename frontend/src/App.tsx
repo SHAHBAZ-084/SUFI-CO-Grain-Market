@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { APP_BRAND_NAME } from './config/brand';
 import { AppShell } from './components/layout/AppShell';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
@@ -33,7 +34,7 @@ import { VoucherFormPage, VoucherListPage } from './pages/vouchers/VoucherPages'
 
 export default function App() {
   return (
-    <ErrorBoundary title="Grain Market POS encountered an error">
+    <ErrorBoundary title={`${APP_BRAND_NAME} encountered an error`}>
       <ThemeProvider>
         <AuthProvider>
           <BrowserRouter>
