@@ -10,6 +10,7 @@ export type User = {
   username: string;
   displayName: string;
   role: 'ADMIN' | 'USER';
+  createdAt?: string;
 };
 
 export type FinancialYear = {
@@ -250,6 +251,25 @@ export const api = {
   },
   me() {
     return request<{ user: User }>('/api/auth/me');
+  },
+
+  listUsers() {
+    return request<User[]>('/api/auth/users');
+  },
+  createUser(data: { username: string; password: string; displayName?: string }) {
+    return request<{ user: User }>('/api/auth/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  deleteUser(id: number) {
+    return request<{ ok: boolean }>(`/api/auth/users/${id}`, { method: 'DELETE' });
+  },
+  changePassword(data: { currentPassword: string; newPassword: string }) {
+    return request<{ ok: boolean }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
   listCategories() {

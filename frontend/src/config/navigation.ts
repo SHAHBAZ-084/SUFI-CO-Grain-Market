@@ -115,6 +115,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     label: 'System',
     icon: Settings,
     items: [
+      { kind: 'link', label: 'User Management', to: '/system/users' },
       { kind: 'link', label: 'System Preference', to: '/system/preferences' },
       { kind: 'link', label: 'Financial Year', to: '/settings/financial-year' },
     ],

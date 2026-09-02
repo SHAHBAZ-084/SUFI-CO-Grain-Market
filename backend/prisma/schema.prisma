@@ -68,7 +68,7 @@ model User {
   username     String   @unique
   passwordHash String
   displayName  String?
-  role         UserRole @default(ADMIN)
+  role         UserRole @default(USER)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

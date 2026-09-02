@@ -1,5 +1,7 @@
 import { Router } from 'express';
-import { requireAuth } from '../../middleware/auth';
+import { z } from 'zod';
+import { requireAdmin, requireAuth } from '../../middleware/auth';
+import { asyncHandler, param, validateBody } from '../../utils/helpers';
 import * as authService from './auth.service';
 
 export const authRouter = Router();
@@ -50,3 +52,60 @@ authRouter.get('/me', requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+
+authRouter.get(
+  '/users',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    const users = await authService.listUsers();
+    res.json(users);
+  }),
+);
+
+authRouter.post(
+  '/users',
+  requireAuth,
+  requireAdmin,
+  validateBody(
+    z.object({
+      username: z.string().min(1),
+      password: z.string().min(1),
+      displayName: z.string().optional(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const user = await authService.createUser(req.body);
+    res.status(201).json({ user });
+  }),
+);
+
+authRouter.delete(
+  '/users/:id',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const id = Number(param(req.params.id));
+    if (!Number.isFinite(id) || id < 1) {
+      res.status(400).json({ error: 'Invalid user id' });
+      return;
+    }
+    const result = await authService.deleteUser(id, req.session.userId!);
+    res.json(result);
+  }),
+);
+
+authRouter.post(
+  '/change-password',
+  requireAuth,
+  validateBody(
+    z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(1),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const result = await authService.changePassword(req.session.userId!, req.body);
+    res.json(result);
+  }),
+);

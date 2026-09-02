@@ -25,6 +25,7 @@ import {
 import { FinancialYearPage } from './pages/system/FinancialYearPage';
 import { SystemPreferencesPage } from './pages/system/SystemPreferencesPage';
 import { UserInfoPage } from './pages/user/UserInfoPage';
+import { UserManagementPage } from './pages/user/UserManagementPage';
 import { VoucherFormPage, VoucherListPage } from './pages/vouchers/VoucherPages';
 
 export default function App() {
@@ -79,6 +80,7 @@ export default function App() {
                   <Route path="/reports/stock" element={<StockReportPage />} />
 
                   <Route path="/system/preferences" element={<SystemPreferencesPage />} />
+                  <Route path="/system/users" element={<UserManagementPage />} />
                   <Route path="/backup" element={<BackupPage />} />
                   <Route path="/user" element={<UserInfoPage />} />
                 </Route>
