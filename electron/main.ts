@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
@@ -22,6 +22,13 @@ function resolveAppIcon(): string | undefined {
     }
   }
   return undefined;
+}
+
+function resolveAppIconImage() {
+  const iconPath = resolveAppIcon();
+  if (!iconPath) return undefined;
+  const image = nativeImage.createFromPath(iconPath);
+  return image.isEmpty() ? undefined : image;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -150,7 +157,7 @@ async function startBackend(): Promise<void> {
 }
 
 function createWindow(): void {
-  const icon = resolveAppIcon();
+  const icon = resolveAppIconImage();
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -181,6 +188,9 @@ function createWindow(): void {
   if (isDev) {
     mainWindow.loadURL('http://127.0.0.1:5173');
     mainWindow.once('ready-to-show', () => {
+      if (icon && process.platform === 'win32') {
+        mainWindow?.setIcon(icon);
+      }
       mainWindow?.show();
       mainWindow?.focus();
     });
@@ -190,6 +200,9 @@ function createWindow(): void {
   } else {
     mainWindow.loadURL(`http://127.0.0.1:${BACKEND_PORT}`);
     mainWindow.once('ready-to-show', () => {
+      if (icon && process.platform === 'win32') {
+        mainWindow?.setIcon(icon);
+      }
       mainWindow?.show();
       mainWindow?.focus();
     });

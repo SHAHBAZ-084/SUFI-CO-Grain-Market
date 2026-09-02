@@ -195,6 +195,11 @@ export type ApprovalKind =
   | 'account-adjustment'
   | 'stock-adjustment';
 
+export type ApprovalAccountRef = {
+  name: string;
+  code: string;
+};
+
 export type PendingApprovalItem = {
   kind: ApprovalKind;
   id: number;
@@ -203,6 +208,11 @@ export type PendingApprovalItem = {
   amount?: number | null;
   reference?: string | null;
   recordType?: string | null;
+  recordDate?: string | null;
+  typeLabel?: string | null;
+  debitAccount?: ApprovalAccountRef | null;
+  creditAccount?: ApprovalAccountRef | null;
+  description?: string | null;
   createdAt: string;
   createdBy?: VoucherUser | null;
 };

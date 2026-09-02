@@ -1998,6 +1998,20 @@
 
 
 
+  .approvals-table td,
+
+  .approvals-table th {
+
+    padding: 0.3125rem 0.5rem;
+
+    font-size: 0.8125rem;
+
+    vertical-align: middle;
+
+  }
+
+
+
   /* ── Dropdowns (SearchSelect etc.) ── */
 
   .app-dropdown {

@@ -1,5 +1,5 @@
 /**
- * electron-builder afterPack: Prisma unpack + Windows .exe icon (when signAndEditExecutable is off).
+ * electron-builder afterPack: Prisma unpack + Windows .exe icon.
  */
 const fs = require('fs');
 const path = require('path');
@@ -15,18 +15,31 @@ function copyDir(src, dest) {
   }
 }
 
-/** Embed build/icon.ico into the packaged .exe. */
+/** Embed build/icon.ico into the packaged .exe (required when signAndEditExecutable is false). */
 async function applyWindowsExeIcon(appOutDir, projectDir, productFilename) {
-  const iconPath = path.join(projectDir, 'build', 'icon.ico');
-  const exePath = path.join(appOutDir, `${productFilename}.exe`);
-  if (!fs.existsSync(iconPath) || !fs.existsSync(exePath)) {
-    console.warn('[afterPack] skip exe icon — missing', { iconPath, exePath });
+  const iconPath = path.resolve(projectDir, 'build', 'icon.ico');
+  const exePath = path.resolve(appOutDir, `${productFilename}.exe`);
+  if (!fs.existsSync(iconPath)) {
+    console.warn('[afterPack] skip exe icon — missing', iconPath);
+    return;
+  }
+  if (!fs.existsSync(exePath)) {
+    console.warn('[afterPack] skip exe icon — missing', exePath);
     return;
   }
 
   const rcedit = require('rcedit');
-  await rcedit(exePath, { icon: iconPath });
-  console.log('[afterPack] applied icon to', exePath);
+  await rcedit(exePath, {
+    icon: iconPath,
+    'version-string': {
+      ProductName: 'Grain Market POS',
+      FileDescription: 'Grain Market POS',
+      CompanyName: 'Sufi & Co',
+      InternalName: 'GrainMarketPOS',
+      OriginalFilename: 'Grain Market POS.exe',
+    },
+  });
+  console.log('[afterPack] applied Sufi & Co icon to', exePath);
 }
 
 exports.default = async function afterPack(context) {

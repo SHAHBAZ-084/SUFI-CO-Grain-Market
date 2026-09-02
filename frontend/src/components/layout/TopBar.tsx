@@ -132,7 +132,7 @@ function PendingApprovalsNavLink({ active }: { active: boolean }) {
       to="/approvals"
       className={`app-topnav-link ${active ? 'is-active' : ''}`}
     >
-      Approvals
+      Pending Approvals
       {count > 0 ? (
         <span className="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
           {count > 99 ? '99+' : count}
@@ -160,6 +160,8 @@ export function TopBar() {
             Dashboard
           </Link>
 
+          <PendingApprovalsNavLink active={approvalsActive} />
+
           {SIDEBAR_NAV.map((section) => (
             <NavDropdown
               key={section.id}
@@ -168,8 +170,6 @@ export function TopBar() {
               active={sectionIsActive(location.pathname, section)}
             />
           ))}
-
-          <PendingApprovalsNavLink active={approvalsActive} />
 
           <Link
             to="/backup"

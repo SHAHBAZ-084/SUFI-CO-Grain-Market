@@ -1,9 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { INVOICE_TYPE_LABELS } from '../../config/navigation';
 import {
-  DangerButton,
   FieldLabel,
-  FormRow,
   LegacyTable,
   PageShell,
   Panel,
@@ -14,16 +11,12 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import {
   api,
+  type ApprovalAccountRef,
   type ApprovalKind,
   type PendingApprovalDetail,
   type PendingApprovalItem,
 } from '../../lib/api';
-import {
-  formatDate,
-  formatLedgerAmount,
-  formatVoucherNumber,
-  formatVoucherTypeLabel,
-} from '../../lib/format';
+import { formatDate, formatLedgerAmount } from '../../lib/format';
 import { notifyApprovalsChanged } from '../../lib/approvals';
 
 const KIND_LABELS: Record<ApprovalKind, string> = {
@@ -31,7 +24,7 @@ const KIND_LABELS: Record<ApprovalKind, string> = {
   product: 'Product',
   voucher: 'Voucher',
   invoice: 'Invoice',
-  'account-adjustment': 'Account Adj.',
+  'account-adjustment': 'Acct Adj.',
   'stock-adjustment': 'Stock Adj.',
 };
 
@@ -44,6 +37,15 @@ const KIND_FILTERS: Array<{ value: 'all' | ApprovalKind; label: string }> = [
   { value: 'account-adjustment', label: 'Acct Adj.' },
   { value: 'stock-adjustment', label: 'Stock Adj.' },
 ];
+
+function rowKey(row: { kind: ApprovalKind; id: number }) {
+  return `${row.kind}-${row.id}`;
+}
+
+function accountCellLabel(account: ApprovalAccountRef | null | undefined) {
+  if (!account) return '—';
+  return account.code ? `${account.name} (${account.code})` : account.name;
+}
 
 function recordCreatedById(record: Record<string, unknown>): number | null {
   const id = record.createdById;
@@ -72,34 +74,20 @@ function toDateInputValue(value: unknown): string {
   return `${y}-${m}-${day}`;
 }
 
-function DetailField({ label, value }: { label: string; value: string }) {
-  return (
-    <FormRow label={label}>
-      <span className="text-sm text-textPrimary">{value}</span>
-    </FormRow>
-  );
-}
-
-function ApprovalDetailPanel({
+function ApprovalEditModal({
   detail,
-  isAdmin,
   canEdit,
-  onApprove,
-  onReject,
+  onClose,
   onSaved,
 }: {
   detail: PendingApprovalDetail;
-  isAdmin: boolean;
   canEdit: boolean;
-  onApprove: () => Promise<void>;
-  onReject: () => Promise<void>;
+  onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const { kind, record } = detail;
   const [saving, setSaving] = useState(false);
-  const [acting, setActing] = useState<'approve' | 'reject' | null>(null);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
 
   const [editName, setEditName] = useState('');
   const [editUnit, setEditUnit] = useState('');
@@ -120,7 +108,6 @@ function ApprovalDetailPanel({
 
   useEffect(() => {
     setError('');
-    setMessage('');
     setEditName(recordString(record.name));
     setEditUnit(recordString(record.unit === null ? '' : record.unit));
     setEditObAmount(recordNumber(record.pendingOpeningBalance)?.toString() ?? '0');
@@ -141,9 +128,9 @@ function ApprovalDetailPanel({
 
   async function onSaveEdit(event: FormEvent) {
     event.preventDefault();
+    if (!canEdit) return;
     setSaving(true);
     setError('');
-    setMessage('');
     try {
       const id = Number(record.id);
       if (kind === 'account') {
@@ -189,8 +176,8 @@ function ApprovalDetailPanel({
           notes: editNotes.trim(),
         });
       }
-      setMessage('Changes saved.');
       await onSaved();
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save changes');
     } finally {
@@ -198,419 +185,228 @@ function ApprovalDetailPanel({
     }
   }
 
-  async function handleApprove() {
-    if (!window.confirm('Approve this record? It will be posted to the ledger/stock.')) return;
-    setActing('approve');
-    setError('');
-    setMessage('');
-    try {
-      await onApprove();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Approval failed');
-    } finally {
-      setActing(null);
-    }
-  }
-
-  async function handleReject() {
-    if (!window.confirm('Reject this record? It will not be posted.')) return;
-    setActing('reject');
-    setError('');
-    setMessage('');
-    try {
-      await onReject();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Rejection failed');
-    } finally {
-      setActing(null);
-    }
-  }
-
-  const createdBy = record.createdBy as { displayName?: string; username?: string } | null | undefined;
-  const category = record.category as { name?: string } | null | undefined;
-  const debitAccount = record.debitAccount as { name?: string; code?: string } | null | undefined;
-  const creditAccount = record.creditAccount as { name?: string; code?: string } | null | undefined;
-  const product = record.product as { name?: string; code?: string } | null | undefined;
-  const adjustmentAccount = record.account as { name?: string; code?: string } | null | undefined;
-  const adjustmentProduct = record.product as { name?: string; code?: string } | null | undefined;
-  const linkedAccount = record.account as
-    | {
-        name?: string;
-        code?: string;
-        pendingOpeningBalance?: number | string | null;
-        pendingOpeningBalanceSide?: string | null;
-        category?: { name?: string } | null;
-      }
-    | null
-    | undefined;
-
-  const lineCount =
-    (Array.isArray(record.kachiMaalLines) ? record.kachiMaalLines.length : 0) +
-    (Array.isArray(record.purchaseMaalLines) ? record.purchaseMaalLines.length : 0) +
-    (Array.isArray(record.saleCommissionLines) ? record.saleCommissionLines.length : 0) +
-    (Array.isArray(record.salePaunchLines) ? record.salePaunchLines.length : 0);
-
   return (
-    <Panel>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-textPrimary">
-          {KIND_LABELS[kind]} detail
-        </h2>
-        {isAdmin ? (
-          <div className="flex gap-2">
-            <PrimaryButton
-              type="button"
-              disabled={acting != null}
-              onClick={() => void handleApprove()}
-            >
-              {acting === 'approve' ? 'Approving…' : 'Approve'}
-            </PrimaryButton>
-            <DangerButton
-              type="button"
-              disabled={acting != null}
-              onClick={() => void handleReject()}
-            >
-              {acting === 'reject' ? 'Rejecting…' : 'Reject'}
-            </DangerButton>
-          </div>
-        ) : null}
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Panel className="max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-lg">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-textPrimary">
+            Edit {KIND_LABELS[kind]}
+          </h2>
+          <SecondaryButton type="button" onClick={onClose}>
+            Close
+          </SecondaryButton>
+        </div>
 
-      {error ? <p className="mb-3 text-sm text-danger">{error}</p> : null}
-      {message ? <p className="mb-3 text-sm text-success">{message}</p> : null}
+        {error ? <p className="mb-3 text-sm text-danger">{error}</p> : null}
 
-      <DetailField label="Submitted by" value={createdBy?.displayName ?? createdBy?.username ?? '—'} />
-      <DetailField label="Submitted on" value={formatDate(String(record.createdAt ?? ''))} />
+        {!canEdit ? (
+          <p className="text-sm text-textMuted">You cannot edit this record.</p>
+        ) : (
+          <form className="space-y-3" onSubmit={onSaveEdit}>
+            {kind === 'account' ? (
+              <>
+                <div>
+                  <FieldLabel>Name</FieldLabel>
+                  <TextInput value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                </div>
+                <div>
+                  <FieldLabel>Opening balance</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editObAmount}
+                    onChange={(e) => setEditObAmount(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Balance side</FieldLabel>
+                  <select
+                    className="app-input"
+                    value={editObSide}
+                    onChange={(e) => setEditObSide(e.target.value as 'DR' | 'CR')}
+                  >
+                    <option value="DR">Debit (DR)</option>
+                    <option value="CR">Credit (CR)</option>
+                  </select>
+                </div>
+              </>
+            ) : null}
 
-      {kind === 'account' ? (
-        <>
-          <DetailField label="Name" value={recordString(record.name)} />
-          <DetailField label="Code" value={recordString(record.code)} />
-          <DetailField label="Type" value={recordString(record.type)} />
-          <DetailField label="Category" value={category?.name ?? '—'} />
-          <DetailField
-            label="Opening balance"
-            value={
-              recordNumber(record.pendingOpeningBalance) != null
-                ? `${formatLedgerAmount(recordNumber(record.pendingOpeningBalance)!)} ${record.pendingOpeningBalanceSide ?? 'DR'}`
-                : '—'
-            }
-          />
-        </>
-      ) : null}
+            {kind === 'product' ? (
+              <>
+                <div>
+                  <FieldLabel>Name</FieldLabel>
+                  <TextInput value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                </div>
+                <div>
+                  <FieldLabel>Unit</FieldLabel>
+                  <TextInput value={editUnit} onChange={(e) => setEditUnit(e.target.value)} />
+                </div>
+              </>
+            ) : null}
 
-      {kind === 'product' ? (
-        <>
-          <DetailField label="Name" value={recordString(record.name)} />
-          <DetailField label="Code" value={recordString(record.code)} />
-          <DetailField label="Unit" value={recordString(record.unit)} />
-          <DetailField
-            label="Maal Khata account"
-            value={linkedAccount ? `${linkedAccount.name} (${linkedAccount.code})` : '—'}
-          />
-          <DetailField label="Account category" value={linkedAccount?.category?.name ?? '—'} />
-          <DetailField
-            label="Pending opening balance"
-            value={
-              recordNumber(linkedAccount?.pendingOpeningBalance) != null
-                ? `${formatLedgerAmount(recordNumber(linkedAccount?.pendingOpeningBalance)!)} ${linkedAccount?.pendingOpeningBalanceSide ?? 'DR'}`
-                : '—'
-            }
-          />
-        </>
-      ) : null}
+            {kind === 'voucher' ? (
+              <>
+                <div>
+                  <FieldLabel>Date</FieldLabel>
+                  <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel>Amount</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Reference</FieldLabel>
+                  <TextInput value={editReference} onChange={(e) => setEditReference(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel>Description</FieldLabel>
+                  <TextInput value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+                </div>
+              </>
+            ) : null}
 
-      {kind === 'voucher' ? (
-        <>
-          <DetailField
-            label="Voucher"
-            value={`${formatVoucherTypeLabel(String(record.type))} ${formatVoucherNumber(recordNumber(record.number))}`}
-          />
-          <DetailField label="Date" value={formatDate(String(record.date ?? ''))} />
-          <DetailField label="Amount" value={formatLedgerAmount(String(record.amount ?? 0))} />
-          <DetailField
-            label="Debit"
-            value={debitAccount ? `${debitAccount.name} (${debitAccount.code})` : '—'}
-          />
-          <DetailField
-            label="Credit"
-            value={creditAccount ? `${creditAccount.name} (${creditAccount.code})` : '—'}
-          />
-          <DetailField label="Reference" value={recordString(record.reference)} />
-          <DetailField label="Description" value={recordString(record.description)} />
-        </>
-      ) : null}
+            {kind === 'invoice' ? (
+              <>
+                <div>
+                  <FieldLabel>Invoice date</FieldLabel>
+                  <TextInput
+                    type="date"
+                    value={editInvoiceDate}
+                    onChange={(e) => setEditInvoiceDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Bill no.</FieldLabel>
+                  <TextInput value={editBillNo} onChange={(e) => setEditBillNo(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel>Gari no.</FieldLabel>
+                  <TextInput value={editGariNo} onChange={(e) => setEditGariNo(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel>Tafseel</FieldLabel>
+                  <TextInput value={editTafseel} onChange={(e) => setEditTafseel(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel>Notes</FieldLabel>
+                  <TextInput value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+                </div>
+              </>
+            ) : null}
 
-      {kind === 'invoice' ? (
-        <>
-          <DetailField label="Reference" value={recordString(record.reference)} />
-          <DetailField
-            label="Type"
-            value={INVOICE_TYPE_LABELS[String(record.type)] ?? recordString(record.type)}
-          />
-          <DetailField label="Invoice date" value={formatDate(String(record.invoiceDate ?? ''))} />
-          <DetailField label="Total" value={formatLedgerAmount(String(record.total ?? 0))} />
-          <DetailField
-            label="Party account"
-            value={debitAccount ? `${debitAccount.name} (${debitAccount.code})` : '—'}
-          />
-          <DetailField
-            label="Product"
-            value={product ? `${product.name} (${product.code})` : '—'}
-          />
-          <DetailField label="Bill no." value={recordString(record.billNo)} />
-          <DetailField label="Gari no." value={recordString(record.gariNo)} />
-          <DetailField label="Line items" value={String(lineCount)} />
-          <DetailField label="Tafseel" value={recordString(record.tafseel)} />
-          <DetailField label="Notes" value={recordString(record.notes)} />
-        </>
-      ) : null}
+            {kind === 'account-adjustment' ? (
+              <>
+                <div>
+                  <FieldLabel>Date</FieldLabel>
+                  <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel>Amount</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Side</FieldLabel>
+                  <select
+                    className="app-input"
+                    value={editObSide}
+                    onChange={(e) => setEditObSide(e.target.value as 'DR' | 'CR')}
+                  >
+                    <option value="DR">Debit (DR)</option>
+                    <option value="CR">Credit (CR)</option>
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel>Notes</FieldLabel>
+                  <TextInput value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+                </div>
+              </>
+            ) : null}
 
-      {kind === 'account-adjustment' ? (
-        <>
-          <DetailField
-            label="Account"
-            value={
-              adjustmentAccount
-                ? `${adjustmentAccount.name} (${adjustmentAccount.code})`
-                : '—'
-            }
-          />
-          <DetailField label="Date" value={formatDate(String(record.adjustmentDate ?? ''))} />
-          <DetailField label="Amount" value={formatLedgerAmount(String(record.amount ?? 0))} />
-          <DetailField label="Side" value={recordString(record.side)} />
-          <DetailField label="Notes" value={recordString(record.notes)} />
-        </>
-      ) : null}
+            {kind === 'stock-adjustment' ? (
+              <>
+                <div>
+                  <FieldLabel>Bag type</FieldLabel>
+                  <select
+                    className="app-input"
+                    value={editBagType}
+                    onChange={(e) => setEditBagType(e.target.value as 'BORI' | 'THELA')}
+                  >
+                    <option value="BORI">Bori</option>
+                    <option value="THELA">Thela</option>
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel>Direction</FieldLabel>
+                  <select
+                    className="app-input"
+                    value={editDirection}
+                    onChange={(e) => setEditDirection(e.target.value as 'IN' | 'OUT')}
+                  >
+                    <option value="IN">IN</option>
+                    <option value="OUT">OUT</option>
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel>Bags</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0.01"
+                    step="1"
+                    value={editBags}
+                    onChange={(e) => setEditBags(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Ledger amount</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Date</FieldLabel>
+                  <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel>Notes</FieldLabel>
+                  <TextInput value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+                </div>
+              </>
+            ) : null}
 
-      {kind === 'stock-adjustment' ? (
-        <>
-          <DetailField
-            label="Product"
-            value={
-              adjustmentProduct
-                ? `${adjustmentProduct.name} (${adjustmentProduct.code})`
-                : '—'
-            }
-          />
-          <DetailField label="Bag type" value={recordString(record.bagType)} />
-          <DetailField label="Direction" value={recordString(record.direction)} />
-          <DetailField label="Bags" value={recordString(record.bags)} />
-          <DetailField label="Ledger amount" value={formatLedgerAmount(String(record.amount ?? 0))} />
-          <DetailField label="Date" value={formatDate(String(record.adjustmentDate ?? ''))} />
-          <DetailField label="Notes" value={recordString(record.notes)} />
-        </>
-      ) : null}
-
-      {canEdit ? (
-        <form className="mt-6 border-t border-border pt-4" onSubmit={onSaveEdit}>
-          <h3 className="mb-3 text-sm font-semibold text-textPrimary">Edit pending record</h3>
-          {kind === 'account' ? (
-            <div className="space-y-3">
-              <div>
-                <FieldLabel>Name</FieldLabel>
-                <TextInput value={editName} onChange={(e) => setEditName(e.target.value)} required />
-              </div>
-              <div>
-                <FieldLabel>Opening balance</FieldLabel>
-                <TextInput
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editObAmount}
-                  onChange={(e) => setEditObAmount(e.target.value)}
-                />
-              </div>
-              <div>
-                <FieldLabel>Balance side</FieldLabel>
-                <select
-                  className="app-input"
-                  value={editObSide}
-                  onChange={(e) => setEditObSide(e.target.value as 'DR' | 'CR')}
-                >
-                  <option value="DR">Debit (DR)</option>
-                  <option value="CR">Credit (CR)</option>
-                </select>
-              </div>
+            <div className="flex gap-2 pt-2">
+              <PrimaryButton type="submit" disabled={saving}>
+                {saving ? 'Saving…' : 'Save changes'}
+              </PrimaryButton>
+              <SecondaryButton type="button" onClick={onClose}>
+                Cancel
+              </SecondaryButton>
             </div>
-          ) : null}
-
-          {kind === 'product' ? (
-            <div className="space-y-3">
-              <div>
-                <FieldLabel>Name</FieldLabel>
-                <TextInput value={editName} onChange={(e) => setEditName(e.target.value)} required />
-              </div>
-              <div>
-                <FieldLabel>Unit</FieldLabel>
-                <TextInput value={editUnit} onChange={(e) => setEditUnit(e.target.value)} />
-              </div>
-            </div>
-          ) : null}
-
-          {kind === 'voucher' ? (
-            <div className="space-y-3">
-              <div>
-                <FieldLabel>Date</FieldLabel>
-                <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Amount</FieldLabel>
-                <TextInput
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <FieldLabel>Reference</FieldLabel>
-                <TextInput value={editReference} onChange={(e) => setEditReference(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Description</FieldLabel>
-                <TextInput value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
-              </div>
-            </div>
-          ) : null}
-
-          {kind === 'invoice' ? (
-            <div className="space-y-3">
-              <div>
-                <FieldLabel>Invoice date</FieldLabel>
-                <TextInput
-                  type="date"
-                  value={editInvoiceDate}
-                  onChange={(e) => setEditInvoiceDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <FieldLabel>Bill no.</FieldLabel>
-                <TextInput value={editBillNo} onChange={(e) => setEditBillNo(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Gari no.</FieldLabel>
-                <TextInput value={editGariNo} onChange={(e) => setEditGariNo(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Tafseel</FieldLabel>
-                <TextInput value={editTafseel} onChange={(e) => setEditTafseel(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Notes</FieldLabel>
-                <TextInput value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
-              </div>
-            </div>
-          ) : null}
-
-          {kind === 'account-adjustment' ? (
-            <div className="space-y-3">
-              <div>
-                <FieldLabel>Date</FieldLabel>
-                <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Amount</FieldLabel>
-                <TextInput
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <FieldLabel>Side</FieldLabel>
-                <select
-                  className="app-input"
-                  value={editObSide}
-                  onChange={(e) => setEditObSide(e.target.value as 'DR' | 'CR')}
-                >
-                  <option value="DR">Debit (DR)</option>
-                  <option value="CR">Credit (CR)</option>
-                </select>
-              </div>
-              <div>
-                <FieldLabel>Notes</FieldLabel>
-                <TextInput value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
-              </div>
-            </div>
-          ) : null}
-
-          {kind === 'stock-adjustment' ? (
-            <div className="space-y-3">
-              <div>
-                <FieldLabel>Bag type</FieldLabel>
-                <select
-                  className="app-input"
-                  value={editBagType}
-                  onChange={(e) => setEditBagType(e.target.value as 'BORI' | 'THELA')}
-                >
-                  <option value="BORI">Bori</option>
-                  <option value="THELA">Thela</option>
-                </select>
-              </div>
-              <div>
-                <FieldLabel>Direction</FieldLabel>
-                <select
-                  className="app-input"
-                  value={editDirection}
-                  onChange={(e) => setEditDirection(e.target.value as 'IN' | 'OUT')}
-                >
-                  <option value="IN">IN</option>
-                  <option value="OUT">OUT</option>
-                </select>
-              </div>
-              <div>
-                <FieldLabel>Bags</FieldLabel>
-                <TextInput
-                  type="number"
-                  min="0.01"
-                  step="1"
-                  value={editBags}
-                  onChange={(e) => setEditBags(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <FieldLabel>Ledger amount</FieldLabel>
-                <TextInput
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <FieldLabel>Date</FieldLabel>
-                <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Notes</FieldLabel>
-                <TextInput value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-4">
-            <PrimaryButton type="submit" disabled={saving}>
-              {saving ? 'Saving…' : 'Save changes'}
-            </PrimaryButton>
-          </div>
-        </form>
-      ) : null}
-
-      {!isAdmin ? (
-        <p className="mt-4 text-sm text-textMuted">
-          Only an administrator can approve or reject pending records.
-        </p>
-      ) : null}
-    </Panel>
+          </form>
+        )}
+      </Panel>
+    </div>
   );
 }
 
@@ -622,9 +418,10 @@ export function PendingApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | ApprovalKind>('all');
-  const [selected, setSelected] = useState<{ kind: ApprovalKind; id: number } | null>(null);
-  const [detail, setDetail] = useState<PendingApprovalDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [actingKey, setActingKey] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<{ kind: ApprovalKind; id: number } | null>(null);
+  const [editDetail, setEditDetail] = useState<PendingApprovalDetail | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -641,73 +438,74 @@ export function PendingApprovalsPage() {
     }
   }, []);
 
-  const loadDetail = useCallback(async (kind: ApprovalKind, id: number) => {
-    setDetailLoading(true);
-    setError('');
-    try {
-      const row = await api.getPendingApprovalDetail(kind, id);
-      setDetail(row);
-    } catch (err) {
-      setDetail(null);
-      setError(err instanceof Error ? err.message : 'Failed to load record detail');
-    } finally {
-      setDetailLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     void loadList();
   }, [loadList]);
 
   useEffect(() => {
-    if (!selected) {
-      setDetail(null);
+    if (!editTarget) {
+      setEditDetail(null);
       return;
     }
-    void loadDetail(selected.kind, selected.id);
-  }, [selected, loadDetail]);
+    setEditLoading(true);
+    void api
+      .getPendingApprovalDetail(editTarget.kind, editTarget.id)
+      .then(setEditDetail)
+      .catch((err) => {
+        setEditDetail(null);
+        setError(err instanceof Error ? err.message : 'Failed to load record for edit');
+        setEditTarget(null);
+      })
+      .finally(() => setEditLoading(false));
+  }, [editTarget]);
 
   const filteredItems = useMemo(
     () => (kindFilter === 'all' ? items : items.filter((row) => row.kind === kindFilter)),
     [items, kindFilter],
   );
 
-  const selectedItem = useMemo(
-    () =>
-      selected
-        ? items.find((row) => row.kind === selected.kind && row.id === selected.id) ?? null
-        : null,
-    [items, selected],
-  );
-
-  const canEditSelected =
-    isAdmin ||
-    (selectedItem?.createdBy?.id != null && selectedItem.createdBy.id === user?.id) ||
-    (detail != null && recordCreatedById(detail.record) === user?.id);
-
-  async function onApproveSelected() {
-    if (!selected) return;
-    await api.approvePendingRecord(selected.kind, selected.id);
-    setSelected(null);
-    setDetail(null);
-    await loadList();
-    notifyApprovalsChanged();
+  function canEditRow(row: PendingApprovalItem) {
+    return isAdmin || (row.createdBy?.id != null && row.createdBy.id === user?.id);
   }
 
-  async function onRejectSelected() {
-    if (!selected) return;
-    await api.rejectPendingRecord(selected.kind, selected.id);
-    setSelected(null);
-    setDetail(null);
-    await loadList();
-    notifyApprovalsChanged();
+  async function onApprove(row: PendingApprovalItem) {
+    const key = rowKey(row);
+    setActingKey(key);
+    setError('');
+    try {
+      await api.approvePendingRecord(row.kind, row.id);
+      await loadList();
+      notifyApprovalsChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Approval failed');
+    } finally {
+      setActingKey(null);
+    }
   }
 
-  async function onDetailSaved() {
-    if (!selected) return;
-    await Promise.all([loadList(), loadDetail(selected.kind, selected.id)]);
-    notifyApprovalsChanged();
+  async function onReject(row: PendingApprovalItem) {
+    if (!window.confirm('Cancel this pending record? It will not be posted.')) return;
+    const key = rowKey(row);
+    setActingKey(key);
+    setError('');
+    try {
+      await api.rejectPendingRecord(row.kind, row.id);
+      await loadList();
+      notifyApprovalsChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Cancel failed');
+    } finally {
+      setActingKey(null);
+    }
   }
+
+  const editCanSave =
+    editDetail != null &&
+    (isAdmin ||
+      (editTarget &&
+        items.find((row) => row.kind === editTarget.kind && row.id === editTarget.id)?.createdBy?.id ===
+          user?.id) ||
+      (editDetail && recordCreatedById(editDetail.record) === user?.id));
 
   return (
     <PageShell
@@ -739,76 +537,116 @@ export function PendingApprovalsPage() {
 
       {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-        <Panel>
-          <h2 className="mb-4 text-base font-semibold text-textPrimary">
-            Queue ({filteredItems.length})
-          </h2>
-          {loading ? (
-            <p className="text-sm text-textMuted">Loading…</p>
-          ) : filteredItems.length === 0 ? (
-            <p className="text-sm text-textMuted">No pending approvals.</p>
-          ) : (
-            <LegacyTable>
-              <thead>
-                <tr>
-                  <th>Type</th>
-                  <th>Description</th>
-                  <th className="text-right">Amount</th>
-                  <th>Submitted by</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.map((row) => {
-                  const isSelected = selected?.kind === row.kind && selected.id === row.id;
-                  return (
-                    <tr
-                      key={`${row.kind}-${row.id}`}
-                      className={`cursor-pointer ${isSelected ? 'bg-surface1' : ''}`}
-                      onClick={() => setSelected({ kind: row.kind, id: row.id })}
-                    >
-                      <td>{KIND_LABELS[row.kind]}</td>
-                      <td>
-                        <div className="font-medium">{row.label}</div>
-                        {row.sublabel ? (
-                          <div className="text-xs text-textMuted">{row.sublabel}</div>
-                        ) : null}
-                      </td>
-                      <td className="text-right">
-                        {row.amount != null ? formatLedgerAmount(row.amount) : '—'}
-                      </td>
-                      <td>{row.createdBy?.displayName ?? row.createdBy?.username ?? '—'}</td>
-                      <td>{formatDate(row.createdAt)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </LegacyTable>
-          )}
-        </Panel>
-
-        {selected ? (
-          detailLoading ? (
-            <Panel>
-              <p className="text-sm text-textMuted">Loading detail…</p>
-            </Panel>
-          ) : detail ? (
-            <ApprovalDetailPanel
-              detail={detail}
-              isAdmin={isAdmin}
-              canEdit={canEditSelected}
-              onApprove={onApproveSelected}
-              onReject={onRejectSelected}
-              onSaved={onDetailSaved}
-            />
-          ) : null
+      <Panel className="p-0">
+        {loading ? (
+          <p className="p-4 text-sm text-textMuted">Loading…</p>
+        ) : filteredItems.length === 0 ? (
+          <p className="p-4 text-sm text-textMuted">No pending approvals.</p>
         ) : (
-          <Panel>
-            <p className="text-sm text-textMuted">Select a row to view details and take action.</p>
-          </Panel>
+          <LegacyTable className="approvals-table border-0">
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Type</th>
+                <th>Reference</th>
+                <th>Date</th>
+                <th>Debit Account</th>
+                <th>Credit Account</th>
+                <th>Creator</th>
+                <th className="text-right">Amount</th>
+                <th>Description</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map((row) => {
+                const key = rowKey(row);
+                const busy = actingKey === key;
+                const editable = canEditRow(row);
+                const hasActions = isAdmin || editable;
+                return (
+                  <tr key={key}>
+                    <td className="whitespace-nowrap">{KIND_LABELS[row.kind]}</td>
+                    <td className="whitespace-nowrap">{row.typeLabel ?? row.recordType ?? '—'}</td>
+                    <td className="whitespace-nowrap">{row.reference ?? row.label ?? '—'}</td>
+                    <td className="whitespace-nowrap">
+                      {row.recordDate ? formatDate(row.recordDate) : formatDate(row.createdAt)}
+                    </td>
+                    <td className="whitespace-nowrap font-medium text-ledgerDebit">
+                      {accountCellLabel(row.debitAccount)}
+                    </td>
+                    <td className="whitespace-nowrap font-medium text-ledgerCredit">
+                      {accountCellLabel(row.creditAccount)}
+                    </td>
+                    <td className="whitespace-nowrap">
+                      {row.createdBy?.displayName ?? row.createdBy?.username ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap text-right tabular-nums">
+                      {row.amount != null ? formatLedgerAmount(row.amount) : '—'}
+                    </td>
+                    <td className="max-w-[14rem] truncate" title={row.description ?? undefined}>
+                      {row.description?.trim() ? row.description : '—'}
+                    </td>
+                    <td className="whitespace-nowrap">
+                      {hasActions ? (
+                        <div className="flex items-center gap-2">
+                          {isAdmin ? (
+                            <PrimaryButton
+                              type="button"
+                              className="!px-2.5 !py-1 text-xs"
+                              disabled={busy}
+                              onClick={() => void onApprove(row)}
+                            >
+                              {busy ? '…' : 'Approve'}
+                            </PrimaryButton>
+                          ) : null}
+                          {editable ? (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-textPrimary hover:underline disabled:opacity-60"
+                              disabled={busy || editLoading}
+                              onClick={() => setEditTarget({ kind: row.kind, id: row.id })}
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-danger hover:underline disabled:opacity-60"
+                              disabled={busy}
+                              onClick={() => void onReject(row)}
+                            >
+                              Cancel
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </LegacyTable>
         )}
-      </div>
+      </Panel>
+
+      {!isAdmin && filteredItems.some(canEditRow) ? (
+        <p className="mt-3 text-sm text-textMuted">
+          Click Edit on your rows to update them before an administrator approves.
+        </p>
+      ) : null}
+
+      {editTarget && editDetail && !editLoading ? (
+        <ApprovalEditModal
+          detail={editDetail}
+          canEdit={Boolean(editCanSave)}
+          onClose={() => setEditTarget(null)}
+          onSaved={loadList}
+        />
+      ) : null}
     </PageShell>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { APPROVALS_CHANGED_EVENT } from '../lib/approvals';
 import { LegacyTable, PageShell, Tile } from '../components/ui/PageShell';
 import { api } from '../lib/api';
 import { formatLedgerAmount, formatVoucherNumber, formatVoucherTypeLabel, voucherTypeColorClass } from '../lib/format';
@@ -18,6 +19,7 @@ function StatBox({ label, value }: { label: string; value: string }) {
 export function PosHomePage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     api
@@ -26,9 +28,43 @@ export function PosHomePage() {
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load dashboard'));
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() {
+      try {
+        const rows = await api.listPendingApprovals();
+        if (!cancelled) setPendingCount(rows.length);
+      } catch {
+        if (!cancelled) setPendingCount(0);
+      }
+    }
+    void refresh();
+    window.addEventListener(APPROVALS_CHANGED_EVENT, refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(APPROVALS_CHANGED_EVENT, refresh);
+    };
+  }, []);
+
   return (
     <PageShell subtitle="Today at a glance">
       {loadError ? <p className="text-sm text-danger">{loadError}</p> : null}
+
+      <Link
+        to="/approvals"
+        className="mb-4 flex items-center justify-between rounded-sm border border-border bg-surface2 px-4 py-3 text-sm hover:bg-surface1"
+      >
+        <span className="font-medium text-textPrimary">Pending Approvals</span>
+        <span className="text-textSecondary">
+          {pendingCount > 0 ? (
+            <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-bold text-white">
+              {pendingCount} waiting
+            </span>
+          ) : (
+            'Review submitted records'
+          )}
+        </span>
+      </Link>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatBox

@@ -8,10 +8,12 @@
   "scripts": {
     "dev": "concurrently -k \"npm run dev -w backend\" \"cross-env ELECTRON_DEV=1 npm run dev -w frontend\" \"npm run electron:dev\"",
     "dev:web": "concurrently -k \"npm run dev -w backend\" \"npm run dev -w frontend\"",
-    "electron:dev": "npm run build:electron && wait-on http://127.0.0.1:5173 http://127.0.0.1:3847/api/health && cross-env NODE_ENV=development electron .",
+    "electron:dev": "npm run build:electron && node scripts/prepare-dev-electron.js && wait-on http://127.0.0.1:5173 http://127.0.0.1:3847/api/health && node scripts/launch-electron-dev.js",
     "electron:build": "npm run db:generate -w backend && npm run build -w backend && npm run build -w frontend && npm run build:electron",
     "build:electron": "npm run prepare:icons && tsc -p electron/tsconfig.json",
     "prepare:icons": "node scripts/generate-icons.js",
+    "prepare:electron-brand": "node scripts/prepare-dev-electron.js",
+    "shortcut:desktop": "powershell -ExecutionPolicy Bypass -File scripts/update-desktop-shortcut.ps1",
     "dist": "npm run electron:build && electron-builder --publish never",
     "dist:win": "npm run electron:build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
     "start": "cross-env NODE_ENV=production electron .",
@@ -54,7 +56,7 @@
     ],
     "win": {
       "icon": "build/icon.ico",
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "target": [
         "nsis"
       ]
@@ -63,7 +65,11 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "shortcutName": "Grain Market POS"
     },
     "publish": null
   },
@@ -74,6 +80,7 @@
     "electron-builder": "^25.1.8",
     "png-to-ico": "^3.0.2",
     "rcedit": "^4.0.1",
+    "sharp": "^0.35.4",
     "typescript": "^5.7.3",
     "wait-on": "^8.0.1"
   },
