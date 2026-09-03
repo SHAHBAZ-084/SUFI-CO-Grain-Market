@@ -336,10 +336,168 @@ async function validateVoucherCreate(
   return { debitAccount, creditAccount, financialYearId };
 }
 
+/** Sort key for the earliest entry affected by a post/cancel/amount change. */
+export type LedgerRecomputeFrom = {
+  effectiveDate: Date;
+  voucherNumber?: number | null;
+  /** Tie-breaker; use -1 to include every entry at the same date/number. */
+  entryId?: number | null;
+  isOpeningBalance?: boolean;
+};
+
+type LedgerEntrySortRow = {
+  id: number;
+  createdAt: Date;
+  isOpeningBalance: boolean;
+  type: LedgerEntryType;
+  amount: Prisma.Decimal | number;
+  balance: Prisma.Decimal | number;
+  voucher: { date: Date; number: number } | null;
+};
+
+function recomputeSortKey(from: LedgerRecomputeFrom): {
+  id: number;
+  createdAt: Date;
+  isOpeningBalance: boolean;
+  voucher: { date: Date; number: number } | null;
+} {
+  const isOpening = from.isOpeningBalance === true;
+  return {
+    id: from.entryId ?? -1,
+    createdAt: from.effectiveDate,
+    isOpeningBalance: isOpening,
+    voucher: isOpening
+      ? null
+      : { date: from.effectiveDate, number: from.voucherNumber ?? 0 },
+  };
+}
+
+/**
+ * Find the last year entry that sorts strictly before `fromKey`, without loading
+ * the whole prior history (critical for append-only posts on busy ledgers).
+ *
+ * When `sameDayCandidates` is provided (already loaded forward window), reuse it
+ * instead of querying that window again.
+ */
+async function findPredecessorLedgerEntryInTx(
+  tx: Prisma.TransactionClient,
+  ledgerId: number,
+  financialYearId: number,
+  yearStart: Date,
+  yearEnd: Date | null,
+  fromKey: ReturnType<typeof recomputeSortKey>,
+  sameDayCandidates?: LedgerEntrySortRow[],
+): Promise<LedgerEntrySortRow | null> {
+  const fromDay = startOfDay(fromKey.isOpeningBalance ? fromKey.createdAt : entryEffectiveDate(fromKey));
+  const voucherSelect = { select: { date: true, number: true } } as const;
+
+  const sameDayOrLater =
+    sameDayCandidates
+    ?? (await tx.ledgerEntry.findMany({
+      where: {
+        ledgerId,
+        isReversal: false,
+        OR: [
+          {
+            voucher: {
+              financialYearId,
+              status: VoucherStatus.ACTIVE,
+              date: { gte: fromDay, ...(yearEnd ? { lte: yearEnd } : {}) },
+            },
+          },
+          {
+            isOpeningBalance: true,
+            createdAt: {
+              gte: fromDay,
+              ...(yearEnd ? { lte: yearEnd } : {}),
+            },
+          },
+          {
+            voucherId: null,
+            isOpeningBalance: false,
+            createdAt: {
+              gte: fromDay,
+              ...(yearEnd ? { lte: yearEnd } : {}),
+            },
+          },
+        ],
+      },
+      include: { voucher: voucherSelect },
+    }));
+
+  const beforeOnOrAfterDay = sameDayOrLater
+    .filter((entry) => compareLedgerEntries(entry, fromKey) < 0)
+    .sort(compareLedgerEntries);
+  if (beforeOnOrAfterDay.length > 0) {
+    return beforeOnOrAfterDay[beforeOnOrAfterDay.length - 1];
+  }
+
+  const [lastVoucherBefore, lastOpeningBefore, lastOrphanBefore] = await Promise.all([
+    tx.ledgerEntry.findFirst({
+      where: {
+        ledgerId,
+        isReversal: false,
+        voucher: {
+          financialYearId,
+          status: VoucherStatus.ACTIVE,
+          date: { gte: yearStart, lt: fromDay },
+        },
+      },
+      include: { voucher: voucherSelect },
+      orderBy: [
+        { voucher: { date: 'desc' } },
+        { voucher: { number: 'desc' } },
+        { id: 'desc' },
+      ],
+    }),
+    tx.ledgerEntry.findFirst({
+      where: {
+        ledgerId,
+        isReversal: false,
+        isOpeningBalance: true,
+        createdAt: {
+          gte: yearStart,
+          lt: fromDay,
+          ...(yearEnd ? { lte: yearEnd } : {}),
+        },
+      },
+      include: { voucher: voucherSelect },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    }),
+    tx.ledgerEntry.findFirst({
+      where: {
+        ledgerId,
+        isReversal: false,
+        voucherId: null,
+        isOpeningBalance: false,
+        createdAt: {
+          gte: yearStart,
+          lt: fromDay,
+          ...(yearEnd ? { lte: yearEnd } : {}),
+        },
+      },
+      include: { voucher: voucherSelect },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    }),
+  ]);
+
+  const candidates = [lastVoucherBefore, lastOpeningBefore, lastOrphanBefore].filter(
+    (row): row is NonNullable<typeof row> => row != null,
+  );
+  if (candidates.length === 0) return null;
+  candidates.sort(compareLedgerEntries);
+  return candidates[candidates.length - 1];
+}
+
+/**
+ * Recompute stored running balances from the affected sort point forward.
+ * When `from` is omitted, recomputes the entire financial year (safe fallback).
+ */
 async function recomputeLedgerRunningBalancesInTx(
   tx: Prisma.TransactionClient,
   ledgerId: number,
   financialYearId: number,
+  from?: LedgerRecomputeFrom | null,
 ) {
   const ledger = await tx.ledger.findUniqueOrThrow({
     where: { id: ledgerId },
@@ -348,16 +506,107 @@ async function recomputeLedgerRunningBalancesInTx(
 
   const { balance: opening } = await getOpeningBalanceSnapshot(tx, ledger.accountId, financialYearId);
   const { yearStart, yearEnd } = await loadFinancialYearBounds(tx, financialYearId);
+  const voucherSelect = { select: { date: true, number: true } } as const;
 
-  const entries = await tx.ledgerEntry.findMany({
-    where: ledgerEntriesForYearWhere(ledgerId, financialYearId, yearStart, yearEnd),
-    include: { voucher: { select: { date: true, number: true } } },
-    orderBy: { id: 'asc' },
-  });
+  let entries: LedgerEntrySortRow[];
+  let running: number;
 
-  entries.sort(compareLedgerEntries);
+  // Opening rows sort before every voucher; a new/changed opening can shift the
+  // entire year. Keep the full-year path for that case (and when `from` is omitted).
+  if (!from || from.isOpeningBalance) {
+    entries = await tx.ledgerEntry.findMany({
+      where: ledgerEntriesForYearWhere(ledgerId, financialYearId, yearStart, yearEnd),
+      include: { voucher: voucherSelect },
+      orderBy: { id: 'asc' },
+    });
+    entries.sort(compareLedgerEntries);
+    running = opening;
+  } else {
+    const fromKey = recomputeSortKey(from);
+    const fromDay = startOfDay(
+      fromKey.isOpeningBalance ? fromKey.createdAt : entryEffectiveDate(fromKey),
+    );
+    const fromDayEnd = endOfDay(fromDay);
+    const fromVoucherNumber = fromKey.voucher?.number ?? 0;
 
-  let running = opening;
+    const forward = await tx.ledgerEntry.findMany({
+      where: {
+        ledgerId,
+        isReversal: false,
+        OR: [
+          // Strictly later calendar days
+          {
+            voucher: {
+              financialYearId,
+              status: VoucherStatus.ACTIVE,
+              date: {
+                gt: fromDayEnd,
+                ...(yearEnd ? { lte: yearEnd } : {}),
+              },
+            },
+          },
+          // Same day at or after this voucher number (avoids reloading earlier same-day rows)
+          {
+            voucher: {
+              financialYearId,
+              status: VoucherStatus.ACTIVE,
+              date: { gte: fromDay, lte: fromDayEnd },
+              number: { gte: fromVoucherNumber },
+            },
+          },
+          {
+            isOpeningBalance: true,
+            createdAt: {
+              gte: fromDay,
+              ...(yearEnd ? { lte: yearEnd } : {}),
+            },
+          },
+          {
+            voucherId: null,
+            isOpeningBalance: false,
+            createdAt: {
+              gte: fromDay,
+              ...(yearEnd ? { lte: yearEnd } : {}),
+            },
+          },
+        ],
+      },
+      include: { voucher: voucherSelect },
+      orderBy: { id: 'asc' },
+    });
+    forward.sort(compareLedgerEntries);
+
+    const startIndex = forward.findIndex((entry) => compareLedgerEntries(entry, fromKey) >= 0);
+    entries = startIndex >= 0 ? forward.slice(startIndex) : [];
+
+    // Predecessor may sit earlier the same day (number < from) — load that narrow window.
+    const sameDayEarlier = await tx.ledgerEntry.findMany({
+      where: {
+        ledgerId,
+        isReversal: false,
+        voucher: {
+          financialYearId,
+          status: VoucherStatus.ACTIVE,
+          date: { gte: fromDay, lte: fromDayEnd },
+          number: { lt: fromVoucherNumber },
+        },
+      },
+      include: { voucher: voucherSelect },
+    });
+    const predecessorWindow = [...sameDayEarlier, ...forward];
+
+    const predecessor = await findPredecessorLedgerEntryInTx(
+      tx,
+      ledgerId,
+      financialYearId,
+      yearStart,
+      yearEnd,
+      fromKey,
+      predecessorWindow,
+    );
+    running = predecessor != null ? Number(predecessor.balance) : opening;
+  }
+
   for (const entry of entries) {
     const debit = entry.type === LedgerEntryType.DEBIT ? Number(entry.amount) : 0;
     const credit = entry.type === LedgerEntryType.CREDIT ? Number(entry.amount) : 0;
@@ -657,8 +906,13 @@ export async function postOneSidedEntryInTx(
   });
 
   const equityAccount = await findOrCreateOpeningBalanceEquityAccount(tx);
-  await recomputeLedgerRunningBalancesInTx(tx, params.ledgerId, params.financialYearId);
-  await recomputeLedgerRunningBalancesInTx(tx, equityAccount.ledger!.id, params.financialYearId);
+  const from: LedgerRecomputeFrom = {
+    effectiveDate: entryDate,
+    isOpeningBalance: params.isOpeningBalance,
+    entryId: -1,
+  };
+  await recomputeLedgerRunningBalancesInTx(tx, params.ledgerId, params.financialYearId, from);
+  await recomputeLedgerRunningBalancesInTx(tx, equityAccount.ledger!.id, params.financialYearId, from);
 }
 
 /** Post Maal Khata / account opening balance + hidden Opening Balance Equity offset. */
@@ -1828,6 +2082,10 @@ export async function postStandardVoucherLedgerEntriesInTx(
   notes: string | null | undefined,
   financialYearId: number,
 ) {
+  const voucher = await tx.voucher.findUniqueOrThrow({
+    where: { id: voucherId },
+    select: { date: true, number: true },
+  });
   const debitLedger = await tx.ledger.findUniqueOrThrow({ where: { accountId: debitAccountId } });
   const creditLedger = await tx.ledger.findUniqueOrThrow({ where: { accountId: creditAccountId } });
 
@@ -1854,8 +2112,13 @@ export async function postStandardVoucherLedgerEntriesInTx(
     ],
   });
 
-  await recomputeLedgerRunningBalancesInTx(tx, debitLedger.id, financialYearId);
-  await recomputeLedgerRunningBalancesInTx(tx, creditLedger.id, financialYearId);
+  const from: LedgerRecomputeFrom = {
+    effectiveDate: voucher.date,
+    voucherNumber: voucher.number,
+    entryId: -1,
+  };
+  await recomputeLedgerRunningBalancesInTx(tx, debitLedger.id, financialYearId, from);
+  await recomputeLedgerRunningBalancesInTx(tx, creditLedger.id, financialYearId, from);
 }
 
 export type VoucherLeg = {
@@ -1871,6 +2134,10 @@ async function postMultiLegVoucherEntries(
   legs: VoucherLeg[],
   financialYearId: number,
 ) {
+  const voucher = await tx.voucher.findUniqueOrThrow({
+    where: { id: voucherId },
+    select: { date: true, number: true },
+  });
   const ledgerByAccountId = new Map<number, number>();
 
   for (const leg of legs) {
@@ -1894,8 +2161,13 @@ async function postMultiLegVoucherEntries(
     });
   }
 
+  const from: LedgerRecomputeFrom = {
+    effectiveDate: voucher.date,
+    voucherNumber: voucher.number,
+    entryId: -1,
+  };
   for (const ledgerId of ledgerByAccountId.values()) {
-    await recomputeLedgerRunningBalancesInTx(tx, ledgerId, financialYearId);
+    await recomputeLedgerRunningBalancesInTx(tx, ledgerId, financialYearId, from);
   }
 }
 
@@ -2274,8 +2546,13 @@ export async function updateVoucherAmount(
       data: { amount: newAmount },
     });
 
-    await recomputeLedgerRunningBalancesInTx(tx, debitEntry.ledgerId, voucher.financialYearId!);
-    await recomputeLedgerRunningBalancesInTx(tx, creditEntry.ledgerId, voucher.financialYearId!);
+    const from: LedgerRecomputeFrom = {
+      effectiveDate: voucher.date,
+      voucherNumber: voucher.number,
+      entryId: -1,
+    };
+    await recomputeLedgerRunningBalancesInTx(tx, debitEntry.ledgerId, voucher.financialYearId!, from);
+    await recomputeLedgerRunningBalancesInTx(tx, creditEntry.ledgerId, voucher.financialYearId!, from);
 
     await assertTrialBalanceInDev(tx);
 
@@ -2330,8 +2607,13 @@ export async function cancelVoucherInTx(
     select: { ledgerId: true },
   });
   const ledgerIds = [...new Set(affectedEntries.map((entry) => entry.ledgerId))];
+  const from: LedgerRecomputeFrom = {
+    effectiveDate: voucher.date,
+    voucherNumber: voucher.number,
+    entryId: -1,
+  };
   for (const ledgerId of ledgerIds) {
-    await recomputeLedgerRunningBalancesInTx(tx, ledgerId, voucher.financialYearId!);
+    await recomputeLedgerRunningBalancesInTx(tx, ledgerId, voucher.financialYearId!, from);
   }
 
   await assertTrialBalanceInDev(tx);
@@ -2602,9 +2884,10 @@ export async function getLedgerEntries(
   accountId: number,
   fromDate?: string,
   toDate?: string,
+  pagination?: { limit: number; offset: number } | null,
 ) {
   const financialYearId = await getActiveFinancialYearId(prisma);
-  return buildLedgerEntriesReport(accountId, financialYearId, fromDate, toDate);
+  return buildLedgerEntriesReport(accountId, financialYearId, fromDate, toDate, pagination);
 }
 
 export async function getLedgerEntriesForYear(
@@ -2612,12 +2895,13 @@ export async function getLedgerEntriesForYear(
   financialYearId: number,
   fromDate?: string,
   toDate?: string,
+  pagination?: { limit: number; offset: number } | null,
 ) {
   const year = await prisma.financialYear.findFirst({
     where: { id: financialYearId },
   });
   if (!year) throw new AppError(404, 'Financial year not found');
-  return buildLedgerEntriesReport(accountId, financialYearId, fromDate, toDate);
+  return buildLedgerEntriesReport(accountId, financialYearId, fromDate, toDate, pagination);
 }
 
 async function buildLedgerEntriesReport(
@@ -2625,6 +2909,7 @@ async function buildLedgerEntriesReport(
   financialYearId: number,
   fromDate?: string,
   toDate?: string,
+  pagination?: { limit: number; offset: number } | null,
 ) {
   let ledger = await prisma.ledger.findFirst({
     where: { accountId },
@@ -2785,10 +3070,29 @@ async function buildLedgerEntriesReport(
         return sum + debit - credit;
       }, 0);
 
+  const openingRows = rows.filter((r) => r.isOpeningRow);
+  const entryRows = rows.filter((r) => !r.isOpeningRow);
+  const total = entryRows.length;
+
+  let pageRows = rows;
+  let limit = total;
+  let offset = 0;
+
+  if (pagination) {
+    limit = pagination.limit;
+    offset = pagination.offset;
+    const pageEntries = entryRows.slice(offset, offset + limit);
+    // Opening balance row only on the first page so running context is clear.
+    pageRows = offset === 0 ? [...openingRows, ...pageEntries] : pageEntries;
+  }
+
   return {
     account: ledger.account,
     balance: closingBalance,
-    rows,
+    rows: pageRows,
+    total,
+    limit: pagination ? limit : total,
+    offset: pagination ? offset : 0,
     summary: {
       periodOpening: from ? periodOpening : baseOpening,
       totalDebit,

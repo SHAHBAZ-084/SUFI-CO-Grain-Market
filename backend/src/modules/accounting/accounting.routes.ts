@@ -221,6 +221,17 @@ accountingRouter.get(
     const fromDate = req.query.fromDate as string | undefined;
     const toDate = req.query.toDate as string | undefined;
     const financialYearIdParam = req.query.financialYearId as string | undefined;
+    const hasPagination =
+      req.query.limit != null || req.query.offset != null;
+    const pagination = hasPagination
+      ? parsePagination(
+          {
+            limit: req.query.limit as string | undefined,
+            offset: req.query.offset as string | undefined,
+          },
+          { limit: 100, max: 500 },
+        )
+      : null;
 
     const ledger = financialYearIdParam
       ? await accountingService.getLedgerEntriesForYear(
@@ -228,8 +239,9 @@ accountingRouter.get(
           parseInt(financialYearIdParam, 10),
           fromDate,
           toDate,
+          pagination,
         )
-      : await accountingService.getLedgerEntries(accountId, fromDate, toDate);
+      : await accountingService.getLedgerEntries(accountId, fromDate, toDate, pagination);
     res.json(ledger);
   }),
 );

@@ -173,6 +173,7 @@ export async function getSalePurchaseReport(params: {
   toDate: string;
   partyAccountId?: number | null;
   productId?: number | null;
+  pagination?: { limit: number; offset: number } | null;
 }) {
   const types = resolveTypes(params.mode, params.typeFilter);
   const from = parseDay(params.fromDate, false);
@@ -327,7 +328,20 @@ export async function getSalePurchaseReport(params: {
   }
 
   const groupByCategory = params.typeFilter === 'ALL' && params.mode === 'SALE';
-  const { categories, grandTotal } = groupRows(rows, groupByCategory);
+  const { grandTotal } = groupRows(rows, groupByCategory);
+  const total = rows.length;
+
+  let pageRows = rows;
+  let limit = total;
+  let offset = 0;
+  if (params.pagination) {
+    limit = params.pagination.limit;
+    offset = params.pagination.offset;
+    pageRows = rows.slice(offset, offset + limit);
+  }
+
+  // Group only the current page for display; grandTotal stays period-wide.
+  const { categories } = groupRows(pageRows, groupByCategory);
 
   return {
     mode: params.mode,
@@ -337,6 +351,9 @@ export async function getSalePurchaseReport(params: {
     title: params.mode === 'SALE' ? 'Sale Report' : 'Purchase Report',
     categories,
     grandTotal,
-    rowCount: rows.length,
+    rowCount: total,
+    total,
+    limit: params.pagination ? limit : total,
+    offset: params.pagination ? offset : 0,
   };
 }

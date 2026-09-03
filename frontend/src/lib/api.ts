@@ -687,11 +687,19 @@ export const api = {
     return request<Account>(`/api/accounting/accounts/${id}`, { method: 'DELETE' });
   },
 
-  getLedger(accountId: number, params?: { fromDate?: string; toDate?: string; financialYearId?: number }) {
+  getLedger(accountId: number, params?: {
+    fromDate?: string;
+    toDate?: string;
+    financialYearId?: number;
+    limit?: number;
+    offset?: number;
+  }) {
     const queryParams = new URLSearchParams();
     if (params?.fromDate) queryParams.set('fromDate', params.fromDate);
     if (params?.toDate) queryParams.set('toDate', params.toDate);
     if (params?.financialYearId != null) queryParams.set('financialYearId', String(params.financialYearId));
+    if (params?.limit != null) queryParams.set('limit', String(params.limit));
+    if (params?.offset != null) queryParams.set('offset', String(params.offset));
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return request<{
       account: { id: number; name: string; code: string; type: string };
@@ -707,6 +715,9 @@ export const api = {
         balance: number;
         isOpeningRow?: boolean;
       }[];
+      total: number;
+      limit: number;
+      offset: number;
       summary: { periodOpening: number; totalDebit: number; totalCredit: number; closingBalance: number };
     }>(`/api/accounting/ledger/${accountId}${query}`);
   },
@@ -824,11 +835,18 @@ export const api = {
     }>('/api/inventory/bardana/add', { method: 'POST', body: JSON.stringify(data) });
   },
 
-  getStockReport(params: { productId: number; bagType: 'BORI' | 'THELA' }) {
+  getStockReport(params: {
+    productId: number;
+    bagType: 'BORI' | 'THELA';
+    limit?: number;
+    offset?: number;
+  }) {
     const query = new URLSearchParams({
       productId: String(params.productId),
       bagType: params.bagType,
     });
+    if (params.limit != null) query.set('limit', String(params.limit));
+    if (params.offset != null) query.set('offset', String(params.offset));
     return request<{
       product: { id: number; name: string; code: string };
       bagType: 'BORI' | 'THELA';
@@ -845,6 +863,9 @@ export const api = {
         bags: number;
         runningBalance: number;
       }>;
+      total: number;
+      limit: number;
+      offset: number;
       totals: { totalIn: number; totalOut: number; netBalance: number };
     }>(`/api/stock/report?${query.toString()}`);
   },
@@ -856,6 +877,8 @@ export const api = {
     toDate: string;
     partyAccountId?: number | null;
     productId?: number | null;
+    limit?: number;
+    offset?: number;
   }) {
     const query = new URLSearchParams({
       mode: params.mode,
@@ -865,6 +888,8 @@ export const api = {
     });
     if (params.partyAccountId) query.set('partyAccountId', String(params.partyAccountId));
     if (params.productId) query.set('productId', String(params.productId));
+    if (params.limit != null) query.set('limit', String(params.limit));
+    if (params.offset != null) query.set('offset', String(params.offset));
     return request<{
       mode: 'SALE' | 'PURCHASE';
       typeFilter: 'ALL' | 'COMMISSION' | 'PAUNCH' | 'MAAL';
@@ -872,6 +897,9 @@ export const api = {
       toDate: string;
       title: string;
       rowCount: number;
+      total: number;
+      limit: number;
+      offset: number;
       categories: Array<{
         category: 'COMMISSION' | 'PAUNCH' | 'MAAL';
         label: string;

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/helpers';
+import { parsePagination } from '../../utils/pagination';
 import * as stockService from './stock.service';
 
 export const stockRouter = Router();
@@ -17,6 +18,16 @@ stockRouter.get(
       res.status(400).json({ error: 'productId is required' });
       return;
     }
-    res.json(await stockService.getStockReport({ productId, bagType }));
+    const hasPagination = req.query.limit != null || req.query.offset != null;
+    const pagination = hasPagination
+      ? parsePagination(
+          {
+            limit: req.query.limit as string | undefined,
+            offset: req.query.offset as string | undefined,
+          },
+          { limit: 100, max: 500 },
+        )
+      : null;
+    res.json(await stockService.getStockReport({ productId, bagType, pagination }));
   }),
 );

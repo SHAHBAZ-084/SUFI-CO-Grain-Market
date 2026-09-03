@@ -17,6 +17,51 @@ type AccountBalanceResult = Awaited<ReturnType<typeof api.getAccountBalanceRepor
 type BalanceSideFilter = 'debit' | 'credit' | 'both';
 type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | 'PURCHASE_MAAL';
 
+const REPORT_PAGE_SIZE = 100;
+
+function reportPageLabel(offset: number, limit: number, total: number) {
+  if (total <= 0) return 'No rows';
+  const from = offset + 1;
+  const to = Math.min(offset + limit, total);
+  return `Showing ${from}–${to} of ${total}`;
+}
+
+function ReportPager(props: {
+  offset: number;
+  limit: number;
+  total: number;
+  loading?: boolean;
+  onChange: (nextOffset: number) => void;
+}) {
+  const { offset, limit, total, loading, onChange } = props;
+  if (total <= limit) {
+    return total > 0 ? (
+      <p className="text-sm text-textSecondary">{reportPageLabel(offset, limit, total)}</p>
+    ) : null;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <p className="text-sm text-textSecondary">{reportPageLabel(offset, limit, total)}</p>
+      <div className="flex gap-2">
+        <SecondaryButton
+          type="button"
+          disabled={loading || offset <= 0}
+          onClick={() => onChange(Math.max(0, offset - limit))}
+        >
+          Previous
+        </SecondaryButton>
+        <SecondaryButton
+          type="button"
+          disabled={loading || offset + limit >= total}
+          onClick={() => onChange(offset + limit)}
+        >
+          Next
+        </SecondaryButton>
+      </div>
+    </div>
+  );
+}
+
 function todayInputValue() {
   const d = new Date();
   const y = d.getFullYear();
@@ -66,6 +111,7 @@ export function AccountReportsPage() {
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [offset, setOffset] = useState(0);
 
   const filteredAccounts = useMemo(
     () => accounts.filter((a) => categoryId && String(a.categoryId) === categoryId),
@@ -89,6 +135,7 @@ export function AccountReportsPage() {
     setAccountId('');
     setLoaded(false);
     setLedger(null);
+    setOffset(0);
     setError('');
   }
 
@@ -96,10 +143,11 @@ export function AccountReportsPage() {
     setAccountId(nextAccountId);
     setLoaded(false);
     setLedger(null);
+    setOffset(0);
     setError('');
   }
 
-  async function loadLedger() {
+  async function loadLedger(nextOffset = 0) {
     if (!categoryId) {
       setError('Select a category');
       return;
@@ -115,8 +163,11 @@ export function AccountReportsPage() {
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
         financialYearId: financialYearIdNum,
+        limit: REPORT_PAGE_SIZE,
+        offset: nextOffset,
       });
       setLedger(result);
+      setOffset(result.offset);
       setLoaded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load ledger');
@@ -126,14 +177,31 @@ export function AccountReportsPage() {
     }
   }
 
-  function exportLedger(format: 'pdf' | 'excel') {
+  async function exportLedger(format: 'pdf' | 'excel') {
     if (!ledger) return;
     const accountName = ledger.account.name;
     const fyLabel = selectedYear?.label;
     const period = [fromDate, toDate].filter(Boolean).join(' to ') || 'All dates';
     const title = `Account Ledger — ${accountName}${fyLabel ? ` · FY ${fyLabel}` : ''} (${period})`;
     const headers = ['Date', 'Voucher#', 'Ref#', 'Type', 'Description', 'Debit', 'Credit', 'Balance'];
-    const rows = ledger.rows.map((r) => [
+
+    let exportRows = ledger.rows;
+    if (ledger.total > ledger.rows.filter((r) => !r.isOpeningRow).length) {
+      try {
+        const full = await api.getLedger(Number(accountId), {
+          fromDate: fromDate || undefined,
+          toDate: toDate || undefined,
+          financialYearId: financialYearIdNum,
+          limit: 500,
+          offset: 0,
+        });
+        exportRows = full.rows;
+      } catch {
+        // Fall back to current page.
+      }
+    }
+
+    const rows = exportRows.map((r) => [
       formatDate(r.date),
       r.voucherNo,
       r.ref ?? '',
@@ -174,6 +242,7 @@ export function AccountReportsPage() {
               setFinancialYearId(next);
               setLoaded(false);
               setLedger(null);
+              setOffset(0);
               setError('');
             }}
           />
@@ -204,7 +273,7 @@ export function AccountReportsPage() {
             <FieldLabel>To date</FieldLabel>
             <TextInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
           </div>
-          <PrimaryButton type="button" onClick={loadLedger} disabled={loading || !financialYearId}>
+          <PrimaryButton type="button" onClick={() => void loadLedger(0)} disabled={loading || !financialYearId}>
             {loading ? 'Loading…' : 'Load Ledger'}
           </PrimaryButton>
         </div>
@@ -217,9 +286,18 @@ export function AccountReportsPage() {
           <p className="text-sm text-textSecondary">No entries in this period</p>
         ) : ledger ? (
           <>
-            <div className="mb-4 flex flex-wrap gap-2">
-              <SecondaryButton type="button" onClick={() => exportLedger('pdf')}>Download PDF</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => exportLedger('excel')}>Download Excel</SecondaryButton>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <SecondaryButton type="button" onClick={() => void exportLedger('pdf')}>Download PDF</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => void exportLedger('excel')}>Download Excel</SecondaryButton>
+              </div>
+              <ReportPager
+                offset={offset}
+                limit={ledger.limit}
+                total={ledger.total}
+                loading={loading}
+                onChange={(next) => void loadLedger(next)}
+              />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full table-fixed text-left text-sm">
@@ -261,13 +339,22 @@ export function AccountReportsPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border font-semibold">
-                    <td className="py-2" colSpan={5}>Total / Closing</td>
+                    <td className="py-2" colSpan={5}>Total / Closing (full period)</td>
                     <td className={`py-2 text-right ${ledgerDebitColorClass(ledger.summary.totalDebit)}`}>{formatLedgerAmount(ledger.summary.totalDebit)}</td>
                     <td className={`py-2 text-right ${ledgerCreditColorClass(ledger.summary.totalCredit)}`}>{formatLedgerAmount(ledger.summary.totalCredit)}</td>
                     <td className={`py-2 text-right font-medium tabular-nums ${ledgerBalanceColorClass(ledger.summary.closingBalance)}`}>{formatLedgerBalance(ledger.summary.closingBalance)}</td>
                   </tr>
                 </tfoot>
               </table>
+            </div>
+            <div className="mt-3">
+              <ReportPager
+                offset={offset}
+                limit={ledger.limit}
+                total={ledger.total}
+                loading={loading}
+                onChange={(next) => void loadLedger(next)}
+              />
             </div>
           </>
         ) : null}
@@ -389,6 +476,7 @@ export function SalePurchaseReportsPage() {
   const [report, setReport] = useState<ReportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     api.listAccounts()
@@ -407,6 +495,7 @@ export function SalePurchaseReportsPage() {
     }
     setPartyAccountId('');
     setReport(null);
+    setOffset(0);
   }, [mode]);
 
   const partyOptions = useMemo(() => {
@@ -426,7 +515,7 @@ export function SalePurchaseReportsPage() {
       ]
     : [{ value: 'MAAL', label: 'Maal' }];
 
-  async function onView() {
+  async function loadReport(nextOffset = 0) {
     setError('');
     if (!fromDate || !toDate) {
       setError('Select from and to dates');
@@ -434,22 +523,28 @@ export function SalePurchaseReportsPage() {
     }
     setLoading(true);
     try {
-      setReport(
-        await api.getSalePurchaseReport({
-          mode,
-          typeFilter: mode === 'PURCHASE' ? 'MAAL' : typeFilter,
-          fromDate,
-          toDate,
-          partyAccountId: partyAccountId ? Number(partyAccountId) : null,
-          productId: productId ? Number(productId) : null,
-        }),
-      );
+      const result = await api.getSalePurchaseReport({
+        mode,
+        typeFilter: mode === 'PURCHASE' ? 'MAAL' : typeFilter,
+        fromDate,
+        toDate,
+        partyAccountId: partyAccountId ? Number(partyAccountId) : null,
+        productId: productId ? Number(productId) : null,
+        limit: REPORT_PAGE_SIZE,
+        offset: nextOffset,
+      });
+      setReport(result);
+      setOffset(result.offset);
     } catch (err) {
       setReport(null);
       setError(err instanceof Error ? err.message : 'Failed to load report');
     } finally {
       setLoading(false);
     }
+  }
+
+  function onView() {
+    void loadReport(0);
   }
 
   function filterSummary(r: ReportResult) {
@@ -614,7 +709,13 @@ export function SalePurchaseReportsPage() {
       {report ? (
         <Panel className="mt-4 sale-purchase-report-print">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3 print:hidden">
-            <div />
+            <ReportPager
+              offset={offset}
+              limit={report.limit}
+              total={report.total}
+              loading={loading}
+              onChange={(next) => void loadReport(next)}
+            />
             <div className="flex flex-wrap gap-2">
               <SecondaryButton type="button" onClick={onPrint}>Print</SecondaryButton>
               <SecondaryButton type="button" onClick={() => onExport('pdf')}>PDF</SecondaryButton>
@@ -697,9 +798,18 @@ export function SalePurchaseReportsPage() {
               ))}
 
               <div className="border-t-2 border-border pt-3 text-sm font-semibold text-financial">
-                Grand Total — Thela {fmtQty(report.grandTotal.thela)} · Bori {fmtQty(report.grandTotal.bori)} · Weight{' '}
+                Grand Total (full period) — Thela {fmtQty(report.grandTotal.thela)} · Bori {fmtQty(report.grandTotal.bori)} · Weight{' '}
                 {fmtQty(report.grandTotal.weight)} · Total Price {formatLedgerAmount(report.grandTotal.totalPrice)} · NetBill{' '}
                 {formatLedgerAmount(report.grandTotal.netBill)}
+              </div>
+              <div className="mt-3 print:hidden">
+                <ReportPager
+                  offset={offset}
+                  limit={report.limit}
+                  total={report.total}
+                  loading={loading}
+                  onChange={(next) => void loadReport(next)}
+                />
               </div>
             </div>
           )}
@@ -719,6 +829,7 @@ export function StockReportPage() {
   const [report, setReport] = useState<StockReportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     api.listProducts()
@@ -726,9 +837,8 @@ export function StockReportPage() {
       .catch(() => setProducts([]));
   }, []);
 
-  async function onLoad() {
+  async function loadReport(nextOffset = 0) {
     setError('');
-    setReport(null);
     const id = Number(productId);
     if (!Number.isFinite(id) || id < 1) {
       setError('Select a product');
@@ -736,12 +846,24 @@ export function StockReportPage() {
     }
     setLoading(true);
     try {
-      setReport(await api.getStockReport({ productId: id, bagType }));
+      const result = await api.getStockReport({
+        productId: id,
+        bagType,
+        limit: REPORT_PAGE_SIZE,
+        offset: nextOffset,
+      });
+      setReport(result);
+      setOffset(result.offset);
     } catch (err) {
+      setReport(null);
       setError(err instanceof Error ? err.message : 'Failed to load stock report');
     } finally {
       setLoading(false);
     }
+  }
+
+  function onLoad() {
+    void loadReport(0);
   }
 
   return (
@@ -777,14 +899,23 @@ export function StockReportPage() {
 
         {report ? (
           <div className="mt-6 space-y-4">
-            <p className="text-sm text-textSecondary">
-              Tracking from {formatDate(report.trackingStartedAt)} onward.
-              {!report.historicalBackfill
-                ? ' Invoices saved before stock tracking started are not included.'
-                : null}
-              {' '}Carried loose remainder: {report.carriedRemainderKg} kg
-              ({report.bagType === 'BORI' ? 'Bori' : 'Thela'}).
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-textSecondary">
+                Tracking from {formatDate(report.trackingStartedAt)} onward.
+                {!report.historicalBackfill
+                  ? ' Invoices saved before stock tracking started are not included.'
+                  : null}
+                {' '}Carried loose remainder: {report.carriedRemainderKg} kg
+                ({report.bagType === 'BORI' ? 'Bori' : 'Thela'}).
+              </p>
+              <ReportPager
+                offset={offset}
+                limit={report.limit}
+                total={report.total}
+                loading={loading}
+                onChange={(next) => void loadReport(next)}
+              />
+            </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -821,7 +952,7 @@ export function StockReportPage() {
                 <tfoot>
                   <tr className="border-t-2 border-border font-semibold">
                     <td className="py-2 pr-3" colSpan={3}>
-                      Total In {report.totals.totalIn} · Total Out {report.totals.totalOut}
+                      Full period — Total In {report.totals.totalIn} · Total Out {report.totals.totalOut}
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums" />
                     <td className="py-2 text-right tabular-nums">
@@ -831,6 +962,13 @@ export function StockReportPage() {
                 </tfoot>
               </table>
             </div>
+            <ReportPager
+              offset={offset}
+              limit={report.limit}
+              total={report.total}
+              loading={loading}
+              onChange={(next) => void loadReport(next)}
+            />
           </div>
         ) : null}
       </Panel>
@@ -1046,6 +1184,7 @@ export function VouchersReportPage() {
   const [voucherType, setVoucherType] = useState<VoucherTypeFilter>('all');
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [listTotal, setListTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1074,9 +1213,10 @@ export function VouchersReportPage() {
     setLoaded(false);
     setVouchers([]);
     setSelected(null);
+    setOffset(0);
   }, [financialYearId]);
 
-  async function loadReport() {
+  async function loadReport(nextOffset = 0) {
     if (!fromDate || !toDate) {
       setError('Select from and to dates');
       return;
@@ -1094,11 +1234,12 @@ export function VouchersReportPage() {
         toDate,
         type: voucherType === 'all' ? undefined : voucherType,
         financialYearId: financialYearIdNum,
-        limit: 500,
-        offset: 0,
+        limit: REPORT_PAGE_SIZE,
+        offset: nextOffset,
       });
       setVouchers(page.items);
       setListTotal(page.total);
+      setOffset(page.offset);
       setLoaded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load vouchers');
@@ -1115,7 +1256,7 @@ export function VouchersReportPage() {
     try {
       const updated = await api.cancelVoucher(selected.id);
       setSelected(updated);
-      await loadReport();
+      await loadReport(offset);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Cancel failed');
     } finally {
@@ -1129,7 +1270,7 @@ export function VouchersReportPage() {
     try {
       const updated = await api.updateVoucherAmount(selected.id, amount);
       setSelected(updated);
-      await loadReport();
+      await loadReport(offset);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Update failed');
     } finally {
@@ -1194,17 +1335,22 @@ export function VouchersReportPage() {
               ]}
             />
           </div>
-          <FinancialButton type="button" onClick={loadReport} disabled={loading || !financialYearId}>
+          <FinancialButton type="button" onClick={() => void loadReport(0)} disabled={loading || !financialYearId}>
             {loading ? 'Loading…' : 'View'}
           </FinancialButton>
         </div>
 
         {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
-        {loaded && listTotal > vouchers.length ? (
-          <p className="mb-4 text-sm text-amber-700 dark:text-amber-400">
-            Showing first {vouchers.length} of {listTotal} vouchers in this period. Narrow the date
-            range for complete totals.
-          </p>
+        {loaded ? (
+          <div className="mb-4">
+            <ReportPager
+              offset={offset}
+              limit={REPORT_PAGE_SIZE}
+              total={listTotal}
+              loading={loading}
+              onChange={(next) => void loadReport(next)}
+            />
+          </div>
         ) : null}
 
         {!loaded ? (
@@ -1267,14 +1413,14 @@ export function VouchersReportPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border font-semibold">
-                    <td className="py-2" colSpan={5}>Total</td>
+                    <td className="py-2" colSpan={5}>This page total</td>
                     <td className="py-2 text-right tabular-nums">{formatLedgerAmount(totals.totalAmount)}</td>
                     <td className="py-2" colSpan={2} />
                   </tr>
                   {voucherType === 'all' ? (
                     <tr className="border-t border-border text-sm text-textSecondary">
                       <td className="py-2" colSpan={8}>
-                        Payments: {formatLedgerAmount(totals.byType.PAYMENT)} · Receipts:{' '}
+                        This page — Payments: {formatLedgerAmount(totals.byType.PAYMENT)} · Receipts:{' '}
                         {formatLedgerAmount(totals.byType.RECEIPT)} · Journal:{' '}
                         {formatLedgerAmount(totals.byType.JOURNAL)} · Kachi:{' '}
                         {formatLedgerAmount(totals.byType.KACHI)}
@@ -1283,6 +1429,15 @@ export function VouchersReportPage() {
                   ) : null}
                 </tfoot>
               </table>
+            </div>
+            <div className="mt-3">
+              <ReportPager
+                offset={offset}
+                limit={REPORT_PAGE_SIZE}
+                total={listTotal}
+                loading={loading}
+                onChange={(next) => void loadReport(next)}
+              />
             </div>
           </>
         )}

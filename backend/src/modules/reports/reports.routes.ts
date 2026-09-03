@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/helpers';
+import { parsePagination } from '../../utils/pagination';
 import * as salePurchaseReport from './sale-purchase-report.service';
 
 export const reportsRouter = Router();
@@ -30,6 +31,17 @@ reportsRouter.get(
       ? Number(productRaw)
       : null;
 
+    const hasPagination = req.query.limit != null || req.query.offset != null;
+    const pagination = hasPagination
+      ? parsePagination(
+          {
+            limit: req.query.limit as string | undefined,
+            offset: req.query.offset as string | undefined,
+          },
+          { limit: 100, max: 500 },
+        )
+      : null;
+
     res.json(
       await salePurchaseReport.getSalePurchaseReport({
         mode,
@@ -40,6 +52,7 @@ reportsRouter.get(
           ? partyAccountId
           : null,
         productId: Number.isFinite(productId) && (productId as number) > 0 ? productId : null,
+        pagination,
       }),
     );
   }),

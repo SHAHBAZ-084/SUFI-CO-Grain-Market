@@ -153,6 +153,7 @@ export async function postSalePaunchStockOut(
 export async function getStockReport(params: {
   productId: number;
   bagType: 'BORI' | 'THELA';
+  pagination?: { limit: number; offset: number } | null;
 }) {
   const product = await prisma.product.findFirst({
     where: { id: params.productId, isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
@@ -172,7 +173,7 @@ export async function getStockReport(params: {
   let running = 0;
   let totalIn = 0;
   let totalOut = 0;
-  const rows = movements.map((m) => {
+  const allRows = movements.map((m) => {
     const bags = Number(m.bags);
     if (m.direction === StockDirection.IN) {
       running += bags;
@@ -193,6 +194,16 @@ export async function getStockReport(params: {
     };
   });
 
+  const total = allRows.length;
+  let rows = allRows;
+  let limit = total;
+  let offset = 0;
+  if (params.pagination) {
+    limit = params.pagination.limit;
+    offset = params.pagination.offset;
+    rows = allRows.slice(offset, offset + limit);
+  }
+
   return {
     product: { id: product.id, name: product.name, code: product.code },
     bagType: params.bagType,
@@ -201,6 +212,9 @@ export async function getStockReport(params: {
     historicalBackfill: false as const,
     carriedRemainderKg: remainder ? Number(remainder.remainderKg) : 0,
     rows,
+    total,
+    limit: params.pagination ? limit : total,
+    offset: params.pagination ? offset : 0,
     totals: {
       totalIn,
       totalOut,
