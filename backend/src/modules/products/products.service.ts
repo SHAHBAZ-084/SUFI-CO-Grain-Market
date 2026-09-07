@@ -1,7 +1,13 @@
-import { AccountType, Prisma, RecordStatus } from '@prisma/client';
+import { AccountType, Prisma, ProductStockMode, RecordStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
 import { USER_VISIBLE_PRODUCT_STATUS } from '../approvals/record-status';
+import { ensureGeneralGoodsAccounts } from '../accounting/accounting.service';
+import {
+  ensureDefaultQuantityCategoriesInTx,
+  ensureGrainProductCategoryInTx,
+  assertProductCategory,
+} from './product-categories';
 import {
   ensureMaalKhataCategoryInTx,
   generateNextMaalKhataCodeInTx,
@@ -10,10 +16,31 @@ import {
 
 export { MAAL_KHATA_CATEGORY_NAME, maalKhataAccountName } from './maal-khata';
 
-export async function listProducts() {
+async function generateNextGeneralGoodsCodeInTx(tx: Prisma.TransactionClient): Promise<string> {
+  const accounts = await tx.account.findMany({
+    where: { code: { startsWith: 'GG' } },
+    select: { code: true },
+  });
+  let max = 0;
+  for (const { code } of accounts) {
+    const num = parseInt(code.slice(2), 10);
+    if (!Number.isNaN(num) && num > max) max = num;
+  }
+  return `GG${String(max + 1).padStart(4, '0')}`;
+}
+
+export async function listProducts(options?: { stockMode?: ProductStockMode; categoryId?: number }) {
   return prisma.product.findMany({
-    where: { isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
-    include: { account: { include: { ledger: true } } },
+    where: {
+      isActive: true,
+      status: USER_VISIBLE_PRODUCT_STATUS,
+      ...(options?.categoryId ? { categoryId: options.categoryId } : {}),
+      ...(options?.stockMode ? { category: { stockMode: options.stockMode } } : {}),
+    },
+    include: {
+      account: { include: { ledger: true } },
+      category: true,
+    },
     orderBy: { name: 'asc' },
   });
 }
@@ -22,6 +49,7 @@ export async function createProduct(data: {
   name: string;
   unit?: string;
   code?: string;
+  categoryId?: number;
   openingBalance?: number;
   openingBalanceSide?: 'DR' | 'CR';
   createdById?: number;
@@ -41,21 +69,51 @@ export async function createProduct(data: {
   const side = data.openingBalanceSide ?? 'DR';
 
   return prisma.$transaction(async (tx) => {
-    const category = await ensureMaalKhataCategoryInTx(tx);
-    const accountName = maalKhataAccountName(name);
-    const code = data.code?.trim() || (await generateNextMaalKhataCodeInTx(tx));
+    await ensureGrainProductCategoryInTx(tx);
+    await ensureDefaultQuantityCategoriesInTx(tx);
+
+    let categoryId = data.categoryId;
+    if (categoryId == null) {
+      const grain = await ensureGrainProductCategoryInTx(tx);
+      categoryId = grain.id;
+    }
+    const category = await assertProductCategory(tx, categoryId);
+
+    const isQuantity = category.stockMode === ProductStockMode.QUANTITY;
+    let accountCategoryId: number;
+    let accountName: string;
+    let code: string;
+
+    if (isQuantity) {
+      const system = await ensureGeneralGoodsAccounts(tx);
+      accountCategoryId = system.inventoryCategoryId;
+      accountName = name;
+      code = data.code?.trim() || (await generateNextGeneralGoodsCodeInTx(tx));
+    } else {
+      const maalCategory = await ensureMaalKhataCategoryInTx(tx);
+      accountCategoryId = maalCategory.id;
+      accountName = maalKhataAccountName(name);
+      code = data.code?.trim() || (await generateNextMaalKhataCodeInTx(tx));
+    }
 
     const codeTaken = await tx.account.findFirst({ where: { code } });
     if (codeTaken) throw new AppError(400, `Account code "${code}" already exists`);
 
     const nameTaken = await tx.account.findFirst({
-      where: { isActive: true, name: accountName, categoryId: category.id },
+      where: { isActive: true, name: accountName, categoryId: accountCategoryId },
     });
-    if (nameTaken) throw new AppError(400, `Maal Khata ledger "${accountName}" already exists`);
+    if (nameTaken) {
+      throw new AppError(
+        400,
+        isQuantity
+          ? `Inventory ledger "${accountName}" already exists`
+          : `Maal Khata ledger "${accountName}" already exists`,
+      );
+    }
 
     const account = await tx.account.create({
       data: {
-        categoryId: category.id,
+        categoryId: accountCategoryId,
         name: accountName,
         code,
         type: AccountType.ASSET,
@@ -74,10 +132,14 @@ export async function createProduct(data: {
         code,
         unit: data.unit?.trim() || null,
         accountId: account.id,
+        categoryId: category.id,
         status: RecordStatus.PENDING_APPROVAL,
         createdById: data.createdById,
       },
-      include: { account: { include: { ledger: true } } },
+      include: {
+        account: { include: { ledger: true } },
+        category: true,
+      },
     });
 
     return product;
@@ -121,6 +183,7 @@ export async function approvePendingProductInTx(
     data: { status: RecordStatus.ACTIVE },
     include: {
       account: { include: { ledger: true, category: true } },
+      category: true,
       createdBy: { select: { id: true, displayName: true, username: true } },
     },
   });

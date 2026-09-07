@@ -1,0 +1,422 @@
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  FieldLabel,
+  FinancialButton,
+  PageShell,
+  Panel,
+  SecondaryButton,
+  TextInput,
+} from '../../components/ui/PageShell';
+import { SearchSelect } from '../../components/ui/SearchSelect';
+import { api, Account, AccountCategory, Product, ProductCategory } from '../../lib/api';
+import { formatLedgerAmount } from '../../lib/format';
+import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useMinimizableForm } from '../../hooks/useMinimizableForm';
+
+const SALE_PARTY_CATEGORIES = ['Sale Party'] as const;
+
+type GridRow = {
+  key: string;
+  productId: number;
+  productName: string;
+  unit: string | null;
+  quantity: number;
+  rate: number;
+  lineTotal: number;
+};
+
+type Draft = {
+  predictedRef: string;
+  invoiceDate: string;
+  billNo: string;
+  tafseel: string;
+  salePartyAccountId: string;
+  productCategoryId: string;
+  productId: string;
+  quantity: string;
+  rate: string;
+  gridRows: GridRow[];
+};
+
+function todayInputValue() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseNum(v: string) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function roundMoney(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function filterCategories(all: AccountCategory[], allowed: readonly string[]) {
+  const set = new Set(allowed);
+  return all.filter((c) => set.has(c.name));
+}
+
+function flatAccountOptions(
+  categories: AccountCategory[],
+  accounts: Account[],
+  categoryNames: readonly string[],
+) {
+  const allowedIds = new Set(filterCategories(categories, categoryNames).map((c) => c.id));
+  return accounts
+    .filter((a) => allowedIds.has(a.categoryId))
+    .map((a) => ({ value: String(a.id), label: a.name }));
+}
+
+export function SaleGeneralInvoicePage() {
+  const navigate = useNavigate();
+  const { restoredState, minimize } = useMinimizableForm<Draft>('sale-general');
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
+  const trapRef = useRef<HTMLDivElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+  useFocusTrap(trapRef, { initialFocusRef: dateRef });
+
+  const [categories, setCategories] = useState<AccountCategory[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [predictedRef, setPredictedRef] = useState(() => restoredState?.predictedRef ?? '');
+  const [gridRows, setGridRows] = useState<GridRow[]>(() => restoredState?.gridRows ?? []);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const [invoiceDate, setInvoiceDate] = useState(() => restoredState?.invoiceDate ?? todayInputValue());
+  const [billNo, setBillNo] = useState(() => restoredState?.billNo ?? '');
+  const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
+  const [salePartyAccountId, setSalePartyAccountId] = useState(
+    () => restoredState?.salePartyAccountId ?? '',
+  );
+  const [productCategoryId, setProductCategoryId] = useState(
+    () => restoredState?.productCategoryId ?? '',
+  );
+  const [productId, setProductId] = useState(() => restoredState?.productId ?? '');
+  const [quantity, setQuantity] = useState(() => restoredState?.quantity ?? '');
+  const [rate, setRate] = useState(() => restoredState?.rate ?? '');
+
+  const partyOptions = useMemo(
+    () => flatAccountOptions(categories, accounts, SALE_PARTY_CATEGORIES),
+    [categories, accounts],
+  );
+
+  const filteredProducts = useMemo(
+    () =>
+      products.filter(
+        (p) =>
+          p.category?.stockMode === 'QUANTITY'
+          && (!productCategoryId || String(p.categoryId) === productCategoryId),
+      ),
+    [products, productCategoryId],
+  );
+
+  const productOptions = useMemo(
+    () =>
+      filteredProducts.map((p) => ({
+        value: String(p.id),
+        label: p.unit ? `${p.name} (${p.unit})` : p.name,
+      })),
+    [filteredProducts],
+  );
+
+  const invoiceTotal = useMemo(
+    () => roundMoney(gridRows.reduce((s, r) => s + r.lineTotal, 0)),
+    [gridRows],
+  );
+
+  const reload = useCallback(async () => {
+    const base = await loadInvoiceFormBase({ includeProducts: true });
+    setAccounts(base.accounts);
+    setCategories(base.categories);
+    const [cats, qtyProducts] = await Promise.all([
+      api.listProductCategories('QUANTITY'),
+      api.listProducts({ stockMode: 'QUANTITY' }),
+    ]);
+    setProductCategories(cats);
+    setProducts(qtyProducts);
+    try {
+      const refRow = await api.getNextSaleGeneralReference();
+      if (keepRestoredPredictedRef.current) {
+        keepRestoredPredictedRef.current = false;
+      } else {
+        setPredictedRef(refRow.reference);
+      }
+    } catch {
+      if (!keepRestoredPredictedRef.current) setPredictedRef('');
+      keepRestoredPredictedRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
+  }, [reload]);
+
+  function addToGrid() {
+    setError('');
+    setMessage('');
+    if (!productId) {
+      setError('Select a product');
+      return;
+    }
+    const product = filteredProducts.find((p) => String(p.id) === productId);
+    if (!product) {
+      setError('Invalid product');
+      return;
+    }
+    const qty = parseNum(quantity);
+    const rt = parseNum(rate);
+    if (!(qty > 0) || !(rt > 0)) {
+      setError('Quantity and rate must be greater than zero');
+      return;
+    }
+    setGridRows((rows) => [
+      ...rows,
+      {
+        key: `${Date.now()}-${product.id}`,
+        productId: product.id,
+        productName: product.name,
+        unit: product.unit,
+        quantity: qty,
+        rate: rt,
+        lineTotal: roundMoney(qty * rt),
+      },
+    ]);
+    setProductId('');
+    setQuantity('');
+    setRate('');
+  }
+
+  async function onSave(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    if (!salePartyAccountId) {
+      setError('Select a sale party');
+      return;
+    }
+    if (gridRows.length === 0) {
+      setError('Add at least one line to the grid');
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await api.createSaleGeneralInvoice({
+        invoiceDate,
+        salePartyAccountId: Number(salePartyAccountId),
+        billNo: billNo.trim() || undefined,
+        tafseel: tafseel.trim() || undefined,
+        lines: gridRows.map((row) => ({
+          productId: row.productId,
+          quantity: row.quantity,
+          rate: row.rate,
+        })),
+      });
+      setMessage(`Invoice ${result.reference} submitted for approval.`);
+      setGridRows([]);
+      const refRow = await api.getNextSaleGeneralReference();
+      setPredictedRef(refRow.reference);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <PageShell
+      centerTitle
+      invoiceTitleBand
+      title="Sale Invoice (General)"
+      className="app-page--sale-general"
+    >
+      <div ref={trapRef}>
+        <Panel>
+          <form className="space-y-4" onSubmit={onSave}>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div>
+                <FieldLabel>Invoice #</FieldLabel>
+                <TextInput value={predictedRef} readOnly />
+              </div>
+              <div>
+                <FieldLabel>Date</FieldLabel>
+                <TextInput
+                  ref={dateRef}
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel>Bill No</FieldLabel>
+                <TextInput value={billNo} onChange={(e) => setBillNo(e.target.value)} />
+              </div>
+              <div>
+                <FieldLabel>Sale party</FieldLabel>
+                <SearchSelect
+                  value={salePartyAccountId}
+                  onChange={setSalePartyAccountId}
+                  options={partyOptions}
+                  placeholder="Search party…"
+                />
+              </div>
+            </div>
+
+            <div>
+              <FieldLabel>Tafseel</FieldLabel>
+              <TextInput value={tafseel} onChange={(e) => setTafseel(e.target.value)} />
+            </div>
+
+            <div className="rounded-lg border border-border p-3">
+              <div className="grid gap-3 md:grid-cols-6 md:items-end">
+                <div>
+                  <FieldLabel>Category</FieldLabel>
+                  <SearchSelect
+                    value={productCategoryId}
+                    onChange={(id) => {
+                      setProductCategoryId(id);
+                      setProductId('');
+                    }}
+                    options={productCategories.map((c) => ({
+                      value: String(c.id),
+                      label: c.name,
+                    }))}
+                    placeholder="All categories…"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <FieldLabel>Product</FieldLabel>
+                  <SearchSelect
+                    value={productId}
+                    onChange={setProductId}
+                    options={productOptions}
+                    placeholder="Search product…"
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Qty</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Rate</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={rate}
+                    onChange={(e) => setRate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <FinancialButton type="button" onClick={addToGrid}>
+                    Add to grid
+                  </FinancialButton>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-textSecondary">
+                    <th className="py-2 pr-3">Product</th>
+                    <th className="py-2 pr-3 text-right">Qty</th>
+                    <th className="py-2 pr-3 text-right">Rate</th>
+                    <th className="py-2 pr-3 text-right">Total</th>
+                    <th className="py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {gridRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-textSecondary">
+                        No lines yet — add products above.
+                      </td>
+                    </tr>
+                  ) : (
+                    gridRows.map((row) => (
+                      <tr key={row.key} className="border-b border-border/60">
+                        <td className="py-2 pr-3">
+                          {row.productName}
+                          {row.unit ? ` (${row.unit})` : ''}
+                        </td>
+                        <td className="py-2 pr-3 text-right">{row.quantity}</td>
+                        <td className="py-2 pr-3 text-right">{formatLedgerAmount(row.rate)}</td>
+                        <td className="py-2 pr-3 text-right">{formatLedgerAmount(row.lineTotal)}</td>
+                        <td className="py-2 text-right">
+                          <button
+                            type="button"
+                            className="text-sm text-danger"
+                            onClick={() =>
+                              setGridRows((rows) => rows.filter((r) => r.key !== row.key))
+                            }
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-textSecondary">
+                Invoice total: <strong>{formatLedgerAmount(invoiceTotal)}</strong>
+              </p>
+              <div className="flex gap-2">
+                <SecondaryButton type="button" onClick={() => navigate('/')}>
+                  Close
+                </SecondaryButton>
+                <SecondaryButton
+                  type="button"
+                  onClick={() =>
+                    minimize(
+                      {
+                        predictedRef,
+                        invoiceDate,
+                        billNo,
+                        tafseel,
+                        salePartyAccountId,
+                        productCategoryId,
+                        productId,
+                        quantity,
+                        rate,
+                        gridRows,
+                      },
+                      predictedRef || 'Sale General',
+                    )
+                  }
+                >
+                  Minimize
+                </SecondaryButton>
+                <FinancialButton type="submit" disabled={saving}>
+                  {saving ? 'Saving…' : 'Save invoice'}
+                </FinancialButton>
+              </div>
+            </div>
+
+            {error ? <p className="text-sm text-danger">{error}</p> : null}
+            {message ? <p className="text-sm text-success">{message}</p> : null}
+          </form>
+        </Panel>
+      </div>
+    </PageShell>
+  );
+}

@@ -89,7 +89,9 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     items: [
       { kind: 'link', label: 'Sale on Commission', to: '/invoices/sale-commission' },
       { kind: 'link', label: 'Sale on Paunch', to: '/invoices/sale-paunch' },
+      { kind: 'link', label: 'Sale Invoice (General)', to: '/invoices/sale-general' },
       { kind: 'link', label: 'Purchase to Maal', to: '/invoices/purchase-maal' },
+      { kind: 'link', label: 'Purchase Invoice (General)', to: '/invoices/purchase-general' },
       { kind: 'link', label: 'Kachi Maal', to: '/invoices/kachi-maal' },
       { kind: 'link', label: 'View Invoice', to: '/invoices/view-invoice' },
     ],
@@ -261,6 +263,8 @@ export const INVOICE_TYPE_LABELS: Record<string, string> = {
   SALE_PAUNCH: 'Sale on Paunch',
   PURCHASE_MAAL: 'Purchase to Maal',
   KACHI_MAAL: 'Kachi Maal',
+  PURCHASE_GENERAL: 'Purchase Invoice (General)',
+  SALE_GENERAL: 'Sale Invoice (General)',
 };
 
 /** @deprecated Use SIDEBAR_NAV — kept for any legacy imports */

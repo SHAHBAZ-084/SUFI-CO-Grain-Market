@@ -11,6 +11,8 @@ export const BILL_LETTERHEAD = {
 export const BILL_TITLES: Record<string, string> = {
   SALE_COMMISSION: 'Sale Bill',
   SALE_PAUNCH: 'Sale Bill',
+  SALE_GENERAL: 'Sale Bill',
   PURCHASE_MAAL: 'Purchase Bill',
+  PURCHASE_GENERAL: 'Purchase Bill',
   KACHI_MAAL: 'Kachi Maal Bill',
 };

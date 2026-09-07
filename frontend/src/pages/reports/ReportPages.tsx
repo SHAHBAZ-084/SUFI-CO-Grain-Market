@@ -823,7 +823,9 @@ type StockBagType = 'BORI' | 'THELA';
 type StockReportResult = Awaited<ReturnType<typeof api.getStockReport>>;
 
 export function StockReportPage() {
-  const [products, setProducts] = useState<Array<{ id: number; name: string; code: string }>>([]);
+  const [products, setProducts] = useState<
+    Array<{ id: number; name: string; code: string; stockMode?: string }>
+  >([]);
   const [productId, setProductId] = useState('');
   const [bagType, setBagType] = useState<StockBagType>('BORI');
   const [report, setReport] = useState<StockReportResult | null>(null);
@@ -833,9 +835,22 @@ export function StockReportPage() {
 
   useEffect(() => {
     api.listProducts()
-      .then((rows) => setProducts(rows.map((p) => ({ id: p.id, name: p.name, code: p.code }))))
+      .then((rows) =>
+        setProducts(
+          rows.map((p) => ({
+            id: p.id,
+            name: p.name,
+            code: p.code,
+            stockMode: p.category?.stockMode,
+          })),
+        ),
+      )
       .catch(() => setProducts([]));
   }, []);
+
+  const selectedProduct = products.find((p) => String(p.id) === productId);
+  const isQuantityProduct = selectedProduct?.stockMode === 'QUANTITY';
+  const qtyMode = report?.stockMode === 'QUANTITY' || isQuantityProduct;
 
   async function loadReport(nextOffset = 0) {
     setError('');
@@ -867,7 +882,14 @@ export function StockReportPage() {
   }
 
   return (
-    <PageShell title="Stock Report" subtitle="Bag stock from Purchase to Maal (IN) and Sale on Paunch (OUT)">
+    <PageShell
+      title="Stock Report"
+      subtitle={
+        qtyMode
+          ? 'Quantity stock for general goods (Purchase IN / Sale OUT). Negatives shown as-is.'
+          : 'Bag stock from Purchase to Maal (IN) and Sale on Paunch (OUT)'
+      }
+    >
       <Panel>
         <div className="grid gap-3 md:grid-cols-4 md:items-end">
           <div className="md:col-span-2">
@@ -879,17 +901,26 @@ export function StockReportPage() {
               placeholder="Search product…"
             />
           </div>
-          <div>
-            <FieldLabel>Bag type</FieldLabel>
-            <SegmentedControl
-              value={bagType}
-              onChange={(v) => setBagType(v as StockBagType)}
-              options={[
-                { value: 'BORI', label: 'Bori' },
-                { value: 'THELA', label: 'Thela' },
-              ]}
-            />
-          </div>
+          {!isQuantityProduct ? (
+            <div>
+              <FieldLabel>Bag type</FieldLabel>
+              <SegmentedControl
+                value={bagType}
+                onChange={(v) => setBagType(v as StockBagType)}
+                options={[
+                  { value: 'BORI', label: 'Bori' },
+                  { value: 'THELA', label: 'Thela' },
+                ]}
+              />
+            </div>
+          ) : (
+            <div>
+              <FieldLabel>Mode</FieldLabel>
+              <p className="rounded-lg border border-border px-3 py-2 text-sm text-textSecondary">
+                Quantity
+              </p>
+            </div>
+          )}
           <FinancialButton type="button" onClick={onLoad} disabled={loading}>
             {loading ? 'Loading…' : 'Show report'}
           </FinancialButton>
@@ -901,12 +932,22 @@ export function StockReportPage() {
           <div className="mt-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-textSecondary">
-                Tracking from {formatDate(report.trackingStartedAt)} onward.
-                {!report.historicalBackfill
-                  ? ' Invoices saved before stock tracking started are not included.'
-                  : null}
-                {' '}Carried loose remainder: {report.carriedRemainderKg} kg
-                ({report.bagType === 'BORI' ? 'Bori' : 'Thela'}).
+                {report.stockMode === 'QUANTITY' ? (
+                  <>
+                    Quantity stock
+                    {report.product.unit ? ` (${report.product.unit})` : ''}. Net balance can be
+                    negative.
+                  </>
+                ) : (
+                  <>
+                    Tracking from {formatDate(report.trackingStartedAt)} onward.
+                    {!report.historicalBackfill
+                      ? ' Invoices saved before stock tracking started are not included.'
+                      : null}
+                    {' '}Carried loose remainder: {report.carriedRemainderKg} kg
+                    ({report.bagType === 'BORI' ? 'Bori' : 'Thela'}).
+                  </>
+                )}
               </p>
               <ReportPager
                 offset={offset}
@@ -924,7 +965,9 @@ export function StockReportPage() {
                     <th className="py-2 pr-3">Date</th>
                     <th className="py-2 pr-3">Description</th>
                     <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 pr-3 text-right">Bags</th>
+                    <th className="py-2 pr-3 text-right">
+                      {report.stockMode === 'QUANTITY' ? 'Qty' : 'Bags'}
+                    </th>
                     <th className="py-2 text-right">Running Balance</th>
                   </tr>
                 </thead>
@@ -932,7 +975,7 @@ export function StockReportPage() {
                   {report.rows.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-6 text-center text-textSecondary">
-                        No stock movements for this product / bag type yet.
+                        No stock movements for this product yet.
                       </td>
                     </tr>
                   ) : (
@@ -943,7 +986,9 @@ export function StockReportPage() {
                         <td className={`py-2 pr-3 font-medium ${row.status === 'IN' ? 'text-success' : 'text-danger'}`}>
                           {row.status}
                         </td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{row.bags}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {row.quantity ?? row.bags}
+                        </td>
                         <td className="py-2 text-right font-medium tabular-nums">{row.runningBalance}</td>
                       </tr>
                     ))

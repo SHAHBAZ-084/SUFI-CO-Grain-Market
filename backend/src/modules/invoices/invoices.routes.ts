@@ -7,15 +7,19 @@ import { parsePagination } from '../../utils/pagination';
 import * as invoicesService from './invoices.service';
 import { registerKachiMaalRoutes } from './kachi-maal.routes';
 import { registerPurchaseMaalRoutes } from './purchase-maal.routes';
+import { registerPurchaseGeneralRoutes } from './purchase-general.routes';
 import { registerSaleCommissionRoutes } from './sale-commission.routes';
 import { registerSalePaunchRoutes } from './sale-paunch.routes';
+import { registerSaleGeneralRoutes } from './sale-general.routes';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
 
 registerKachiMaalRoutes(invoicesRouter);
 registerPurchaseMaalRoutes(invoicesRouter);
+registerPurchaseGeneralRoutes(invoicesRouter);
 registerSalePaunchRoutes(invoicesRouter);
+registerSaleGeneralRoutes(invoicesRouter);
 registerSaleCommissionRoutes(invoicesRouter);
 
 const itemSchema = z.object({

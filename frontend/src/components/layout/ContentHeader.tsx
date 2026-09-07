@@ -7,7 +7,9 @@ function hidesContentHeaderTitle(pathname: string) {
   return (
     pathname.startsWith('/invoices/sale-commission')
     || pathname.startsWith('/invoices/sale-paunch')
+    || pathname.startsWith('/invoices/sale-general')
     || pathname.startsWith('/invoices/purchase-maal')
+    || pathname.startsWith('/invoices/purchase-general')
     || pathname.startsWith('/invoices/kachi-maal')
     || pathname.startsWith('/vouchers/payment')
     || pathname.startsWith('/vouchers/journal')

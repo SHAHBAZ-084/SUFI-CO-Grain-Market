@@ -315,7 +315,14 @@ async function validateVoucherCreate(
     throw new AppError(400, 'Amount must be greater than zero');
   }
 
-  if (data.type === 'KACHI' || data.type === 'PURCHASE_MAAL' || data.type === 'SALE_PAUNCH' || data.type === 'SALE_COMMISSION') {
+  if (
+    data.type === 'KACHI'
+    || data.type === 'PURCHASE_MAAL'
+    || data.type === 'SALE_PAUNCH'
+    || data.type === 'SALE_COMMISSION'
+    || data.type === 'PURCHASE_GENERAL'
+    || data.type === 'SALE_GENERAL'
+  ) {
     throw new AppError(400, 'Invoice vouchers are created via invoice posting');
   }
 
@@ -1244,7 +1251,10 @@ async function nextVoucherNumber(
 async function nextMultiLegVoucherNumber(
   tx: Prisma.TransactionClient,
   financialYearId: number,
-  type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION'>,
+  type: Extract<
+    VoucherType,
+    'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION' | 'PURCHASE_GENERAL' | 'SALE_GENERAL'
+  >,
 ): Promise<number> {
   return nextVoucherNumber(tx, financialYearId, type);
 }
@@ -1566,6 +1576,48 @@ export async function ensureSalePaunchAccounts(
     taxDeduction: { id: taxDeduction.id, name: taxDeduction.name },
     biltyKiraya: { id: biltyKiraya.id, name: biltyKiraya.name },
     paunchRevenue: { id: paunchRevenue.id, name: paunchRevenue.name },
+  };
+}
+
+export const GENERAL_GOODS_CATEGORY_NAMES = {
+  INVENTORY: 'General Goods Inventory',
+  SALE_FEE: 'Sale Fee',
+  REVENUE_EARN: 'Revenue Earn',
+} as const;
+
+export type GeneralGoodsSystemAccounts = {
+  mazduri: { id: number; name: string };
+  saleRevenue: { id: number; name: string };
+  inventoryCategoryId: number;
+};
+
+/** System accounts for General Goods purchase/sale (separate from grain Mazduri / Paunch Revenue). */
+export async function ensureGeneralGoodsAccounts(
+  tx: Prisma.TransactionClient,
+): Promise<GeneralGoodsSystemAccounts> {
+  const inventory = await ensureCategoryInTx(tx, GENERAL_GOODS_CATEGORY_NAMES.INVENTORY);
+  const saleFee = await ensureCategoryInTx(tx, GENERAL_GOODS_CATEGORY_NAMES.SALE_FEE);
+  const revenueEarn = await ensureCategoryInTx(tx, GENERAL_GOODS_CATEGORY_NAMES.REVENUE_EARN);
+
+  const mazduri = await ensureDefaultAccountInTx(
+    tx,
+    saleFee.id,
+    'General Goods Mazduri',
+    AccountType.EXPENSE,
+    'GG-MAZ',
+  );
+  const saleRevenue = await ensureDefaultAccountInTx(
+    tx,
+    revenueEarn.id,
+    'General Goods Sale Revenue',
+    AccountType.REVENUE,
+    'GG-PREV',
+  );
+
+  return {
+    mazduri: { id: mazduri.id, name: mazduri.name },
+    saleRevenue: { id: saleRevenue.id, name: saleRevenue.name },
+    inventoryCategoryId: inventory.id,
   };
 }
 
@@ -2174,7 +2226,10 @@ async function postMultiLegVoucherEntries(
 export async function createMultiLegVoucherInTx(
   tx: Prisma.TransactionClient,
   data: {
-    type: Extract<VoucherType, 'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION'>;
+    type: Extract<
+      VoucherType,
+      'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION' | 'PURCHASE_GENERAL' | 'SALE_GENERAL'
+    >;
     legs: VoucherLeg[];
     amount: number;
     date: Date | string;

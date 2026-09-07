@@ -12,12 +12,12 @@ stockRouter.get(
   '/report',
   asyncHandler(async (req, res) => {
     const productId = Number(req.query.productId);
-    const bagTypeRaw = String(req.query.bagType ?? '').toUpperCase();
-    const bagType = z.enum(['BORI', 'THELA']).parse(bagTypeRaw);
     if (!Number.isFinite(productId) || productId < 1) {
       res.status(400).json({ error: 'productId is required' });
       return;
     }
+    const bagTypeRaw = String(req.query.bagType ?? 'BORI').toUpperCase();
+    const bagType = z.enum(['BORI', 'THELA']).parse(bagTypeRaw);
     const hasPagination = req.query.limit != null || req.query.offset != null;
     const pagination = hasPagination
       ? parsePagination(

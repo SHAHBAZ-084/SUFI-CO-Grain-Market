@@ -1,21 +1,37 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { api, type Product } from '../../lib/api';
+import { api, type Product, type ProductCategory } from '../../lib/api';
 import { formatLedgerBalance } from '../../lib/format';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 
 export function ProductAddPage() {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [categoryId, setCategoryId] = useState<number | ''>('');
   const [openingBalance, setOpeningBalance] = useState('');
   const [openingBalanceSide, setOpeningBalanceSide] = useState<'DR' | 'CR'>('DR');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.listProductCategories()
+      .then((rows) => {
+        setCategories(rows);
+        const grain = rows.find((c) => c.stockMode === 'GRAIN_BAGS');
+        if (grain) setCategoryId(grain.id);
+      })
+      .catch(() => setCategories([]));
+  }, []);
+
+  const selectedCategory = categories.find((c) => c.id === categoryId) ?? null;
+  const isQuantity = selectedCategory?.stockMode === 'QUANTITY';
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError('');
     setMessage('');
     try {
+      if (!categoryId) throw new Error('Select a product category');
       const parsedOpening = openingBalance.trim() ? Number(openingBalance) : 0;
       if (openingBalance.trim() && !(parsedOpening >= 0)) {
         throw new Error('Opening balance must be zero or greater');
@@ -27,19 +43,21 @@ export function ProductAddPage() {
       const product = await api.createProduct({
         name,
         unit: unit || undefined,
+        categoryId: Number(categoryId),
         ...(parsedOpening > 0
           ? { openingBalance: parsedOpening, openingBalanceSide }
           : {}),
       });
 
+      const ledgerLabel = isQuantity ? 'inventory' : 'Maal Khata';
       if (parsedOpening > 0) {
         setMessage(
-          `Product "${product.name}" submitted for approval with Maal Khata ${product.account?.name ?? ''} ` +
+          `Product "${product.name}" submitted for approval with ${ledgerLabel} ${product.account?.name ?? ''} ` +
             `(opening ${formatLedgerBalance(parsedOpening)} ${openingBalanceSide}).`,
         );
       } else {
         setMessage(
-          `Product "${product.name}" submitted for approval with Maal Khata ledger ${product.account?.name ?? ''}`.trim(),
+          `Product "${product.name}" submitted for approval with ${ledgerLabel} ledger ${product.account?.name ?? ''}`.trim(),
         );
       }
       setName('');
@@ -52,16 +70,43 @@ export function ProductAddPage() {
   }
 
   return (
-    <PageShell title="Add Product" subtitle="Creates the product and its Maal Khata inventory ledger automatically">
+    <PageShell
+      title="Add Product"
+      subtitle={
+        isQuantity
+          ? 'Creates a general-goods product and its inventory ledger'
+          : 'Creates the product and its Maal Khata inventory ledger automatically'
+      }
+    >
       <Panel className="max-w-lg">
         <form className="space-y-4" onSubmit={onSubmit}>
+          <div>
+            <FieldLabel>Category</FieldLabel>
+            <select
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              value={categoryId === '' ? '' : String(categoryId)}
+              onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : '')}
+              required
+            >
+              <option value="">Select category…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.stockMode === 'QUANTITY' ? 'qty' : 'grain'})
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <FieldLabel>Product name</FieldLabel>
             <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <div>
             <FieldLabel>Unit (optional)</FieldLabel>
-            <TextInput value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="e.g. maund, kg" />
+            <TextInput
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder={isQuantity ? 'e.g. bag, liter, bottle' : 'e.g. maund, kg'}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -87,7 +132,7 @@ export function ProductAddPage() {
                 <option value="CR">Credit</option>
               </select>
               <p className="mt-1 text-xs text-textMuted">
-                Seeds the Maal Khata ledger; optional.
+                Seeds the inventory ledger; optional.
               </p>
             </div>
           </div>

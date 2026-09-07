@@ -66,6 +66,8 @@ const invoiceDetailInclude = {
     orderBy: { sortOrder: 'asc' as const },
   },
   saleCommissionLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' as const } },
+  generalPurchaseLines: { include: { product: true }, orderBy: { sortOrder: 'asc' as const } },
+  generalSaleLines: { include: { product: true }, orderBy: { sortOrder: 'asc' as const } },
   vouchers: {
     include: {
       voucher: {
@@ -88,6 +90,8 @@ const invoiceDetailInclude = {
     },
   },
   debitAccount: true,
+  partyAccount: true,
+  salePartyAccount: true,
   product: { include: { account: true } },
   createdBy: { select: { id: true, displayName: true, username: true } },
 } as const;

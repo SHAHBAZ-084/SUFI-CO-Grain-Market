@@ -3,7 +3,9 @@ import { create } from 'zustand';
 export type MinimizedFormKind =
   | 'kachi-maal'
   | 'purchase-maal'
+  | 'purchase-general'
   | 'sale-paunch'
+  | 'sale-general'
   | 'sale-commission'
   | 'payment'
   | 'receipt'
@@ -35,7 +37,9 @@ function newId() {
 export const MINIMIZED_FORM_ROUTES: Record<MinimizedFormKind, string> = {
   'kachi-maal': '/invoices/kachi-maal',
   'purchase-maal': '/invoices/purchase-maal',
+  'purchase-general': '/invoices/purchase-general',
   'sale-paunch': '/invoices/sale-paunch',
+  'sale-general': '/invoices/sale-general',
   'sale-commission': '/invoices/sale-commission',
   payment: '/vouchers/payment',
   receipt: '/vouchers/receipt',
@@ -45,7 +49,9 @@ export const MINIMIZED_FORM_ROUTES: Record<MinimizedFormKind, string> = {
 export const MINIMIZED_FORM_TITLES: Record<MinimizedFormKind, string> = {
   'kachi-maal': 'Kachi Maal',
   'purchase-maal': 'Purchase Maal',
+  'purchase-general': 'Purchase Invoice (General)',
   'sale-paunch': 'Sale on Paunch',
+  'sale-general': 'Sale Invoice (General)',
   'sale-commission': 'Sale on Commission',
   payment: 'Payment',
   receipt: 'Receipt',

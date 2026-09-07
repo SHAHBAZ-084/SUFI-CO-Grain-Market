@@ -51,11 +51,17 @@ describe('visibility filters (Phase 4)', () => {
     });
     await prisma.ledger.create({ data: { accountId: pendingAccount.id, balance: 0 } });
 
+    const grainCategory = await prisma.productCategory.findFirst({
+      where: { name: 'Grain' },
+    });
+    if (!grainCategory) throw new Error('Grain product category missing — run migrations');
+
     const pendingProduct = await prisma.product.create({
       data: {
         name: `Pending Visibility Product ${stamp}`,
         code: `PVP${stamp}`,
         accountId: pendingAccount.id,
+        categoryId: grainCategory.id,
         status: RecordStatus.PENDING_APPROVAL,
         createdById: adminId,
       },

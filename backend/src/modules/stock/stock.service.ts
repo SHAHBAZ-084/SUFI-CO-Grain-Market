@@ -157,8 +157,16 @@ export async function getStockReport(params: {
 }) {
   const product = await prisma.product.findFirst({
     where: { id: params.productId, isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
+    include: { category: true },
   });
   if (!product) throw new AppError(404, 'Product not found');
+
+  if (product.category.stockMode === 'QUANTITY') {
+    return getQuantityStockReport({
+      productId: params.productId,
+      pagination: params.pagination,
+    });
+  }
 
   const bagType = toStockBagType(params.bagType);
   const movements = await prisma.stockMovement.findMany({
@@ -190,6 +198,7 @@ export async function getStockReport(params: {
       invoiceType: m.invoiceType,
       status: m.direction as 'IN' | 'OUT',
       bags,
+      quantity: bags,
       runningBalance: running,
     };
   });
@@ -205,12 +214,98 @@ export async function getStockReport(params: {
   }
 
   return {
-    product: { id: product.id, name: product.name, code: product.code },
+    product: {
+      id: product.id,
+      name: product.name,
+      code: product.code,
+      stockMode: 'GRAIN_BAGS' as const,
+      unit: product.unit,
+    },
     bagType: params.bagType,
+    stockMode: 'GRAIN_BAGS' as const,
     trackingStartedAt: STOCK_TRACKING_STARTED_AT.toISOString(),
     /** Historical invoices before stock feature ship are not backfilled. */
     historicalBackfill: false as const,
     carriedRemainderKg: remainder ? Number(remainder.remainderKg) : 0,
+    rows,
+    total,
+    limit: params.pagination ? limit : total,
+    offset: params.pagination ? offset : 0,
+    totals: {
+      totalIn,
+      totalOut,
+      netBalance: running,
+    },
+  };
+}
+
+/** Quantity stock report for General Goods products — negatives shown plainly (no clamp). */
+export async function getQuantityStockReport(params: {
+  productId: number;
+  pagination?: { limit: number; offset: number } | null;
+}) {
+  const product = await prisma.product.findFirst({
+    where: { id: params.productId, isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
+    include: { category: true },
+  });
+  if (!product) throw new AppError(404, 'Product not found');
+  if (product.category.stockMode !== 'QUANTITY') {
+    throw new AppError(400, 'Product does not use quantity stock');
+  }
+
+  const movements = await prisma.productQuantityMovement.findMany({
+    where: { productId: params.productId },
+    orderBy: [{ date: 'asc' }, { id: 'asc' }],
+  });
+
+  let running = 0;
+  let totalIn = 0;
+  let totalOut = 0;
+  const allRows = movements.map((m) => {
+    const quantity = Number(m.quantity);
+    if (m.direction === StockDirection.IN) {
+      running += quantity;
+      totalIn += quantity;
+    } else {
+      running -= quantity;
+      totalOut += quantity;
+    }
+    return {
+      id: m.id,
+      date: m.date.toISOString(),
+      description: m.description ?? m.invoiceReference,
+      invoiceReference: m.invoiceReference,
+      invoiceType: m.invoiceType,
+      status: m.direction as 'IN' | 'OUT',
+      bags: quantity,
+      quantity,
+      runningBalance: running,
+    };
+  });
+
+  const total = allRows.length;
+  let rows = allRows;
+  let limit = total;
+  let offset = 0;
+  if (params.pagination) {
+    limit = params.pagination.limit;
+    offset = params.pagination.offset;
+    rows = allRows.slice(offset, offset + limit);
+  }
+
+  return {
+    product: {
+      id: product.id,
+      name: product.name,
+      code: product.code,
+      stockMode: 'QUANTITY' as const,
+      unit: product.unit,
+    },
+    bagType: null,
+    stockMode: 'QUANTITY' as const,
+    trackingStartedAt: STOCK_TRACKING_STARTED_AT.toISOString(),
+    historicalBackfill: false as const,
+    carriedRemainderKg: 0,
     rows,
     total,
     limit: params.pagination ? limit : total,

@@ -41,12 +41,22 @@ export type Account = {
   ledger?: Ledger | null;
 };
 
+export type ProductCategory = {
+  id: number;
+  name: string;
+  stockMode: 'GRAIN_BAGS' | 'QUANTITY';
+  isActive: boolean;
+};
+
 export type Product = {
   id: number;
   name: string;
   code: string;
   unit: string | null;
   accountId: number;
+  categoryId?: number;
+  averageCost?: number | string | null;
+  category?: ProductCategory | null;
   account?: { id: number; name: string; code: string; ledger?: { balance: number | string } | null };
 };
 
@@ -320,13 +330,28 @@ export const api = {
     return request<AccountCategory>(`/api/accounting/categories/${id}`, { method: 'DELETE' });
   },
 
-  listProducts() {
-    return request<Product[]>('/api/products');
+  listProducts(params?: { stockMode?: 'GRAIN_BAGS' | 'QUANTITY'; categoryId?: number }) {
+    const query = new URLSearchParams();
+    if (params?.stockMode) query.set('stockMode', params.stockMode);
+    if (params?.categoryId != null) query.set('categoryId', String(params.categoryId));
+    const suffix = query.toString() ? `?${query}` : '';
+    return request<Product[]>(`/api/products${suffix}`);
+  },
+  listProductCategories(stockMode?: 'GRAIN_BAGS' | 'QUANTITY') {
+    const query = stockMode ? `?stockMode=${stockMode}` : '';
+    return request<ProductCategory[]>(`/api/products/categories${query}`);
+  },
+  createProductCategory(data: { name: string; stockMode: 'GRAIN_BAGS' | 'QUANTITY' }) {
+    return request<ProductCategory>('/api/products/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
   createProduct(data: {
     name: string;
     unit?: string;
     code?: string;
+    categoryId?: number;
     openingBalance?: number;
     openingBalanceSide?: 'DR' | 'CR';
   }) {
@@ -439,6 +464,49 @@ export const api = {
     }[];
   }) {
     return request<KachiMaalInvoiceResult>('/api/invoices/purchase-maal', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getNextPurchaseGeneralReference() {
+    return request<{ reference: string }>('/api/invoices/purchase-general/next-reference');
+  },
+
+  createPurchaseGeneralInvoice(data: {
+    invoiceDate: string;
+    partyAccountId: number;
+    billNo?: string;
+    tafseel?: string;
+    lines: {
+      productId: number;
+      quantity: number;
+      rate: number;
+      mazduriAmount?: number;
+    }[];
+  }) {
+    return request<KachiMaalInvoiceResult>('/api/invoices/purchase-general', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getNextSaleGeneralReference() {
+    return request<{ reference: string }>('/api/invoices/sale-general/next-reference');
+  },
+
+  createSaleGeneralInvoice(data: {
+    invoiceDate: string;
+    salePartyAccountId: number;
+    billNo?: string;
+    tafseel?: string;
+    lines: {
+      productId: number;
+      quantity: number;
+      rate: number;
+    }[];
+  }) {
+    return request<KachiMaalInvoiceResult>('/api/invoices/sale-general', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -848,8 +916,15 @@ export const api = {
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
     return request<{
-      product: { id: number; name: string; code: string };
-      bagType: 'BORI' | 'THELA';
+      product: {
+        id: number;
+        name: string;
+        code: string;
+        stockMode?: 'GRAIN_BAGS' | 'QUANTITY';
+        unit?: string | null;
+      };
+      bagType: 'BORI' | 'THELA' | null;
+      stockMode?: 'GRAIN_BAGS' | 'QUANTITY';
       trackingStartedAt: string;
       historicalBackfill: false;
       carriedRemainderKg: number;
@@ -861,6 +936,7 @@ export const api = {
         invoiceType: string;
         status: 'IN' | 'OUT';
         bags: number;
+        quantity?: number;
         runningBalance: number;
       }>;
       total: number;

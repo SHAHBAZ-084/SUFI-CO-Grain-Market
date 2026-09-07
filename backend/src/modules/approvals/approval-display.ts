@@ -21,16 +21,20 @@ const INVOICE_TYPE_LABELS: Record<InvoiceType, string> = {
   SALE_PAUNCH: 'Sale on Paunch',
   PURCHASE_MAAL: 'Purchase to Maal',
   KACHI_MAAL: 'Kachi Maal',
+  PURCHASE_GENERAL: 'Purchase Invoice (General)',
+  SALE_GENERAL: 'Sale Invoice (General)',
 };
 
-const SALE_INVOICE_TYPES: InvoiceType[] = ['SALE_COMMISSION', 'SALE_PAUNCH'];
-const PURCHASE_INVOICE_TYPES: InvoiceType[] = ['PURCHASE_MAAL', 'KACHI_MAAL'];
+const SALE_INVOICE_TYPES: InvoiceType[] = ['SALE_COMMISSION', 'SALE_PAUNCH', 'SALE_GENERAL'];
+const PURCHASE_INVOICE_TYPES: InvoiceType[] = ['PURCHASE_MAAL', 'KACHI_MAAL', 'PURCHASE_GENERAL'];
 
 const MULTI_LEG_VOUCHER_TYPES: VoucherType[] = [
   'KACHI',
   'PURCHASE_MAAL',
   'SALE_PAUNCH',
   'SALE_COMMISSION',
+  'PURCHASE_GENERAL',
+  'SALE_GENERAL',
 ];
 
 function accountRef(name: string, code: string): ApprovalAccountRef {
@@ -67,6 +71,10 @@ function voucherBaseTypeLabel(type: VoucherType): string {
       return 'Sale Paunch';
     case 'SALE_COMMISSION':
       return 'Sale Commission';
+    case 'PURCHASE_GENERAL':
+      return 'Purchase General';
+    case 'SALE_GENERAL':
+      return 'Sale General';
     default:
       return type;
   }

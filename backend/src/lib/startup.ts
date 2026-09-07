@@ -161,6 +161,13 @@ export async function initializeDatabase(db: PrismaClient): Promise<StartupStatu
     const { backfillLegacyActiveRecordStatus } = await import('../modules/approvals/approval-backfill');
     await backfillLegacyActiveRecordStatus(db);
 
+    const {
+      ensureProductCategorySeed,
+      backfillProductAverageCosts,
+    } = await import('../modules/products/average-cost-backfill');
+    await ensureProductCategorySeed(db);
+    await backfillProductAverageCosts(db);
+
     await ensureBootstrapData(db);
 
     if (status.databaseExists && process.env.NODE_ENV === 'production') {
