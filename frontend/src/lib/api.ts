@@ -230,6 +230,8 @@ export type PendingApprovalItem = {
 export type PendingApprovalDetail = {
   kind: ApprovalKind;
   record: Record<string, unknown>;
+  /** Computed summary for General Goods invoices. */
+  approvalDescription?: string | null;
 };
 
 export type VoucherLedgerEntry = {

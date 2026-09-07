@@ -10,8 +10,10 @@ import { listProductCategories } from '../products/product-categories';
 import { voucherDateInActiveYear } from '../../test-helpers/financial-year';
 import { approveInvoice, approveProduct } from '../../test-helpers/approval';
 import { getQuantityStockReport } from '../stock/stock.service';
+import { listPendingApprovals, getPendingApprovalDetail } from '../approvals/approvals.service';
 import { createPurchaseGeneralInvoice } from './purchase-general.service';
 import { createSaleGeneralInvoice } from './sale-general.service';
+import { AppError } from '../../utils/helpers';
 
 async function ensureAccountInCategory(
   categoryName: string,
@@ -58,6 +60,7 @@ describe('General Goods purchase + sale', () => {
   let userId: number;
   let partyId: number;
   let salePartyId: number;
+  let intPartyId: number;
   let fertilizerCategoryId: number;
   let productAId: number;
   let productBId: number;
@@ -90,6 +93,14 @@ describe('General Goods purchase + sale', () => {
         'GG Party Customer',
         AccountType.ASSET,
         'GG-CUS-1',
+      )
+    ).id;
+    intPartyId = (
+      await ensureAccountInCategory(
+        KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE,
+        'GG Party Internal',
+        AccountType.LIABILITY,
+        'GG-INT-1',
       )
     ).id;
 
@@ -222,5 +233,70 @@ describe('General Goods purchase + sale', () => {
     void productAAccountId;
     void mazduriId;
     void revenueId;
+  });
+
+  it('shows readable approval descriptions for pending general invoices', async () => {
+    const pendingPurchase = await createPurchaseGeneralInvoice({
+      invoiceDate,
+      partyAccountId: partyId,
+      lines: [{ productId: productAId, quantity: 1, rate: 5000 }],
+      createdById: userId,
+    });
+    const pendingSale = await createSaleGeneralInvoice({
+      invoiceDate,
+      salePartyAccountId: salePartyId,
+      lines: [{ productId: productAId, quantity: 1, rate: 5500 }],
+      createdById: userId,
+    });
+
+    const items = await listPendingApprovals();
+    const purchaseItem = items.find((i) => i.kind === 'invoice' && i.id === pendingPurchase.id);
+    const saleItem = items.find((i) => i.kind === 'invoice' && i.id === pendingSale.id);
+    expect(purchaseItem?.description).toMatch(/Purchase: Fert A .*1@5000 from GG Party Supplier/);
+    expect(saleItem?.description).toMatch(/Sale: Fert A .*1@5500 to GG Party Customer/);
+
+    const purchaseDetail = await getPendingApprovalDetail('invoice', pendingPurchase.id);
+    expect(purchaseDetail.approvalDescription).toMatch(/Purchase:.*from GG Party Supplier/);
+
+    // Leave pending — do not approve (avoids changing stock for later tests).
+  });
+
+  it('allows Int. Purchase Party as sale settlement party (Sale Paunch parity)', async () => {
+    const pendingSale = await createSaleGeneralInvoice({
+      invoiceDate,
+      salePartyAccountId: intPartyId,
+      lines: [{ productId: productAId, quantity: 1, rate: 5100 }],
+      createdById: userId,
+    });
+    expect(pendingSale.status).toBe('PENDING_APPROVAL');
+    await approveInvoice(pendingSale.id);
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({
+      where: { id: pendingSale.id },
+      include: { vouchers: true, salePartyAccount: true },
+    });
+    expect(invoice.salePartyAccountId).toBe(intPartyId);
+    expect(invoice.vouchers).toHaveLength(1);
+  });
+
+  it('rejects non-party accounts on sale settlement', async () => {
+    const bankCat = await prisma.accountCategory.findFirst({
+      where: { isActive: true, name: { contains: 'Bank' } },
+    });
+    if (!bankCat) return;
+
+    const bank = await prisma.account.findFirst({
+      where: { isActive: true, status: RecordStatus.ACTIVE, categoryId: bankCat.id },
+    });
+    if (!bank) return;
+
+    await expect(
+      createSaleGeneralInvoice({
+        invoiceDate,
+        salePartyAccountId: bank.id,
+        lines: [{ productId: productAId, quantity: 1, rate: 100 }],
+        createdById: userId,
+      }),
+    ).rejects.toBeInstanceOf(AppError);
   });
 });

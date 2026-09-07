@@ -14,8 +14,7 @@ import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useMinimizableForm } from '../../hooks/useMinimizableForm';
-
-const SALE_PARTY_CATEGORIES = ['Sale Party'] as const;
+import { SALE_PARTY_CATEGORIES } from '../../lib/salePaunchCalculations';
 
 type GridRow = {
   key: string;
@@ -127,6 +126,22 @@ export function SaleGeneralInvoicePage() {
       })),
     [filteredProducts],
   );
+
+  const selectedProduct = useMemo(
+    () => filteredProducts.find((p) => String(p.id) === productId) ?? null,
+    [filteredProducts, productId],
+  );
+
+  const averageCostLabel = useMemo(() => {
+    if (!selectedProduct) return null;
+    if (selectedProduct.averageCost == null || selectedProduct.averageCost === '') {
+      return 'No cost data yet';
+    }
+    const n = Number(selectedProduct.averageCost);
+    if (!Number.isFinite(n)) return 'No cost data yet';
+    const unit = selectedProduct.unit?.trim() || 'unit';
+    return `Avg. Cost: Rs. ${formatLedgerAmount(n)}/${unit}`;
+  }, [selectedProduct]);
 
   const invoiceTotal = useMemo(
     () => roundMoney(gridRows.reduce((s, r) => s + r.lineTotal, 0)),
@@ -266,7 +281,7 @@ export function SaleGeneralInvoicePage() {
                   value={salePartyAccountId}
                   onChange={setSalePartyAccountId}
                   options={partyOptions}
-                  placeholder="Search party…"
+                  placeholder="Search Int / Ext / Sale Party…"
                 />
               </div>
             </div>
@@ -321,6 +336,9 @@ export function SaleGeneralInvoicePage() {
                     value={rate}
                     onChange={(e) => setRate(e.target.value)}
                   />
+                  {averageCostLabel ? (
+                    <p className="mt-1 text-xs text-textMuted">{averageCostLabel}</p>
+                  ) : null}
                 </div>
                 <div>
                   <FinancialButton type="button" onClick={addToGrid}>

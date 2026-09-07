@@ -18,6 +18,10 @@ import {
 } from '../accounting/accounting.service';
 import { roundMoney } from './purchase-maal.calculations';
 import { postGeneralSaleQuantityOut } from '../stock/quantity-stock.service';
+import {
+  combinedGeneralGoodsLineDescription,
+  formatLineSnippet,
+} from './general-goods-descriptions';
 
 const TYPE_PREFIX = 'SG';
 
@@ -60,18 +64,22 @@ export type ComputedSaleGeneralLine = {
   profitAmount: number;
 };
 
-function formatLineSnippet(name: string, qty: number, rate: number) {
-  return `${name} ${qty}@${rate}`;
-}
-
 async function assertSalePartyAccount(tx: Prisma.TransactionClient, accountId: number) {
   const account = await tx.account.findFirst({
     where: { id: accountId, isActive: true, status: RecordStatus.ACTIVE },
     include: { category: true },
   });
   if (!account) throw new AppError(400, 'Invalid sale party account');
-  if (account.category.name !== KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY) {
-    throw new AppError(400, 'Party must be a Sale Party account');
+  const name = account.category.name;
+  if (
+    name !== KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE
+    && name !== KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE
+    && name !== KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY
+  ) {
+    throw new AppError(
+      400,
+      'Settlement party must be an Int. Purchase Party, Ext. Purchase Party, or Sale Party account',
+    );
   }
   return account;
 }
@@ -158,15 +166,13 @@ export function buildSaleGeneralLedgerLegs(
     }
   }
 
-  const combinedDesc = computedLines
-    .map((line) => formatLineSnippet(line.productName, line.quantity, line.rate))
-    .join('; ');
+  const combinedDesc = combinedGeneralGoodsLineDescription(computedLines, invoiceReference);
 
   legs.push({
     accountId: salePartyAccountId,
     type: LedgerEntryType.DEBIT,
     amount: invoiceTotal,
-    description: combinedDesc || invoiceReference,
+    description: combinedDesc,
   });
 
   const totalDebits = roundMoney(

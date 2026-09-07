@@ -276,6 +276,14 @@ function ApprovalEditModal({
 
             {kind === 'invoice' ? (
               <>
+                {detail.approvalDescription ? (
+                  <div>
+                    <FieldLabel>Summary</FieldLabel>
+                    <p className="rounded-lg border border-border bg-surface1 px-3 py-2 text-sm text-textSecondary">
+                      {detail.approvalDescription}
+                    </p>
+                  </div>
+                ) : null}
                 <div>
                   <FieldLabel>Invoice date</FieldLabel>
                   <TextInput

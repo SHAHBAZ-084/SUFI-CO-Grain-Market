@@ -21,6 +21,10 @@ import {
   applyPurchaseWeightedAverageCost,
   postGeneralPurchaseQuantityIn,
 } from '../stock/quantity-stock.service';
+import {
+  combinedGeneralGoodsLineDescription,
+  formatLineSnippet,
+} from './general-goods-descriptions';
 
 const TYPE_PREFIX = 'PG';
 
@@ -62,10 +66,6 @@ export type ComputedPurchaseGeneralLine = {
   mazduriAmount: number;
   inventoryDebit: number;
 };
-
-function formatLineSnippet(name: string, qty: number, rate: number) {
-  return `${name} ${qty}@${rate}`;
-}
 
 async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountId: number) {
   const account = await tx.account.findFirst({
@@ -147,15 +147,13 @@ export function buildPurchaseGeneralLedgerLegs(
     });
   }
 
-  const combinedDesc = computedLines
-    .map((line) => formatLineSnippet(line.productName, line.quantity, line.rate))
-    .join('; ');
+  const combinedDesc = combinedGeneralGoodsLineDescription(computedLines, invoiceReference);
 
   legs.push({
     accountId: partyAccountId,
     type: LedgerEntryType.CREDIT,
     amount: goodsTotal,
-    description: combinedDesc || invoiceReference,
+    description: combinedDesc,
   });
 
   if (mazduriTotal > 0) {

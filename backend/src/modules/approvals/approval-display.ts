@@ -4,6 +4,11 @@ import {
   VoucherType,
 } from '@prisma/client';
 import { OPENING_BALANCE_EQUITY_ACCOUNT_NAME } from '../accounting/accounting.service';
+import {
+  generalPurchaseApprovalDescription,
+  generalSaleApprovalDescription,
+  type GeneralGoodsLineDescInput,
+} from '../invoices/general-goods-descriptions';
 import type { ApprovalKind } from './approval-types';
 
 export type ApprovalAccountRef = {
@@ -134,6 +139,47 @@ export function kindDisplayLabel(kind: ApprovalKind): string {
 
 export function invoiceTypeLabel(type: InvoiceType): string {
   return INVOICE_TYPE_LABELS[type] ?? type;
+}
+
+/** Readable pending-approval description for General Goods invoices (else tafseel/notes). */
+export function invoiceApprovalDescription(invoice: {
+  type: InvoiceType;
+  tafseel?: string | null;
+  notes?: string | null;
+  partyAccount?: { name: string } | null;
+  salePartyAccount?: { name: string } | null;
+  generalPurchaseLines?: Array<{
+    quantity: unknown;
+    rate: unknown;
+    product?: { name: string } | null;
+  }>;
+  generalSaleLines?: Array<{
+    quantity: unknown;
+    rate: unknown;
+    product?: { name: string } | null;
+  }>;
+}): string | null {
+  if (invoice.type === 'PURCHASE_GENERAL') {
+    const lines: GeneralGoodsLineDescInput[] = (invoice.generalPurchaseLines ?? [])
+      .filter((line) => line.product?.name)
+      .map((line) => ({
+        productName: line.product!.name,
+        quantity: Number(line.quantity),
+        rate: Number(line.rate),
+      }));
+    return generalPurchaseApprovalDescription(lines, invoice.partyAccount?.name);
+  }
+  if (invoice.type === 'SALE_GENERAL') {
+    const lines: GeneralGoodsLineDescInput[] = (invoice.generalSaleLines ?? [])
+      .filter((line) => line.product?.name)
+      .map((line) => ({
+        productName: line.product!.name,
+        quantity: Number(line.quantity),
+        rate: Number(line.rate),
+      }));
+    return generalSaleApprovalDescription(lines, invoice.salePartyAccount?.name);
+  }
+  return invoice.tafseel ?? invoice.notes ?? null;
 }
 
 export { accountRef, sideAccounts };

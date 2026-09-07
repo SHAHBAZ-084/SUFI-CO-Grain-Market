@@ -33,6 +33,7 @@ import { assertCanEditPendingRecord } from './approval-permissions';
 import {
   accountRef,
   invoiceTypeLabel,
+  invoiceApprovalDescription,
   sideAccounts,
   voucherApprovalAccounts,
   voucherApprovalTypeLabel,
@@ -85,12 +86,22 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
       include: {
         createdBy: { select: userSelect },
         debitAccount: { select: { name: true, code: true } },
+        partyAccount: { select: { name: true, code: true } },
+        salePartyAccount: { select: { name: true, code: true } },
         product: {
           select: {
             name: true,
             code: true,
             account: { select: { name: true, code: true } },
           },
+        },
+        generalPurchaseLines: {
+          orderBy: { sortOrder: 'asc' },
+          include: { product: { select: { name: true } } },
+        },
+        generalSaleLines: {
+          orderBy: { sortOrder: 'asc' },
+          include: { product: { select: { name: true } } },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -210,7 +221,7 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
         : row.product
           ? accountRef(row.product.name, row.product.code)
           : null,
-      description: row.tafseel ?? row.notes,
+      description: invoiceApprovalDescription(row),
       createdAt: row.createdAt.toISOString(),
       createdBy: row.createdBy,
     })),
@@ -303,16 +314,30 @@ export async function getPendingApprovalDetail(kind: ApprovalKind, id: number) {
         where: { id, status: InvoiceStatus.PENDING_APPROVAL },
         include: {
           debitAccount: true,
+          partyAccount: true,
+          salePartyAccount: true,
           product: true,
           kachiMaalLines: { orderBy: { sortOrder: 'asc' } },
           purchaseMaalLines: { orderBy: { sortOrder: 'asc' } },
           saleCommissionLines: { orderBy: { sortOrder: 'asc' } },
           salePaunchLines: { orderBy: { sortOrder: 'asc' } },
+          generalPurchaseLines: {
+            orderBy: { sortOrder: 'asc' },
+            include: { product: true },
+          },
+          generalSaleLines: {
+            orderBy: { sortOrder: 'asc' },
+            include: { product: true },
+          },
           createdBy: { select: userSelect },
         },
       });
       if (!invoice) throw new AppError(404, 'Pending invoice not found');
-      return { kind, record: invoice };
+      return {
+        kind,
+        record: invoice,
+        approvalDescription: invoiceApprovalDescription(invoice),
+      };
     }
     case 'account-adjustment': {
       const adjustment = await getPendingAccountAdjustmentDetail(id);
