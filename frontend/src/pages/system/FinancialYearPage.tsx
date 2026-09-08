@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import {
   DangerButton,
   FieldLabel,
@@ -51,8 +52,12 @@ export function FinancialYearPage() {
   }
 
   useEffect(() => {
-    void loadYears();
-  }, []);
+    if (isAdmin) void loadYears();
+  }, [isAdmin]);
+
+  if (!isAdmin) {
+    return <Navigate to="/user" replace />;
+  }
 
   function openCloseModal() {
     setPassword('');
@@ -160,18 +165,14 @@ export function FinancialYearPage() {
           </table>
         </div>
 
-        {isAdmin ? (
-          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
-            <DangerButton type="button" onClick={openCloseModal} disabled={!activeFromList}>
-              Close & Start New Year
-            </DangerButton>
-            <p className="text-xs text-textMuted">
-              Snapshots closing balances and opens the next year. Past vouchers become read-only.
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-textSecondary">Only an admin can close the financial year.</p>
-        )}
+        <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+          <DangerButton type="button" onClick={openCloseModal} disabled={!activeFromList}>
+            Close & Start New Year
+          </DangerButton>
+          <p className="text-xs text-textMuted">
+            Snapshots closing balances and opens the next year. Past vouchers become read-only.
+          </p>
+        </div>
       </Panel>
 
       {modalOpen ? (

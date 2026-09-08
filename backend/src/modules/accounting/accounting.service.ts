@@ -219,7 +219,7 @@ export async function closeActiveFinancialYear(params: {
   const { verifyPasswordByUserId } = await import('../auth/auth.service');
   const passwordOk = await verifyPasswordByUserId(params.userId, params.password);
   if (!passwordOk) {
-    throw new AppError(401, 'Password is incorrect');
+    throw new AppError(401, 'Incorrect password');
   }
 
   const trialBalance = await getTrialBalance();

@@ -53,7 +53,7 @@ describe('financial year close guards', () => {
       closeActiveFinancialYear({ userId, confirm: true, password: 'not-the-password' }),
     ).rejects.toMatchObject({
       statusCode: 401,
-      message: 'Password is incorrect',
+      message: 'Incorrect password',
     } satisfies Partial<AppError>);
   });
 
