@@ -33,6 +33,7 @@ import { assertCanEditPendingRecord } from './approval-permissions';
 import {
   accountRef,
   invoiceTypeLabel,
+  invoiceApprovalAccounts,
   invoiceApprovalDescription,
   sideAccounts,
   voucherApprovalAccounts,
@@ -97,11 +98,27 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
         },
         generalPurchaseLines: {
           orderBy: { sortOrder: 'asc' },
-          include: { product: { select: { name: true } } },
+          include: {
+            product: {
+              select: {
+                name: true,
+                code: true,
+                account: { select: { name: true, code: true } },
+              },
+            },
+          },
         },
         generalSaleLines: {
           orderBy: { sortOrder: 'asc' },
-          include: { product: { select: { name: true } } },
+          include: {
+            product: {
+              select: {
+                name: true,
+                code: true,
+                account: { select: { name: true, code: true } },
+              },
+            },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -203,28 +220,25 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
         createdBy: row.createdBy,
       };
     }),
-    ...invoices.map((row) => ({
-      kind: 'invoice' as const,
-      id: row.id,
-      label: row.reference,
-      sublabel: row.type,
-      amount: Number(row.total),
-      reference: row.reference,
-      recordType: row.type,
-      recordDate: (row.invoiceDate ?? row.createdAt).toISOString(),
-      typeLabel: invoiceTypeLabel(row.type),
-      debitAccount: row.debitAccount
-        ? accountRef(row.debitAccount.name, row.debitAccount.code)
-        : null,
-      creditAccount: row.product?.account
-        ? accountRef(row.product.account.name, row.product.account.code)
-        : row.product
-          ? accountRef(row.product.name, row.product.code)
-          : null,
-      description: invoiceApprovalDescription(row),
-      createdAt: row.createdAt.toISOString(),
-      createdBy: row.createdBy,
-    })),
+    ...invoices.map((row) => {
+      const { debitAccount, creditAccount } = invoiceApprovalAccounts(row);
+      return {
+        kind: 'invoice' as const,
+        id: row.id,
+        label: row.reference,
+        sublabel: row.type,
+        amount: Number(row.total),
+        reference: row.reference,
+        recordType: row.type,
+        recordDate: (row.invoiceDate ?? row.createdAt).toISOString(),
+        typeLabel: invoiceTypeLabel(row.type),
+        debitAccount,
+        creditAccount,
+        description: invoiceApprovalDescription(row),
+        createdAt: row.createdAt.toISOString(),
+        createdBy: row.createdBy,
+      };
+    }),
     ...accountAdjustments.map((row) => {
       const primary = accountRef(row.account.name, row.account.code);
       const amount = Number(row.amount);
@@ -323,20 +337,27 @@ export async function getPendingApprovalDetail(kind: ApprovalKind, id: number) {
           salePaunchLines: { orderBy: { sortOrder: 'asc' } },
           generalPurchaseLines: {
             orderBy: { sortOrder: 'asc' },
-            include: { product: true },
+            include: {
+              product: { include: { account: { select: { name: true, code: true } } } },
+            },
           },
           generalSaleLines: {
             orderBy: { sortOrder: 'asc' },
-            include: { product: true },
+            include: {
+              product: { include: { account: { select: { name: true, code: true } } } },
+            },
           },
           createdBy: { select: userSelect },
         },
       });
       if (!invoice) throw new AppError(404, 'Pending invoice not found');
+      const { debitAccount, creditAccount } = invoiceApprovalAccounts(invoice);
       return {
         kind,
         record: invoice,
         approvalDescription: invoiceApprovalDescription(invoice),
+        debitAccount,
+        creditAccount,
       };
     }
     case 'account-adjustment': {
