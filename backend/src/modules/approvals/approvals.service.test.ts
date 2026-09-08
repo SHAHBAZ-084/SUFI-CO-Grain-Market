@@ -85,7 +85,8 @@ describe('approvals service (Phase 2)', () => {
     expect(items.some((i) => i.kind === 'voucher' && i.id === voucher.id)).toBe(true);
 
     const detail = await getPendingApprovalDetail('account', account.id);
-    expect(detail.record.name).toContain('Pending Acct');
+    expect(detail.kind).toBe('account');
+    expect((detail.record as { name: string }).name).toContain('Pending Acct');
 
     const approved = await approvePendingRecord('account', account.id);
     expect(approved.status).toBe(RecordStatus.ACTIVE);

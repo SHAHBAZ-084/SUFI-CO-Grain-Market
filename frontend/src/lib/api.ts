@@ -195,7 +195,7 @@ export type InvoiceDetail = Invoice & {
 };
 
 export type VoucherAccount = { id: number; name: string; code: string };
-export type VoucherUser = { id: number; displayName: string; username: string };
+export type VoucherUser = { id: number; displayName: string | null; username: string };
 
 export type ApprovalKind =
   | 'account'

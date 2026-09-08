@@ -30,7 +30,7 @@ export type PendingApprovalItem = {
   createdAt: string;
   createdBy?: {
     id: number;
-    displayName: string;
+    displayName: string | null;
     username: string;
   } | null;
 };
