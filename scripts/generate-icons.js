@@ -19,8 +19,11 @@ async function main() {
 
   fs.mkdirSync(buildDir, { recursive: true });
 
+  // Transparent letterbox — never bake opaque black into non-square logos.
+  const letterboxBg = { r: 0, g: 0, b: 0, alpha: 0 };
+
   const masterPng = await sharp(src)
-    .resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
+    .resize(256, 256, { fit: 'contain', background: letterboxBg })
     .png()
     .toBuffer();
 
@@ -29,7 +32,7 @@ async function main() {
   const pngBuffers = await Promise.all(
     sizes.map((size) =>
       sharp(masterPng)
-        .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
+        .resize(size, size, { fit: 'contain', background: letterboxBg })
         .png()
         .toBuffer(),
     ),

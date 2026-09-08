@@ -13,6 +13,8 @@ function resolveAppIcon(): string | undefined {
   const roots = [
     path.join(__dirname, '..', 'build'),
     path.join(app.getAppPath(), 'build'),
+    // Packaged: extraResources copies icons next to the asar
+    path.join(process.resourcesPath, 'build'),
     path.join(process.cwd(), 'build'),
   ];
   for (const name of names) {
@@ -24,11 +26,39 @@ function resolveAppIcon(): string | undefined {
   return undefined;
 }
 
+/** Append startup diagnostics to userData (same folder pattern as startup-error.log). */
+function logStartupInfo(lines: string[]): void {
+  try {
+    const logPath = path.join(app.getPath('userData'), 'startup.log');
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    const body = `[${new Date().toISOString()}]\n${lines.join('\n')}\n\n`;
+    fs.appendFileSync(logPath, body, 'utf8');
+  } catch {
+    // ignore log failures
+  }
+}
+
 function resolveAppIconImage() {
   const iconPath = resolveAppIcon();
+  const msg = iconPath
+    ? `[resolveAppIcon] using ${iconPath}`
+    : '[resolveAppIcon] no icon file found (checked build/ under __dirname, appPath, resourcesPath, cwd)';
+  console.log(msg);
+  logStartupInfo([
+    msg,
+    `isDev=${isDev}`,
+    `appPath=${app.getAppPath()}`,
+    `resourcesPath=${process.resourcesPath}`,
+    `__dirname=${__dirname}`,
+  ]);
   if (!iconPath) return undefined;
   const image = nativeImage.createFromPath(iconPath);
-  return image.isEmpty() ? undefined : image;
+  if (image.isEmpty()) {
+    console.warn(`[resolveAppIcon] nativeImage empty for ${iconPath}`);
+    logStartupInfo([`[resolveAppIcon] nativeImage.empty for ${iconPath}`]);
+    return undefined;
+  }
+  return image;
 }
 
 let mainWindow: BrowserWindow | null = null;

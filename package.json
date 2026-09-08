@@ -52,11 +52,19 @@
       {
         "from": "node_modules/.prisma",
         "to": "backend/node_modules/.prisma"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "build/icon.ico"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "build/icon.png"
       }
     ],
     "win": {
       "icon": "build/icon.ico",
-      "signAndEditExecutable": true,
+      "signAndEditExecutable": false,
       "target": [
         "nsis"
       ]
