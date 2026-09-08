@@ -1,4 +1,4 @@
-import { AccountType, Prisma, ProductStockMode, RecordStatus } from '@prisma/client';
+import { AccountType, Prisma, ProductStockMode, RecordStatus, StockDirection } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
 import { USER_VISIBLE_PRODUCT_STATUS } from '../approvals/record-status';
@@ -13,6 +13,7 @@ import {
   generateNextMaalKhataCodeInTx,
   maalKhataAccountName,
 } from './maal-khata';
+import { roundMoney } from '../invoices/purchase-maal.calculations';
 
 export { MAAL_KHATA_CATEGORY_NAME, maalKhataAccountName } from './maal-khata';
 
@@ -30,7 +31,7 @@ async function generateNextGeneralGoodsCodeInTx(tx: Prisma.TransactionClient): P
 }
 
 export async function listProducts(options?: { stockMode?: ProductStockMode; categoryId?: number }) {
-  return prisma.product.findMany({
+  const products = await prisma.product.findMany({
     where: {
       isActive: true,
       status: USER_VISIBLE_PRODUCT_STATUS,
@@ -43,6 +44,32 @@ export async function listProducts(options?: { stockMode?: ProductStockMode; cat
     },
     orderBy: { name: 'asc' },
   });
+
+  const quantityIds = products
+    .filter((p) => p.category?.stockMode === ProductStockMode.QUANTITY)
+    .map((p) => p.id);
+
+  const onHandByProduct = new Map<number, number>();
+  if (quantityIds.length > 0) {
+    const grouped = await prisma.productQuantityMovement.groupBy({
+      by: ['productId', 'direction'],
+      where: { productId: { in: quantityIds } },
+      _sum: { quantity: true },
+    });
+    for (const row of grouped) {
+      const qty = Number(row._sum.quantity ?? 0);
+      const signed = row.direction === StockDirection.IN ? qty : -qty;
+      onHandByProduct.set(row.productId, roundMoney((onHandByProduct.get(row.productId) ?? 0) + signed));
+    }
+  }
+
+  return products.map((product) => ({
+    ...product,
+    quantityOnHand:
+      product.category?.stockMode === ProductStockMode.QUANTITY
+        ? (onHandByProduct.get(product.id) ?? 0)
+        : null,
+  }));
 }
 
 export async function createProduct(data: {

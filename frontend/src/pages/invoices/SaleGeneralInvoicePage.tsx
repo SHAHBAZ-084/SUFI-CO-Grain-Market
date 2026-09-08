@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   FieldLabel,
@@ -132,16 +133,23 @@ export function SaleGeneralInvoicePage() {
     [filteredProducts, productId],
   );
 
-  const averageCostLabel = useMemo(() => {
-    if (!selectedProduct) return null;
-    if (selectedProduct.averageCost == null || selectedProduct.averageCost === '') {
-      return 'No cost data yet';
-    }
-    const n = Number(selectedProduct.averageCost);
-    if (!Number.isFinite(n)) return 'No cost data yet';
+  const productInfoTooltip = useMemo(() => {
+    if (!selectedProduct) return '';
     const unit = selectedProduct.unit?.trim() || 'unit';
-    return `Avg. Cost: Rs. ${formatLedgerAmount(n)}/${unit}`;
+    const stockRaw = selectedProduct.quantityOnHand;
+    const stockN = stockRaw == null || stockRaw === '' ? 0 : Number(stockRaw);
+    const stockLabel = Number.isFinite(stockN)
+      ? `Stock: ${Number.isInteger(stockN) ? String(stockN) : formatLedgerAmount(stockN)} ${unit}`
+      : 'Stock: —';
+    if (selectedProduct.averageCost == null || selectedProduct.averageCost === '') {
+      return `${stockLabel}\nNo cost data yet`;
+    }
+    const cost = Number(selectedProduct.averageCost);
+    if (!Number.isFinite(cost)) return `${stockLabel}\nNo cost data yet`;
+    return `${stockLabel}\nAvg. Cost: Rs. ${formatLedgerAmount(cost)}/${unit}`;
   }, [selectedProduct]);
+
+  const [rateInfoOpen, setRateInfoOpen] = useState(false);
 
   const invoiceTotal = useMemo(
     () => roundMoney(gridRows.reduce((s, r) => s + r.lineTotal, 0)),
@@ -328,7 +336,31 @@ export function SaleGeneralInvoicePage() {
                   />
                 </div>
                 <div>
-                  <FieldLabel>Rate</FieldLabel>
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <span className="app-field-label-text text-sm font-medium text-textPrimary">Rate</span>
+                    {selectedProduct && productInfoTooltip ? (
+                      <span className="relative inline-flex">
+                        <button
+                          type="button"
+                          className="rounded p-0.5 text-textMuted hover:bg-surface1 hover:text-textPrimary"
+                          title={productInfoTooltip}
+                          aria-label={productInfoTooltip.replace(/\n/g, '. ')}
+                          onClick={() => setRateInfoOpen((open) => !open)}
+                          onBlur={() => setRateInfoOpen(false)}
+                        >
+                          <Info className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                        {rateInfoOpen ? (
+                          <span
+                            role="tooltip"
+                            className="absolute left-0 top-full z-20 mt-1 w-max max-w-[14rem] whitespace-pre-line rounded-md border border-border bg-surface2 px-2.5 py-1.5 text-xs text-textSecondary shadow-sm"
+                          >
+                            {productInfoTooltip}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </div>
                   <TextInput
                     type="number"
                     min="0"
@@ -336,9 +368,6 @@ export function SaleGeneralInvoicePage() {
                     value={rate}
                     onChange={(e) => setRate(e.target.value)}
                   />
-                  {averageCostLabel ? (
-                    <p className="mt-1 text-xs text-textMuted">{averageCostLabel}</p>
-                  ) : null}
                 </div>
                 <div>
                   <FinancialButton type="button" onClick={addToGrid}>

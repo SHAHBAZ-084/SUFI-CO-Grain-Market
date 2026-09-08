@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import {
   api,
+  ApiRequestError,
   type ApprovalAccountRef,
   type ApprovalKind,
   type PendingApprovalDetail,
@@ -419,7 +420,7 @@ function ApprovalEditModal({
 }
 
 export function PendingApprovalsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
 
   const [items, setItems] = useState<PendingApprovalItem[]>([]);
@@ -431,6 +432,16 @@ export function PendingApprovalsPage() {
   const [editDetail, setEditDetail] = useState<PendingApprovalDetail | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
+  const handleSessionExpired = useCallback(async () => {
+    setError('');
+    setItems([]);
+    try {
+      await logout();
+    } catch {
+      // logout clears local session even if the API call fails
+    }
+  }, [logout]);
+
   const loadList = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -439,16 +450,21 @@ export function PendingApprovalsPage() {
       setItems(rows);
       notifyApprovalsChanged();
     } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        await handleSessionExpired();
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to load pending approvals');
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleSessionExpired]);
 
   useEffect(() => {
+    if (authLoading) return;
     void loadList();
-  }, [loadList]);
+  }, [authLoading, loadList]);
 
   useEffect(() => {
     if (!editTarget) {
@@ -460,12 +476,17 @@ export function PendingApprovalsPage() {
       .getPendingApprovalDetail(editTarget.kind, editTarget.id)
       .then(setEditDetail)
       .catch((err) => {
+        if (err instanceof ApiRequestError && err.status === 401) {
+          void handleSessionExpired();
+          setEditTarget(null);
+          return;
+        }
         setEditDetail(null);
         setError(err instanceof Error ? err.message : 'Failed to load record for edit');
         setEditTarget(null);
       })
       .finally(() => setEditLoading(false));
-  }, [editTarget]);
+  }, [editTarget, handleSessionExpired]);
 
   const filteredItems = useMemo(
     () => (kindFilter === 'all' ? items : items.filter((row) => row.kind === kindFilter)),
@@ -485,6 +506,10 @@ export function PendingApprovalsPage() {
       await loadList();
       notifyApprovalsChanged();
     } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        await handleSessionExpired();
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Approval failed');
     } finally {
       setActingKey(null);
@@ -501,6 +526,10 @@ export function PendingApprovalsPage() {
       await loadList();
       notifyApprovalsChanged();
     } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        await handleSessionExpired();
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Cancel failed');
     } finally {
       setActingKey(null);
@@ -514,6 +543,14 @@ export function PendingApprovalsPage() {
         items.find((row) => row.kind === editTarget.kind && row.id === editTarget.id)?.createdBy?.id ===
           user?.id) ||
       (editDetail && recordCreatedById(editDetail.record) === user?.id));
+
+  if (authLoading) {
+    return (
+      <PageShell title="Approval" subtitle="Checking session…">
+        <p className="text-sm text-textMuted">Loading…</p>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell

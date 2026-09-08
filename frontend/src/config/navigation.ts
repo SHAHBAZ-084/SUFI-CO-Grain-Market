@@ -101,6 +101,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     label: 'Reports',
     icon: BarChart3,
     items: [
+      { kind: 'link', label: 'Reports Hub', to: '/reports' },
       {
         kind: 'submenu',
         label: 'Account Reports',
@@ -110,6 +111,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
           { label: 'Vouchers', to: '/reports/vouchers' },
         ],
       },
+      { kind: 'link', label: 'Daily Report', to: '/reports/daily' },
       { kind: 'link', label: 'Detail Trial Balance', to: '/reports/trial-balance' },
       { kind: 'link', label: 'Sale/Purchase Reports', to: '/reports/sale-purchase' },
       { kind: 'link', label: 'Stock Report', to: '/reports/stock' },

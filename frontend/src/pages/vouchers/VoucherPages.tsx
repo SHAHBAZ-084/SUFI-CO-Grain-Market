@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
 import { api, Account, AccountCategory, Voucher, VoucherAccount, VoucherUser } from '../../lib/api';
 import { DangerButton, FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
@@ -700,12 +700,14 @@ export function VoucherDetailCard({
 }
 
 export function VoucherListPage() {
+  const [searchParams] = useSearchParams();
+  const autoSearchedKey = useRef<string | null>(null);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [searchType, setSearchType] = useState('');
-  const [searchNo, setSearchNo] = useState('');
+  const [searchType, setSearchType] = useState(searchParams.get('type') ?? '');
+  const [searchNo, setSearchNo] = useState(searchParams.get('number') ?? '');
   const [searched, setSearched] = useState(false);
   const [result, setResult] = useState<Voucher | 'notfound' | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -714,19 +716,43 @@ export function VoucherListPage() {
   const loadVouchers = useCallback(() => {
     setLoading(true);
     setLoadError('');
-    api
+    return api
       .listVouchers({ limit: 200, offset: 0 })
       .then((page) => {
         setVouchers(page.items);
         setTotal(page.total);
+        return page.items;
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load vouchers'))
+      .catch((err) => {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load vouchers');
+        return [] as Voucher[];
+      })
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    loadVouchers();
+    void loadVouchers();
   }, [loadVouchers]);
+
+  useEffect(() => {
+    const type = searchParams.get('type') ?? '';
+    const number = searchParams.get('number') ?? '';
+    if (!number || loading || loadError) return;
+    const key = `${type}:${number}`;
+    if (autoSearchedKey.current === key) return;
+    autoSearchedKey.current = key;
+    setSearchType(type);
+    setSearchNo(number);
+    const no = parseInt(number.trim(), 10);
+    if (!no) {
+      setResult('notfound');
+      setSearched(true);
+      return;
+    }
+    const found = vouchers.find((v) => v.number === no && (!type || v.type === type));
+    setResult(found ?? 'notfound');
+    setSearched(true);
+  }, [searchParams, vouchers, loading, loadError]);
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();

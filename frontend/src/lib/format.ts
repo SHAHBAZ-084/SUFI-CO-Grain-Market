@@ -43,8 +43,8 @@ const VOUCHER_TYPE_LABELS: Record<string, string> = {
   PURCHASE_MAAL: 'Purchase Maal',
   SALE_PAUNCH: 'Sale Paunch',
   SALE_COMMISSION: 'Sale Commission',
-  PURCHASE_GENERAL: 'Purchase General',
-  SALE_GENERAL: 'Sale General',
+  PURCHASE_GENERAL: 'Purchase Invoice',
+  SALE_GENERAL: 'Sale Invoice',
   BARDANA: 'Bardana',
 };
 

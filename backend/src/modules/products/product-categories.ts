@@ -4,7 +4,12 @@ import { AppError } from '../../utils/helpers';
 export const GRAIN_PRODUCT_CATEGORY_NAME = 'Grain';
 
 /** Default QUANTITY categories for general-goods pickers (idempotent seed). */
-export const DEFAULT_QUANTITY_CATEGORY_NAMES = ['Fertilizer', 'Pesticide'] as const;
+export const DEFAULT_QUANTITY_CATEGORY_NAMES = [
+  'Fertilizer',
+  'Pesticide',
+  'Seed',
+  'General',
+] as const;
 
 export async function ensureGrainProductCategoryInTx(tx: Prisma.TransactionClient) {
   const existing = await tx.productCategory.findFirst({

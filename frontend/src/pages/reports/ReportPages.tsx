@@ -3,10 +3,7 @@ import { api, type Account, type AccountCategory, type Voucher } from '../../lib
 import { BILL_LETTERHEAD } from '../../config/billPrint';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
 import { downloadExcel, downloadPdf } from '../../lib/reportExport';
-import {
-  ReportFinancialYearSelect,
-  useReportFinancialYears,
-} from '../../components/reports/ReportFinancialYearSelect';
+import { useReportFinancialYear } from '../../contexts/ReportFinancialYearContext';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
@@ -95,12 +92,10 @@ function voucherToAccount(voucher: Voucher) {
 
 export function AccountReportsPage() {
   const {
-    years,
     financialYearId,
-    setFinancialYearId,
     financialYearIdNum,
     selectedYear,
-  } = useReportFinancialYears();
+  } = useReportFinancialYear();
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categoryId, setCategoryId] = useState('');
@@ -129,6 +124,13 @@ export function AccountReportsPage() {
         setAccounts([]);
       });
   }, []);
+
+  useEffect(() => {
+    setLoaded(false);
+    setLedger(null);
+    setOffset(0);
+    setError('');
+  }, [financialYearId]);
 
   function onCategoryChange(nextCategoryId: string) {
     setCategoryId(nextCategoryId);
@@ -231,21 +233,17 @@ export function AccountReportsPage() {
   }
 
   return (
-    <PageShell title="Account Ledger" subtitle="View ledger entries for any account">
+    <PageShell
+      title="Account Ledger"
+      subtitle={
+        selectedYear
+          ? `View ledger entries · FY ${selectedYear.label}${selectedYear.status === 'ACTIVE' ? ' (Active)' : ''}`
+          : 'View ledger entries for any account'
+      }
+    >
       <Panel className="overflow-visible">
         <h2 className="mb-4 text-lg font-semibold text-textPrimary">Account Ledger</h2>
-        <div className="mb-4 grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] xl:items-end">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={(next) => {
-              setFinancialYearId(next);
-              setLoaded(false);
-              setLedger(null);
-              setOffset(0);
-              setError('');
-            }}
-          />
+        <div className="mb-4 grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
           <div>
             <FieldLabel>Category</FieldLabel>
             <SearchSelect
@@ -364,8 +362,7 @@ export function AccountReportsPage() {
 }
 
 export function TrialBalancePage() {
-  const { years, financialYearId, setFinancialYearId, financialYearIdNum, selectedYear } =
-    useReportFinancialYears();
+  const { financialYearIdNum, selectedYear } = useReportFinancialYear();
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getTrialBalance>> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -403,15 +400,15 @@ export function TrialBalancePage() {
   }
 
   return (
-    <PageShell title="Detail Trial Balance" subtitle="Debit and credit totals by account">
+    <PageShell
+      title="Detail Trial Balance"
+      subtitle={
+        selectedYear
+          ? `Debit and credit totals · FY ${selectedYear.label}${selectedYear.status === 'ACTIVE' ? ' (Active)' : ''}`
+          : 'Debit and credit totals by account'
+      }
+    >
       <Panel>
-        <div className="mb-4 max-w-sm">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={setFinancialYearId}
-          />
-        </div>
         {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
         {loading ? (
           <p className="text-sm text-textSecondary">Loading…</p>
@@ -453,7 +450,7 @@ export function TrialBalancePage() {
             </p>
           </>
         ) : (
-          <p className="text-sm text-textSecondary">Select a financial year</p>
+          <p className="text-sm text-textSecondary">Select a financial year on the Reports hub to load data.</p>
         )}
       </Panel>
     </PageShell>
@@ -1075,8 +1072,7 @@ function BalanceTable({
 }
 
 export function AccountBalancePage() {
-  const { years, financialYearId, setFinancialYearId, financialYearIdNum, selectedYear } =
-    useReportFinancialYears();
+  const { financialYearId, financialYearIdNum, selectedYear } = useReportFinancialYear();
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [datedOn, setDatedOn] = useState(todayInputValue);
   const [categoryId, setCategoryId] = useState('');
@@ -1152,14 +1148,16 @@ export function AccountBalancePage() {
   const showGrouped = !categoryId && (report?.groups.length ?? 0) > 0;
 
   return (
-    <PageShell title="Account Balance" subtitle="Balances as of a selected date">
+    <PageShell
+      title="Account Balance"
+      subtitle={
+        selectedYear
+          ? `Balances as of a selected date · FY ${selectedYear.label}${selectedYear.status === 'ACTIVE' ? ' (Active)' : ''}`
+          : 'Balances as of a selected date'
+      }
+    >
       <Panel className="overflow-visible">
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={setFinancialYearId}
-          />
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
           <div>
             <FieldLabel>Dated On</FieldLabel>
             <TextInput type="date" value={datedOn} onChange={(e) => setDatedOn(e.target.value)} />
@@ -1222,8 +1220,7 @@ export function AccountBalancePage() {
 }
 
 export function VouchersReportPage() {
-  const { years, financialYearId, setFinancialYearId, financialYearIdNum, selectedYear } =
-    useReportFinancialYears();
+  const { financialYearId, financialYearIdNum, selectedYear } = useReportFinancialYear();
   const [fromDate, setFromDate] = useState(monthStartInputValue);
   const [toDate, setToDate] = useState(monthEndInputValue);
   const [voucherType, setVoucherType] = useState<VoucherTypeFilter>('all');
@@ -1348,14 +1345,16 @@ export function VouchersReportPage() {
   }
 
   return (
-    <PageShell title="Vouchers Report" subtitle="Filter and review posted vouchers">
+    <PageShell
+      title="Vouchers Report"
+      subtitle={
+        selectedYear
+          ? `Filter and review posted vouchers · FY ${selectedYear.label}${selectedYear.status === 'ACTIVE' ? ' (Active)' : ''}`
+          : 'Filter and review posted vouchers'
+      }
+    >
       <Panel>
-        <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={setFinancialYearId}
-          />
+        <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
           <div>
             <FieldLabel>From Date</FieldLabel>
             <TextInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />

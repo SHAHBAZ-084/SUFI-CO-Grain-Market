@@ -3,10 +3,23 @@ import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/helpers';
 import { parsePagination } from '../../utils/pagination';
+import * as dailyReport from './daily-report.service';
 import * as salePurchaseReport from './sale-purchase-report.service';
 
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
+
+reportsRouter.get(
+  '/daily',
+  asyncHandler(async (req, res) => {
+    const date = String(req.query.date ?? '');
+    if (!date) {
+      res.status(400).json({ error: 'date is required (YYYY-MM-DD)' });
+      return;
+    }
+    res.json(await dailyReport.getDailyReport(date));
+  }),
+);
 
 reportsRouter.get(
   '/sale-purchase',

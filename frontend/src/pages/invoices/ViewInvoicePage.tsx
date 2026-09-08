@@ -1,8 +1,9 @@
-import { FormEvent, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { INVOICE_TYPE_LABELS } from '../../config/navigation';
-import { api, type InvoiceDetail, type SystemPreferences } from '../../lib/api';
+import { ApiRequestError, api, type InvoiceDetail, type SystemPreferences } from '../../lib/api';
 import { buildInvoiceReference, type InvoiceTypeKey } from '../../lib/invoiceReference';
 import { FieldLabel, FinancialButton, PageShell, Panel, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -13,10 +14,42 @@ const INVOICE_TYPE_OPTIONS = (Object.keys(INVOICE_TYPE_LABELS) as InvoiceTypeKey
   label: INVOICE_TYPE_LABELS[key]!,
 }));
 
+function isInvoiceTypeKey(value: string): value is InvoiceTypeKey {
+  return value in INVOICE_TYPE_PREFIX_CHECK;
+}
+
+const INVOICE_TYPE_PREFIX_CHECK: Record<string, true> = {
+  SALE_COMMISSION: true,
+  SALE_PAUNCH: true,
+  PURCHASE_MAAL: true,
+  KACHI_MAAL: true,
+  PURCHASE_GENERAL: true,
+  SALE_GENERAL: true,
+};
+
+function isInvoiceNotFoundError(err: unknown): boolean {
+  if (err instanceof ApiRequestError && err.status === 404) return true;
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('no invoice found')
+    || lower.includes('invoice not found')
+    || (lower.includes('not found') && lower.includes('invoice'))
+  );
+}
+
 export function ViewInvoicePage() {
+  const [searchParams] = useSearchParams();
   const printRef = useRef<HTMLDivElement>(null);
-  const [invoiceType, setInvoiceType] = useState<InvoiceTypeKey>('KACHI_MAAL');
-  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const autoFetchedKey = useRef<string | null>(null);
+
+  const paramType = searchParams.get('type') ?? '';
+  const paramNumber = searchParams.get('number') ?? '';
+  const initialType = isInvoiceTypeKey(paramType) ? paramType : 'KACHI_MAAL';
+  const initialNumber = /^\d+$/.test(paramNumber) ? paramNumber : '';
+
+  const [invoiceType, setInvoiceType] = useState<InvoiceTypeKey>(initialType);
+  const [invoiceNumber, setInvoiceNumber] = useState(initialNumber);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
@@ -24,20 +57,19 @@ export function ViewInvoicePage() {
   const [notFoundRef, setNotFoundRef] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  async function onFetch(event: FormEvent) {
-    event.preventDefault();
+  const fetchInvoice = useCallback(async (type: InvoiceTypeKey, numberText: string) => {
     setError('');
     setNotFoundRef(null);
     setInvoice(null);
     setPrefs(null);
 
-    const num = parseInt(invoiceNumber.trim(), 10);
+    const num = parseInt(numberText.trim(), 10);
     if (!Number.isFinite(num) || num < 1) {
       setError('Enter a valid invoice number (1 or greater).');
       return;
     }
 
-    const reference = buildInvoiceReference(invoiceType, num);
+    const reference = buildInvoiceReference(type, num);
     setLoading(true);
     try {
       const [row, systemPrefs] = await Promise.all([
@@ -47,15 +79,29 @@ export function ViewInvoicePage() {
       setInvoice(row);
       setPrefs(systemPrefs);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Lookup failed';
-      if (message.toLowerCase().includes('no invoice found')) {
+      if (isInvoiceNotFoundError(err)) {
         setNotFoundRef(reference);
       } else {
-        setError(message);
+        setError(err instanceof Error ? err.message : 'Lookup failed');
       }
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!isInvoiceTypeKey(paramType) || !/^\d+$/.test(paramNumber)) return;
+    const key = `${paramType}:${paramNumber}`;
+    if (autoFetchedKey.current === key) return;
+    autoFetchedKey.current = key;
+    setInvoiceType(paramType);
+    setInvoiceNumber(paramNumber);
+    void fetchInvoice(paramType, paramNumber);
+  }, [paramType, paramNumber, fetchInvoice]);
+
+  async function onFetch(event: FormEvent) {
+    event.preventDefault();
+    await fetchInvoice(invoiceType, invoiceNumber);
   }
 
   async function onDownloadPdf() {

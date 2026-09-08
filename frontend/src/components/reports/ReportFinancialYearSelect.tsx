@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { api, type FinancialYear } from '../../lib/api';
+import type { FinancialYear } from '../../lib/api';
 import { FieldLabel } from '../ui/PageShell';
 import { SearchSelect } from '../ui/SearchSelect';
 
@@ -8,49 +7,7 @@ export function financialYearOptionLabel(year: FinancialYear): string {
   return `${year.label} (${status})`;
 }
 
-/** Shared Financial Year dropdown for Reports pages only. */
-export function useReportFinancialYears() {
-  const [years, setYears] = useState<FinancialYear[]>([]);
-  const [financialYearId, setFinancialYearId] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    api
-      .listFinancialYears()
-      .then((rows) => {
-        if (cancelled) return;
-        setYears(rows);
-        const active = rows.find((y) => y.status === 'ACTIVE');
-        setFinancialYearId(String(active?.id ?? rows[0]?.id ?? ''));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setYears([]);
-        setFinancialYearId('');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const selectedYear = years.find((y) => String(y.id) === financialYearId) ?? null;
-  const financialYearIdNum = financialYearId ? Number(financialYearId) : undefined;
-
-  return {
-    years,
-    financialYearId,
-    setFinancialYearId,
-    financialYearIdNum,
-    selectedYear,
-    loading,
-  };
-}
-
+/** Financial Year dropdown — intended for the Reports hub only. */
 export function ReportFinancialYearSelect({
   value,
   years,

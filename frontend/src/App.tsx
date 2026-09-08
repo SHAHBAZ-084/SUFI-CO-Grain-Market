@@ -1,10 +1,11 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { APP_BRAND_NAME } from './config/brand';
 import { AppShell } from './components/layout/AppShell';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ReportFinancialYearProvider } from './contexts/ReportFinancialYearContext';
 import { AccountManagePage } from './pages/accounts/AccountManagePage';
 import { CategoryManagePage } from './pages/accounts/CategoryManagePage';
 import { PurchasePartiesPage, SalePartiesPage } from './pages/accounts/PartiesPage';
@@ -15,6 +16,8 @@ import { ViewInvoicePage } from './pages/invoices/ViewInvoicePage';
 import { LoginPage } from './pages/LoginPage';
 import { BackupPage } from './pages/BackupPage';
 import { PosHomePage } from './pages/PosHomePage';
+import { ReportsHubPage } from './pages/reports/ReportsHubPage';
+import { DailyReportPage } from './pages/reports/DailyReportPage';
 import {
   AccountReportsPage,
   AccountBalancePage,
@@ -32,6 +35,14 @@ import { PendingApprovalsPage } from './pages/approvals/PendingApprovalsPage';
 import { UserManagementPage } from './pages/user/UserManagementPage';
 import { VoucherFormPage, VoucherListPage } from './pages/vouchers/VoucherPages';
 
+function ReportsLayout() {
+  return (
+    <ReportFinancialYearProvider>
+      <Outlet />
+    </ReportFinancialYearProvider>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary title={`${APP_BRAND_NAME} encountered an error`}>
@@ -48,7 +59,6 @@ export default function App() {
                   <Route path="/invoices" element={<Navigate to="/invoices/sale-commission" replace />} />
                   <Route path="/accounts" element={<Navigate to="/accounts/manage/add" replace />} />
                   <Route path="/products" element={<Navigate to="/accounts/products/add" replace />} />
-                  <Route path="/reports" element={<Navigate to="/reports/accounts" replace />} />
                   <Route path="/system" element={<Navigate to="/system/preferences" replace />} />
                   <Route path="/settings/financial-year" element={<FinancialYearPage />} />
 
@@ -80,12 +90,16 @@ export default function App() {
                   <Route path="/vouchers/receipt" element={<VoucherFormPage kind="receipt" />} />
                   <Route path="/vouchers/view" element={<VoucherListPage />} />
 
-                  <Route path="/reports/accounts" element={<AccountReportsPage />} />
-                  <Route path="/reports/account-balance" element={<AccountBalancePage />} />
-                  <Route path="/reports/vouchers" element={<VouchersReportPage />} />
-                  <Route path="/reports/trial-balance" element={<TrialBalancePage />} />
-                  <Route path="/reports/sale-purchase" element={<SalePurchaseReportsPage />} />
-                  <Route path="/reports/stock" element={<StockReportPage />} />
+                  <Route path="/reports" element={<ReportsLayout />}>
+                    <Route index element={<ReportsHubPage />} />
+                    <Route path="accounts" element={<AccountReportsPage />} />
+                    <Route path="account-balance" element={<AccountBalancePage />} />
+                    <Route path="vouchers" element={<VouchersReportPage />} />
+                    <Route path="daily" element={<DailyReportPage />} />
+                    <Route path="trial-balance" element={<TrialBalancePage />} />
+                    <Route path="sale-purchase" element={<SalePurchaseReportsPage />} />
+                    <Route path="stock" element={<StockReportPage />} />
+                  </Route>
 
                   <Route path="/system/preferences" element={<SystemPreferencesPage />} />
                   <Route path="/system/users" element={<UserManagementPage />} />

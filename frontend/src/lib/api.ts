@@ -56,6 +56,8 @@ export type Product = {
   accountId: number;
   categoryId?: number;
   averageCost?: number | string | null;
+  /** On-hand qty for QUANTITY stock products; null for grain/other. */
+  quantityOnHand?: number | string | null;
   category?: ProductCategory | null;
   account?: { id: number; name: string; code: string; ledger?: { balance: number | string } | null };
 };
@@ -166,6 +168,28 @@ export type SalePaunchLineDetail = {
   maalKhataAccount?: VoucherAccount | null;
 };
 
+export type GeneralPurchaseLineDetail = {
+  id: number;
+  productId: number;
+  quantity: number | string;
+  rate: number | string;
+  lineTotal: number | string;
+  mazduriAmount?: number | string | null;
+  sortOrder?: number;
+  product?: Product | null;
+};
+
+export type GeneralSaleLineDetail = {
+  id: number;
+  productId: number;
+  quantity: number | string;
+  rate: number | string;
+  lineTotal: number | string;
+  unitCost?: number | string | null;
+  sortOrder?: number;
+  product?: Product | null;
+};
+
 export type InvoiceDetail = Invoice & {
   invoiceDate?: string | null;
   billNo?: string | null;
@@ -185,11 +209,15 @@ export type InvoiceDetail = Invoice & {
   marketFeeEnabled?: boolean;
   mazduriEnabled?: boolean;
   debitAccount?: VoucherAccount | null;
+  partyAccount?: VoucherAccount | null;
+  salePartyAccount?: VoucherAccount | null;
   items?: InvoiceItemDetail[];
   kachiMaalLines?: KachiMaalLineDetail[];
   purchaseMaalLines?: PurchaseMaalLineDetail[];
   salePaunchLines?: SalePaunchLineDetail[];
   saleCommissionLines?: MaalLineDetail[];
+  generalPurchaseLines?: GeneralPurchaseLineDetail[];
+  generalSaleLines?: GeneralSaleLineDetail[];
   vouchers?: { voucher: Voucher }[];
   createdBy?: VoucherUser | null;
 };
@@ -268,10 +296,12 @@ type ApiError = { error: string; code?: string };
 
 export class ApiRequestError extends Error {
   code?: string;
-  constructor(message: string, code?: string) {
+  status?: number;
+  constructor(message: string, code?: string, status?: number) {
     super(message);
     this.name = 'ApiRequestError';
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -282,7 +312,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'include',
   });
   const data = (await response.json().catch(() => ({}))) as T & ApiError;
-  if (!response.ok) throw new ApiRequestError(data.error ?? 'Request failed', data.code);
+  if (!response.ok) throw new ApiRequestError(data.error ?? 'Request failed', data.code, response.status);
   return data;
 }
 
@@ -946,6 +976,39 @@ export const api = {
       offset: number;
       totals: { totalIn: number; totalOut: number; netBalance: number };
     }>(`/api/stock/report?${query.toString()}`);
+  },
+
+  getDailyReport(params: { date: string }) {
+    const query = new URLSearchParams({ date: params.date });
+    return request<{
+      date: string;
+      rows: Array<{
+        kind: 'voucher' | 'invoice';
+        id: number;
+        filterKey:
+          | 'PAYMENT'
+          | 'RECEIPT'
+          | 'JOURNAL'
+          | 'KACHI_MAAL'
+          | 'PURCHASE_MAAL'
+          | 'SALE_PAUNCH'
+          | 'SALE_COMMISSION'
+          | 'PURCHASE_GENERAL'
+          | 'SALE_GENERAL';
+        typeLabel: string;
+        reference: string;
+        amount: number;
+        date: string;
+        debitAccount: { name: string; code: string } | null;
+        creditAccount: { name: string; code: string } | null;
+        voucherType?: string;
+        voucherNumber?: number;
+        invoiceType?: string;
+        invoiceNumber?: number;
+        invoiceReference?: string;
+      }>;
+      totals: { count: number; amount: number };
+    }>(`/api/reports/daily?${query.toString()}`);
   },
 
   getSalePurchaseReport(params: {

@@ -171,9 +171,11 @@ function LineTable({ rows }: { rows: BillLineRow[] }) {
 function TotalsStack({
   lines,
   netAmount,
+  netLabel = 'Net Amount:',
 }: {
   lines: Array<{ label: string; value: string; bold?: boolean; boxed?: boolean }>;
   netAmount: string;
+  netLabel?: string;
 }) {
   return (
     <div className="mt-4 flex justify-end">
@@ -185,7 +187,7 @@ function TotalsStack({
           </div>
         ))}
         <div className="flex items-center justify-between gap-4 pt-2">
-          <span className="font-bold">Net Amount:</span>
+          <span className="font-bold">{netLabel}</span>
           <span className="border-2 border-black px-3 py-0.5 text-[13px] font-bold tabular-nums">
             {netAmount}
           </span>
@@ -481,6 +483,142 @@ function BillSignature() {
   );
 }
 
+type GeneralGoodsBillRow = {
+  product: string;
+  quantity: number;
+  unit: string;
+  rate: number;
+  lineTotal: number;
+};
+
+function GeneralGoodsLineTable({ rows }: { rows: GeneralGoodsBillRow[] }) {
+  const qtyTotal = rows.reduce((s, r) => s + r.quantity, 0);
+  const amountTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
+  return (
+    <table className="mt-3 w-full border-collapse text-[12px]">
+      <thead>
+        <tr className="border-b border-black">
+          <th className="py-1.5 pr-2 text-left font-semibold">Product</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Qty</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Unit</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Rate</th>
+          <th className="py-1.5 pl-1 text-right font-semibold">Line Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            <td className="py-1.5 pr-2">{row.product || '\u00A0'}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{row.quantity || '0'}</td>
+            <td className="px-1 py-1.5 text-right">{row.unit || '—'}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.rate)}</td>
+            <td className="py-1.5 pl-1 text-right tabular-nums">{formatBillAmount(row.lineTotal)}</td>
+          </tr>
+        ))}
+        <tr className="border-t border-black font-semibold">
+          <td className="py-1.5 pr-2">{'\u00A0'}</td>
+          <td className="px-1 py-1.5 text-right tabular-nums">{qtyTotal || '0'}</td>
+          <td className="px-1 py-1.5" />
+          <td className="px-1 py-1.5" />
+          <td className="py-1.5 pl-1 text-right tabular-nums">{formatBillAmount(amountTotal)}</td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function generalGoodsProductLabel(lines: Array<{ product?: { name?: string | null } | null }>) {
+  const names = lines.map((l) => l.product?.name?.trim()).filter(Boolean) as string[];
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  return 'Multiple';
+}
+
+function PurchaseGeneralBillBody({ invoice }: { invoice: InvoiceDetail }) {
+  const lines = invoice.generalPurchaseLines ?? [];
+  const rows: GeneralGoodsBillRow[] = lines.map((line) => ({
+    product: line.product?.name ?? '—',
+    quantity: Number(line.quantity),
+    unit: line.product?.unit?.trim() || '—',
+    rate: Number(line.rate),
+    lineTotal: Number(line.lineTotal),
+  }));
+  const goodsTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
+  const mazduriTotal = lines.reduce((s, line) => s + Math.max(0, Number(line.mazduriAmount ?? 0)), 0);
+  const party = invoice.partyAccount;
+  const totalLines: Array<{ label: string; value: string; bold?: boolean }> = [
+    { label: 'Goods Total:', value: formatBillAmount(goodsTotal), bold: true },
+  ];
+  if (mazduriTotal > 0) {
+    totalLines.push({
+      label: 'Mazduri (paid separately):',
+      value: formatBillAmount(mazduriTotal),
+    });
+  }
+
+  return (
+    <>
+      <BillHeader title={BILL_TITLES.PURCHASE_GENERAL ?? 'Purchase Bill'} />
+      <MetaRow
+        invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
+        date={formatBillDate(invoiceBillDate(invoice))}
+        billNo={invoice.billNo ?? ''}
+        gariNo={invoice.gariNo ?? ''}
+      />
+      <PartyBlock
+        billToLabel="Bill From:"
+        partyCode={party?.code}
+        partyName={party?.name ?? '—'}
+        product={generalGoodsProductLabel(lines)}
+      />
+      <GeneralGoodsLineTable rows={rows.length ? rows : [{ product: '', quantity: 0, unit: '', rate: 0, lineTotal: 0 }]} />
+      <TotalsStack
+        lines={totalLines}
+        netAmount={formatBillAmount(Number(invoice.total))}
+        netLabel="Net Payable to Supplier:"
+      />
+      <BillSignature />
+    </>
+  );
+}
+
+function SaleGeneralBillBody({ invoice }: { invoice: InvoiceDetail }) {
+  const lines = invoice.generalSaleLines ?? [];
+  const rows: GeneralGoodsBillRow[] = lines.map((line) => ({
+    product: line.product?.name ?? '—',
+    quantity: Number(line.quantity),
+    unit: line.product?.unit?.trim() || '—',
+    rate: Number(line.rate),
+    lineTotal: Number(line.lineTotal),
+  }));
+  const goodsTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
+  const party = invoice.salePartyAccount;
+
+  return (
+    <>
+      <BillHeader title={BILL_TITLES.SALE_GENERAL ?? 'Sale Bill'} />
+      <MetaRow
+        invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
+        date={formatBillDate(invoiceBillDate(invoice))}
+        billNo={invoice.billNo ?? ''}
+        gariNo={invoice.gariNo ?? ''}
+      />
+      <PartyBlock
+        billToLabel="Bill To:"
+        partyCode={party?.code}
+        partyName={party?.name ?? '—'}
+        product={generalGoodsProductLabel(lines)}
+      />
+      <GeneralGoodsLineTable rows={rows.length ? rows : [{ product: '', quantity: 0, unit: '', rate: 0, lineTotal: 0 }]} />
+      <TotalsStack
+        lines={[{ label: 'Total Amount:', value: formatBillAmount(goodsTotal), bold: true }]}
+        netAmount={formatBillAmount(Number(invoice.total))}
+      />
+      <BillSignature />
+    </>
+  );
+}
+
 function SaleCommissionBillBody({
   invoice,
   prefs,
@@ -625,6 +763,8 @@ export function InvoiceBillView({
       {invoice.type === 'SALE_COMMISSION' ? (
         <SaleCommissionBillBody invoice={invoice} prefs={p} />
       ) : null}
+      {invoice.type === 'PURCHASE_GENERAL' ? <PurchaseGeneralBillBody invoice={invoice} /> : null}
+      {invoice.type === 'SALE_GENERAL' ? <SaleGeneralBillBody invoice={invoice} /> : null}
     </div>
   );
 }
