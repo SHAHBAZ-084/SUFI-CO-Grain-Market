@@ -7,6 +7,7 @@ function isFocusableCandidate(el: HTMLElement, container: HTMLElement): boolean 
   if (!container.contains(el)) return false;
   if (el.getAttribute('role') === 'option') return false;
   if (el.closest('[role="listbox"]')) return false;
+  if (el.closest('[data-date-field-calendar]')) return false;
   if (el.tabIndex < 0) return false;
   if (el.hasAttribute('disabled')) return false;
   const style = window.getComputedStyle(el);
@@ -28,8 +29,40 @@ export function getFocusableElements(container: HTMLElement): HTMLElement[] {
   });
 }
 
+export function indexOfFocusable(
+  focusables: HTMLElement[],
+  active: Element | null,
+): number {
+  if (!active || !(active instanceof HTMLElement)) return -1;
+  const direct = focusables.indexOf(active);
+  if (direct >= 0) return direct;
+  return focusables.findIndex((el) => el.contains(active));
+}
+
+/** Move ±1 through the container's focusable list (wraps). Shared by the trap and SearchSelect. */
+export function moveFocusInContainer(
+  container: HTMLElement,
+  active: Element | null,
+  direction: 1 | -1,
+): void {
+  const focusables = getFocusableElements(container);
+  if (focusables.length === 0) return;
+  const index = indexOfFocusable(focusables, active);
+  let nextIndex: number;
+  if (index === -1) {
+    nextIndex = direction === 1 ? 0 : focusables.length - 1;
+  } else {
+    nextIndex = (index + direction + focusables.length) % focusables.length;
+  }
+  focusables[nextIndex]?.focus();
+}
+
 function hasOpenCombobox(container: HTMLElement): boolean {
   return Boolean(container.querySelector('[role="combobox"][aria-expanded="true"]'));
+}
+
+function hasOpenDateCalendar(container: HTMLElement): boolean {
+  return Boolean(container.querySelector('[data-date-field-calendar]'));
 }
 
 type UseFocusTrapOptions = {
@@ -46,9 +79,11 @@ export function useFocusTrap(
   const [trapped, setTrapped] = useState(true);
 
   useEffect(() => {
-    if (!trapped || !containerRef.current) return;
+    const el = containerRef.current;
+    if (!trapped || !el) return;
+    const container: HTMLElement = el;
 
-    const container = containerRef.current;
+    container.setAttribute('data-focus-trap', 'true');
 
     requestAnimationFrame(() => {
       if (options.initialFocusRef?.current) {
@@ -62,7 +97,8 @@ export function useFocusTrap(
       if (!trapped) return;
 
       if (e.key === 'Escape') {
-        if (hasOpenCombobox(container)) return;
+        // Open overlays handle Escape themselves (and stopPropagation). Do not release the form trap.
+        if (hasOpenCombobox(container) || hasOpenDateCalendar(container)) return;
         e.preventDefault();
         setTrapped(false);
         requestAnimationFrame(() => {
@@ -73,29 +109,18 @@ export function useFocusTrap(
 
       if (e.key !== 'Tab') return;
 
-      const focusables = getFocusableElements(container);
-      if (focusables.length === 0) return;
+      // Let SearchSelect / DateField finish commit + move focus while their overlay is open.
+      if (hasOpenCombobox(container) || hasOpenDateCalendar(container)) return;
 
-      const first = focusables[0]!;
-      const last = focusables[focusables.length - 1]!;
-      const active = document.activeElement as HTMLElement | null;
-
-      if (e.shiftKey) {
-        if (active === first || (active && !container.contains(active))) {
-          e.preventDefault();
-          last.focus();
-        }
-        return;
-      }
-
-      if (active === last) {
-        e.preventDefault();
-        first.focus();
-      }
+      e.preventDefault();
+      moveFocusInContainer(container, document.activeElement, e.shiftKey ? -1 : 1);
     }
 
     container.addEventListener('keydown', handleKeyDown);
-    return () => container.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      container.removeEventListener('keydown', handleKeyDown);
+      container.removeAttribute('data-focus-trap');
+    };
   }, [trapped, containerRef, options.escapeFocusRef, options.initialFocusRef]);
 
   return { trapped, releaseTrap: () => setTrapped(false) };

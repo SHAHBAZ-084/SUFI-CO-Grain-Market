@@ -213,7 +213,7 @@ function buildLedgerLegs(
     { amount: totals.commissionAmount, creditAccountId: systemAccounts.commission.id, description: 'Commission' },
     { amount: totals.dalaliAmount, creditAccountId: systemAccounts.dalali.id, description: 'Dalali' },
     { amount: totals.sutliAmount, creditAccountId: systemAccounts.sutli.id, description: 'Sutli' },
-    { amount: totals.mazduriAmount, creditAccountId: systemAccounts.mazduri.id, description: 'Labour (Mazduri)' },
+    { amount: totals.mazduriAmount, creditAccountId: systemAccounts.mazduri.id, description: 'Labour (PaleDari)' },
     { amount: totals.marketFeeAmount, creditAccountId: systemAccounts.marketFee.id, description: 'Market Fee' },
     { amount: totals.munshianaAmount, creditAccountId: systemAccounts.munshiana.id, description: 'Munshiana' },
     { amount: totals.miscAmount, creditAccountId: systemAccounts.misc.id, description: 'Misc' },

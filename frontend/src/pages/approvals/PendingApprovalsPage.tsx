@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { DateField } from '../../components/ui/DateField';
 import {
   FieldLabel,
   LegacyTable,
@@ -251,7 +252,7 @@ function ApprovalEditModal({
               <>
                 <div>
                   <FieldLabel>Date</FieldLabel>
-                  <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                  <DateField value={editDate} onChange={setEditDate} />
                 </div>
                 <div>
                   <FieldLabel>Amount</FieldLabel>
@@ -287,10 +288,9 @@ function ApprovalEditModal({
                 ) : null}
                 <div>
                   <FieldLabel>Invoice date</FieldLabel>
-                  <TextInput
-                    type="date"
+                  <DateField
                     value={editInvoiceDate}
-                    onChange={(e) => setEditInvoiceDate(e.target.value)}
+                    onChange={setEditInvoiceDate}
                   />
                 </div>
                 <div>
@@ -316,7 +316,7 @@ function ApprovalEditModal({
               <>
                 <div>
                   <FieldLabel>Date</FieldLabel>
-                  <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                  <DateField value={editDate} onChange={setEditDate} />
                 </div>
                 <div>
                   <FieldLabel>Amount</FieldLabel>
@@ -395,7 +395,7 @@ function ApprovalEditModal({
                 </div>
                 <div>
                   <FieldLabel>Date</FieldLabel>
-                  <TextInput type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                  <DateField value={editDate} onChange={setEditDate} />
                 </div>
                 <div>
                   <FieldLabel>Notes</FieldLabel>

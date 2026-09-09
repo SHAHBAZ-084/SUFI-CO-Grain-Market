@@ -140,6 +140,21 @@ async function ensureBootstrapData(db: PrismaClient): Promise<void> {
   } catch (err) {
     logger.warn('Chart of accounts bootstrap skipped/failed', { err: String(err) });
   }
+
+  // Legacy cTnSoft opening balances (parties, banks, products) — first run only.
+  try {
+    const {
+      shouldRunLegacyAccountImport,
+      runLegacyAccountImport,
+    } = await import('./legacy-account-import');
+    if (await shouldRunLegacyAccountImport()) {
+      logger.info('Running first-run legacy account import…');
+      const summary = await runLegacyAccountImport();
+      logger.info('Legacy account import complete', summary);
+    }
+  } catch (err) {
+    logger.warn('Legacy account import skipped/failed', { err: String(err) });
+  }
 }
 
 export async function initializeDatabase(db: PrismaClient): Promise<StartupStatus> {

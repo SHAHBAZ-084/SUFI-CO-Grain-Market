@@ -1465,6 +1465,7 @@ export type KachiMaalSystemAccounts = {
   bori: { id: number; name: string };
   thela: { id: number; name: string };
   commission: { id: number; name: string };
+  /** Sale Fee ledger — display name "PaleDari" (live PaleDari / labour postings). */
   mazduri: { id: number; name: string };
   broker: { id: number; name: string };
   marketFee: { id: number; name: string };
@@ -1491,7 +1492,9 @@ export async function ensureKachiMaalAccounts(
   const bori = await ensureDefaultAccountInTx(tx, bardana.id, 'Bori', AccountType.ASSET, 'BD-BORI');
   const thela = await ensureDefaultAccountInTx(tx, bardana.id, 'Thela', AccountType.ASSET, 'BD-THELA');
   const commission = await ensureDefaultAccountInTx(tx, revenue.id, 'Commission', AccountType.REVENUE, 'REV-COMM');
-  const mazduri = await ensureDefaultAccountInTx(tx, saleFee.id, 'Mazduri', AccountType.EXPENSE, 'SF-MAZ');
+  // Live Kachi PaleDari (and Purchase Maal / Commission labour) post here — name matches old books.
+  await renameAccountIfNeededInTx(tx, 'Mazduri', 'PaleDari');
+  const mazduri = await ensureDefaultAccountInTx(tx, saleFee.id, 'PaleDari', AccountType.EXPENSE, 'SF-MAZ');
   const broker = await ensureDefaultAccountInTx(tx, saleFee.id, 'Broker', AccountType.EXPENSE, 'SF-BRK');
   const marketFee = await ensureDefaultAccountInTx(tx, saleFee.id, 'Market Fee', AccountType.EXPENSE, 'SF-MKT');
   const misc = await ensureDefaultAccountInTx(tx, saleFee.id, 'Misc', AccountType.EXPENSE, 'SF-MISC');
@@ -1773,6 +1776,26 @@ async function ensureCategoryInTx(tx: Prisma.TransactionClient, name: string) {
   });
   if (existing) return existing;
   return tx.accountCategory.create({ data: { name } });
+}
+
+/** Rename a system account once when migrating display names (no-op if target already exists). */
+async function renameAccountIfNeededInTx(
+  tx: Prisma.TransactionClient,
+  fromName: string,
+  toName: string,
+) {
+  const target = await tx.account.findFirst({
+    where: { isActive: true, name: { equals: toName } },
+  });
+  if (target) return;
+  const source = await tx.account.findFirst({
+    where: { isActive: true, name: { equals: fromName } },
+  });
+  if (!source) return;
+  await tx.account.update({
+    where: { id: source.id },
+    data: { name: toName },
+  });
 }
 
 async function ensureDefaultAccountInTx(

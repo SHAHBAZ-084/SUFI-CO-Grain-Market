@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { DateField } from '../../components/ui/DateField';
 import {
   FieldLabel,
   FinancialButton,
@@ -7,7 +8,6 @@ import {
   PageShell,
   Panel,
   SecondaryButton,
-  TextInput,
 } from '../../components/ui/PageShell';
 import { api } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
@@ -130,10 +130,9 @@ export function DailyReportPage() {
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-4">
           <div className="min-w-[180px]">
             <FieldLabel>Date</FieldLabel>
-            <TextInput
-              type="date"
+            <DateField
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
               required
             />
           </div>

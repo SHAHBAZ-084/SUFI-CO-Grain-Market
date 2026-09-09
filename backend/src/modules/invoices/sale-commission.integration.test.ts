@@ -207,7 +207,7 @@ describe('Sale on Commission posting', () => {
         { accountId: commissionId, accountName: expect.any(String), type: 'CREDIT', amount: 6_515.1, description: 'Commission' },
         { accountId: dalaliId, accountName: expect.any(String), type: 'CREDIT', amount: 3_206.25, description: 'Dalali' },
         { accountId: sutliId, accountName: expect.any(String), type: 'CREDIT', amount: 1_102, description: 'Sutli' },
-        { accountId: mazduriId, accountName: expect.any(String), type: 'CREDIT', amount: 22_040, description: 'Labour (Mazduri)' },
+        { accountId: mazduriId, accountName: expect.any(String), type: 'CREDIT', amount: 22_040, description: 'Labour (PaleDari)' },
         { accountId: marketFeeId, accountName: expect.any(String), type: 'CREDIT', amount: 661.2, description: 'Market Fee' },
         { accountId: munshianaId, accountName: expect.any(String), type: 'CREDIT', amount: 500, description: 'Munshiana' },
         { accountId: miscId, accountName: expect.any(String), type: 'CREDIT', amount: 100, description: 'Misc' },

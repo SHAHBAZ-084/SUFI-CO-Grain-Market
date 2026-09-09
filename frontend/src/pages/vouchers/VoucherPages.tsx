@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
 import { api, Account, AccountCategory, Voucher, VoucherAccount, VoucherUser } from '../../lib/api';
 import { DangerButton, FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
+import { DateField } from '../../components/ui/DateField';
 import { FormActionFooter } from '../../components/ui/FormActionFooter';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -339,13 +340,12 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <FieldLabel>Date</FieldLabel>
-              <TextInput
+              <DateField
                 ref={dateRef}
                 tabIndex={1}
-                type="date"
                 required
                 value={voucherDate}
-                onChange={(e) => setVoucherDate(e.target.value)}
+                onChange={setVoucherDate}
               />
             </div>
             <div>

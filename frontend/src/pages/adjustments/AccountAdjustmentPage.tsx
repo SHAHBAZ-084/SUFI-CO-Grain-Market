@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { notifyApprovalsChanged } from '../../lib/approvals';
 import { api, type Account } from '../../lib/api';
+import { DateField } from '../../components/ui/DateField';
 import { FieldLabel, PageShell, Panel, PrimaryButton, TextInput } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 
@@ -107,10 +108,9 @@ export function AccountAdjustmentPage() {
           </div>
           <div>
             <FieldLabel>Date</FieldLabel>
-            <TextInput
-              type="date"
+            <DateField
               value={adjustmentDate}
-              onChange={(e) => setAdjustmentDate(e.target.value)}
+              onChange={setAdjustmentDate}
               required
             />
           </div>

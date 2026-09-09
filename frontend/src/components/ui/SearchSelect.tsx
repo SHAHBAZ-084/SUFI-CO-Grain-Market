@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from 'react';
+import { moveFocusInContainer } from '../../hooks/useFocusTrap';
 import { filterOptions, resolveSelection } from './searchSelectUtils';
 
 export type SearchSelectOption = { value: string; label: string };
@@ -31,6 +32,7 @@ export function SearchSelect({
   tabIndex?: number;
   id?: string;
   inputRef?: RefObject<HTMLInputElement | null>;
+  /** Used for Enter / click advance only. Tab / Shift+Tab use the shared focus list. */
   nextFocusRef?: RefObject<HTMLElement | null>;
   onSelected?: (value: string) => void;
 }) {
@@ -40,6 +42,7 @@ export function SearchSelect({
 
   const internalInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const openRef = useRef(false);
 
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -48,6 +51,10 @@ export function SearchSelect({
   const [highlightMovedByKeyboard, setHighlightMovedByKeyboard] = useState(false);
 
   const selected = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 200);
@@ -84,6 +91,23 @@ export function SearchSelect({
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
+  // Capture-phase Escape so the form focus trap never sees "close dropdown" as "leave form".
+  useEffect(() => {
+    const input = internalInputRef.current;
+    if (!input) return;
+
+    function onKeyDownCapture(e: globalThis.KeyboardEvent) {
+      if (e.key !== 'Escape' || !openRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+      setQuery('');
+    }
+
+    input.addEventListener('keydown', onKeyDownCapture, true);
+    return () => input.removeEventListener('keydown', onKeyDownCapture, true);
+  }, []);
+
   function assignInputRef(el: HTMLInputElement | null) {
     internalInputRef.current = el;
     if (inputRefProp) {
@@ -91,15 +115,49 @@ export function SearchSelect({
     }
   }
 
-  function commitSelection(option: SearchSelectOption, advanceFocus: boolean) {
+  function focusTrapContainer(): HTMLElement | null {
+    const input = internalInputRef.current;
+    if (!input) return null;
+    return (
+      input.closest<HTMLElement>('[data-focus-trap]') ??
+      input.form ??
+      input.closest<HTMLElement>('form')
+    );
+  }
+
+  function advanceAfterCommit(direction: 1 | -1 | 'next-ref') {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (direction === 'next-ref') {
+          if (nextFocusRef?.current) {
+            nextFocusRef.current.focus();
+            return;
+          }
+        }
+        const container = focusTrapContainer();
+        const input = internalInputRef.current;
+        if (container && input) {
+          moveFocusInContainer(
+            container,
+            input,
+            direction === 'next-ref' ? 1 : direction,
+          );
+          return;
+        }
+        if (direction === 'next-ref' || direction === 1) {
+          nextFocusRef?.current?.focus();
+        }
+      });
+    });
+  }
+
+  function commitSelection(option: SearchSelectOption, advance: false | 1 | -1 | 'next-ref') {
     onChange(option.value);
     onSelected?.(option.value);
     setOpen(false);
     setQuery('');
-    if (advanceFocus) {
-      requestAnimationFrame(() => {
-        nextFocusRef?.current?.focus();
-      });
+    if (advance !== false) {
+      advanceAfterCommit(advance);
     }
   }
 
@@ -130,7 +188,10 @@ export function SearchSelect({
     }
 
     if (e.key === 'Escape') {
+      // Capture listener handles open case; closed Escape bubbles to the form trap.
+      if (!open) return;
       e.preventDefault();
+      e.stopPropagation();
       closeWithoutChange();
       return;
     }
@@ -139,32 +200,21 @@ export function SearchSelect({
       if (!open) return;
       e.preventDefault();
       const option = resolveSelection(filtered, highlightIndex, highlightMovedByKeyboard, 'enter');
-      if (option) commitSelection(option, true);
+      if (option) commitSelection(option, 'next-ref');
       return;
     }
 
     if (e.key === 'Tab') {
       if (!open) return;
+      // Own focus movement so Shift+Tab goes backward; do not use nextFocusRef here.
+      e.preventDefault();
+      const direction: 1 | -1 = e.shiftKey ? -1 : 1;
       const option = resolveSelection(filtered, highlightIndex, highlightMovedByKeyboard, 'tab');
       if (option) {
-        e.preventDefault();
-        onChange(option.value);
-        onSelected?.(option.value);
-        setOpen(false);
-        setQuery('');
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            if (nextFocusRef?.current) {
-              nextFocusRef.current.focus();
-            } else {
-              internalInputRef.current?.form?.querySelector<HTMLElement>(
-                `[tabindex="${(tabIndex ?? 0) + 1}"]`,
-              )?.focus();
-            }
-          });
-        });
+        commitSelection(option, direction);
       } else {
         closeWithoutChange();
+        advanceAfterCommit(direction);
       }
     }
   }
@@ -223,7 +273,7 @@ export function SearchSelect({
                   data-active={isHighlighted ? 'true' : 'false'}
                   onMouseDown={(e) => e.preventDefault()}
                   onMouseEnter={() => setHighlightIndex(index)}
-                  onClick={() => commitSelection(o, Boolean(nextFocusRef))}
+                  onClick={() => commitSelection(o, nextFocusRef ? 'next-ref' : false)}
                   className={`cursor-pointer px-3 py-2 text-sm ${
                     isHighlighted || isSelected
                       ? 'bg-bgAccent font-medium text-textAccent'

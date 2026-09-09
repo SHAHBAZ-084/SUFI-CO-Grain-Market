@@ -6,7 +6,8 @@ import { downloadExcel, downloadPdf } from '../../lib/reportExport';
 import { useReportFinancialYear } from '../../contexts/ReportFinancialYearContext';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
-import { FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
+import { DateField } from '../../components/ui/DateField';
+import { FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton } from '../../components/ui/PageShell';
 import { VoucherDetailCard } from '../vouchers/VoucherPages';
 
 type LedgerResult = Awaited<ReturnType<typeof api.getLedger>>;
@@ -265,11 +266,11 @@ export function AccountReportsPage() {
           </div>
           <div>
             <FieldLabel>From date</FieldLabel>
-            <TextInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            <DateField value={fromDate} onChange={setFromDate} />
           </div>
           <div>
             <FieldLabel>To date</FieldLabel>
-            <TextInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            <DateField value={toDate} onChange={setToDate} />
           </div>
           <PrimaryButton type="button" onClick={() => void loadLedger(0)} disabled={loading || !financialYearId}>
             {loading ? 'Loading…' : 'Load Ledger'}
@@ -665,11 +666,11 @@ export function SalePurchaseReportsPage() {
           </div>
           <div>
             <FieldLabel>From</FieldLabel>
-            <TextInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            <DateField value={fromDate} onChange={setFromDate} />
           </div>
           <div>
             <FieldLabel>To</FieldLabel>
-            <TextInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            <DateField value={toDate} onChange={setToDate} />
           </div>
           <FinancialButton type="button" onClick={onView} disabled={loading}>
             {loading ? 'Loading…' : 'View Report'}
@@ -1160,7 +1161,7 @@ export function AccountBalancePage() {
         <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
           <div>
             <FieldLabel>Dated On</FieldLabel>
-            <TextInput type="date" value={datedOn} onChange={(e) => setDatedOn(e.target.value)} />
+            <DateField value={datedOn} onChange={setDatedOn} />
           </div>
           <div>
             <FieldLabel>Account Type</FieldLabel>
@@ -1357,11 +1358,11 @@ export function VouchersReportPage() {
         <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
           <div>
             <FieldLabel>From Date</FieldLabel>
-            <TextInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            <DateField value={fromDate} onChange={setFromDate} />
           </div>
           <div>
             <FieldLabel>To Date</FieldLabel>
-            <TextInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            <DateField value={toDate} onChange={setToDate} />
           </div>
           <div>
             <FieldLabel>Voucher Type</FieldLabel>

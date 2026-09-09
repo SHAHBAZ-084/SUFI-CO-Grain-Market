@@ -11,6 +11,7 @@ import {
   InvoiceHeaderRow,
   InvoiceReadOnlyField,
 } from '../../components/invoices/InvoiceFormLayout';
+import { DateField } from '../../components/ui/DateField';
 import {
   FieldLabel,
   PageShell,
@@ -371,12 +372,11 @@ export function KachiMaalInvoicePage() {
               <InvoiceHeaderRow>
                 <InvoiceField>
                   <FieldLabel>Date</FieldLabel>
-                  <TextInput
+                  <DateField
                     ref={dateRef}
-                    type="date"
                     required
                     value={invoiceDate}
-                    onChange={(e) => setInvoiceDate(e.target.value)}
+                    onChange={setInvoiceDate}
                   />
                 </InvoiceField>
                 <InvoiceField>

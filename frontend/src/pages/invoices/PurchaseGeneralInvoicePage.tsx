@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DateField } from '../../components/ui/DateField';
 import {
   FieldLabel,
   FinancialButton,
@@ -265,11 +266,10 @@ export function PurchaseGeneralInvoicePage() {
               </div>
               <div>
                 <FieldLabel>Date</FieldLabel>
-                <TextInput
+                <DateField
                   ref={dateRef}
-                  type="date"
                   value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  onChange={setInvoiceDate}
                   required
                 />
               </div>

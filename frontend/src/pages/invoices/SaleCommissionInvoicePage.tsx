@@ -12,6 +12,7 @@ import {
   InvoiceReadOnlyField,
   InvoiceToggleField,
 } from '../../components/invoices/InvoiceFormLayout';
+import { DateField } from '../../components/ui/DateField';
 import { FieldLabel, PageShell, Panel, TextInput } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
@@ -358,7 +359,7 @@ export function SaleCommissionInvoicePage() {
               <InvoiceHeaderRow>
                 <InvoiceField>
                   <FieldLabel>Date</FieldLabel>
-                  <TextInput ref={dateRef} type="date" required value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+                  <DateField ref={dateRef} required value={invoiceDate} onChange={setInvoiceDate} />
                 </InvoiceField>
                 <InvoiceField>
                   <FieldLabel>Invoice #</FieldLabel>
