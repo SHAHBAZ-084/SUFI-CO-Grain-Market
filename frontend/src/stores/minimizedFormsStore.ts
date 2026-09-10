@@ -6,6 +6,7 @@ export type MinimizedFormKind =
   | 'purchase-general'
   | 'sale-paunch'
   | 'sale-general'
+  | 'general-trade'
   | 'sale-commission'
   | 'payment'
   | 'receipt'
@@ -40,6 +41,7 @@ export const MINIMIZED_FORM_ROUTES: Record<MinimizedFormKind, string> = {
   'purchase-general': '/invoices/purchase-general',
   'sale-paunch': '/invoices/sale-paunch',
   'sale-general': '/invoices/sale-general',
+  'general-trade': '/invoices/general-trade',
   'sale-commission': '/invoices/sale-commission',
   payment: '/vouchers/payment',
   receipt: '/vouchers/receipt',
@@ -52,6 +54,7 @@ export const MINIMIZED_FORM_TITLES: Record<MinimizedFormKind, string> = {
   'purchase-general': 'Purchase Invoice (General)',
   'sale-paunch': 'Sale on Paunch',
   'sale-general': 'Sale Invoice (General)',
+  'general-trade': 'General Trade',
   'sale-commission': 'Sale on Commission',
   payment: 'Payment',
   receipt: 'Receipt',

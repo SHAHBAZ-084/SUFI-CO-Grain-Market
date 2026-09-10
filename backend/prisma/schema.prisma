@@ -17,6 +17,7 @@ enum VoucherType {
   SALE_COMMISSION
   PURCHASE_GENERAL
   SALE_GENERAL
+  GENERAL_TRADE
 }
 
 enum BoriThelaMode {
@@ -61,6 +62,7 @@ enum InvoiceType {
   KACHI_MAAL
   PURCHASE_GENERAL
   SALE_GENERAL
+  GENERAL_TRADE
 }
 
 enum ProductStockMode {
@@ -575,6 +577,12 @@ model SystemPreference {
   mazduriPerBagRate Decimal  @default(0)
   kantaRate         Decimal  @default(0)
   closingDate       String?
+  businessName      String   @default("Sufi & Co.")
+  proprietorName    String   @default("Sufi M.Saleem Ullah")
+  phone             String   @default("0632501213")
+  mobile            String?
+  email             String?
+  ntnNumber         String?
   updatedAt         DateTime @updatedAt
 }
 

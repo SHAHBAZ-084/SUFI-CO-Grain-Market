@@ -6,6 +6,7 @@ export const INVOICE_TYPE_PREFIX = {
   KACHI_MAAL: 'KM',
   PURCHASE_GENERAL: 'PG',
   SALE_GENERAL: 'SG',
+  GENERAL_TRADE: 'GT',
 } as const;
 
 export type InvoiceTypeKey = keyof typeof INVOICE_TYPE_PREFIX;

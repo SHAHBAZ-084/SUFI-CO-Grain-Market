@@ -31,10 +31,11 @@ const INVOICE_TYPE_LABELS: Record<InvoiceType, string> = {
   KACHI_MAAL: 'Kachi Maal',
   PURCHASE_GENERAL: 'Purchase Invoice (General)',
   SALE_GENERAL: 'Sale Invoice (General)',
+  GENERAL_TRADE: 'General Trade',
 };
 
-const SALE_INVOICE_TYPES: InvoiceType[] = ['SALE_COMMISSION', 'SALE_PAUNCH', 'SALE_GENERAL'];
-const PURCHASE_INVOICE_TYPES: InvoiceType[] = ['PURCHASE_MAAL', 'KACHI_MAAL', 'PURCHASE_GENERAL'];
+const SALE_INVOICE_TYPES: InvoiceType[] = ['SALE_COMMISSION', 'SALE_PAUNCH', 'SALE_GENERAL', 'GENERAL_TRADE'];
+const PURCHASE_INVOICE_TYPES: InvoiceType[] = ['PURCHASE_MAAL', 'KACHI_MAAL', 'PURCHASE_GENERAL', 'GENERAL_TRADE'];
 
 const MULTI_LEG_VOUCHER_TYPES: VoucherType[] = [
   'KACHI',
@@ -43,6 +44,7 @@ const MULTI_LEG_VOUCHER_TYPES: VoucherType[] = [
   'SALE_COMMISSION',
   'PURCHASE_GENERAL',
   'SALE_GENERAL',
+  'GENERAL_TRADE',
 ];
 
 function roundMoney(value: number): number {
@@ -123,6 +125,8 @@ function voucherBaseTypeLabel(type: VoucherType): string {
       return 'Purchase General';
     case 'SALE_GENERAL':
       return 'Sale General';
+    case 'GENERAL_TRADE':
+      return 'General Trade';
     default:
       return type;
   }
@@ -341,6 +345,46 @@ export function invoiceApprovalAccounts(invoice: {
     return withSideTotals(debitAccount, creditAccount, 'SALE_GENERAL');
   }
 
+  if (invoice.type === 'GENERAL_TRADE') {
+    const purchaseLines = invoice.generalPurchaseLines ?? [];
+    const saleLines = invoice.generalSaleLines ?? [];
+    const purchaseTotal = roundMoney(
+      purchaseLines.reduce(
+        (sum, line) =>
+          sum + Math.max(0, Number(line.lineTotal ?? Number(line.quantity ?? 0) * Number(line.rate ?? 0))),
+        0,
+      ),
+    );
+    const saleTotal = roundMoney(
+      saleLines.reduce(
+        (sum, line) =>
+          sum + Math.max(0, Number(line.lineTotal ?? Number(line.quantity ?? 0) * Number(line.rate ?? 0))),
+        0,
+      ),
+    );
+    const debitAccount = invoice.salePartyAccount
+      ? accountRef(
+          invoice.salePartyAccount.name,
+          invoice.salePartyAccount.code,
+          saleTotal > 0 ? saleTotal : undefined,
+        )
+      : null;
+    const creditAccount = invoice.partyAccount
+      ? accountRef(
+          invoice.partyAccount.name,
+          invoice.partyAccount.code,
+          purchaseTotal > 0 ? purchaseTotal : undefined,
+        )
+      : null;
+    // Sale vs purchase totals usually differ by profit/loss — keep amounts as-is.
+    return {
+      debitAccount,
+      creditAccount,
+      debitAmount: saleTotal > 0 ? saleTotal : null,
+      creditAmount: purchaseTotal > 0 ? purchaseTotal : null,
+    };
+  }
+
   if (invoice.type === 'SALE_PAUNCH') {
     const lines = invoice.salePaunchLines ?? [];
     const creditRefs = lines
@@ -416,7 +460,10 @@ export function resolveApprovalSideAmounts(input: {
     const debitAmount = input.invoiceDebitAmount ?? input.debitAccount?.amount ?? input.amount ?? null;
     const creditAmount =
       input.invoiceCreditAmount ?? input.creditAccount?.amount ?? input.amount ?? null;
+    const intentionalSides =
+      input.invoiceDebitAmount != null && input.invoiceCreditAmount != null;
     if (
+      !intentionalSides &&
       debitAmount != null &&
       creditAmount != null &&
       Math.abs(debitAmount - creditAmount) > 0.01
@@ -477,6 +524,28 @@ export function invoiceApprovalDescription(invoice: {
         rate: Number(line.rate),
       }));
     return generalSaleApprovalDescription(lines, invoice.salePartyAccount?.name);
+  }
+  if (invoice.type === 'GENERAL_TRADE') {
+    const purchaseLines: GeneralGoodsLineDescInput[] = (invoice.generalPurchaseLines ?? [])
+      .filter((line) => line.product?.name)
+      .map((line) => ({
+        productName: line.product!.name,
+        quantity: Number(line.quantity),
+        rate: Number(line.rate),
+      }));
+    const saleLines: GeneralGoodsLineDescInput[] = (invoice.generalSaleLines ?? [])
+      .filter((line) => line.product?.name)
+      .map((line) => ({
+        productName: line.product!.name,
+        quantity: Number(line.quantity),
+        rate: Number(line.rate),
+      }));
+    const purchaseDesc = generalPurchaseApprovalDescription(
+      purchaseLines,
+      invoice.partyAccount?.name,
+    );
+    const saleDesc = generalSaleApprovalDescription(saleLines, invoice.salePartyAccount?.name);
+    return [purchaseDesc, saleDesc].filter(Boolean).join(' · ') || null;
   }
   return invoice.tafseel ?? invoice.notes ?? null;
 }

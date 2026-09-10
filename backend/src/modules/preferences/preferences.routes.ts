@@ -9,6 +9,7 @@ preferencesRouter.use(requireAuth);
 
 const percentField = z.number().min(0).optional();
 const rateField = z.number().min(0).optional();
+const optionalText = z.string().nullable().optional();
 
 const updateSchema = z.object({
   daamiPercent: percentField,
@@ -26,6 +27,12 @@ const updateSchema = z.object({
   mazduriPerBagRate: rateField,
   kantaRate: rateField,
   closingDate: z.string().nullable().optional(),
+  businessName: z.string().optional(),
+  proprietorName: z.string().optional(),
+  phone: z.string().optional(),
+  mobile: optionalText,
+  email: optionalText,
+  ntnNumber: optionalText,
 });
 
 preferencesRouter.get(

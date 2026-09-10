@@ -67,7 +67,7 @@ export type ComputedPurchaseGeneralLine = {
   inventoryDebit: number;
 };
 
-async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountId: number) {
+export async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountId: number) {
   const account = await tx.account.findFirst({
     where: { id: accountId, isActive: true, status: RecordStatus.ACTIVE },
     include: { category: true },
@@ -87,7 +87,7 @@ async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountI
   return account;
 }
 
-async function resolveQuantityProduct(tx: Prisma.TransactionClient, productId: number) {
+export async function resolveQuantityProduct(tx: Prisma.TransactionClient, productId: number) {
   const product = await tx.product.findFirst({
     where: { id: productId, isActive: true, status: RecordStatus.ACTIVE },
     include: { category: true, account: { include: { ledger: true } } },

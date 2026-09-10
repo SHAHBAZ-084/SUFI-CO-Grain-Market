@@ -45,6 +45,7 @@ const VOUCHER_TYPE_LABELS: Record<string, string> = {
   SALE_COMMISSION: 'Sale Commission',
   PURCHASE_GENERAL: 'Purchase Invoice',
   SALE_GENERAL: 'Sale Invoice',
+  GENERAL_TRADE: 'General Trade',
   BARDANA: 'Bardana',
 };
 

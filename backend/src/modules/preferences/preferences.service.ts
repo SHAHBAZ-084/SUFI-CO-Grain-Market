@@ -1,4 +1,14 @@
 import { prisma } from '../../lib/prisma';
+import { AppError } from '../../utils/helpers';
+
+const BUSINESS_DEFAULTS = {
+  businessName: 'Sufi & Co.',
+  proprietorName: 'Sufi M.Saleem Ullah',
+  phone: '0632501213',
+  mobile: '03006982486' as string | null,
+  email: 'sufisaleemullah@gmail.com' as string | null,
+  ntnNumber: null as string | null,
+};
 
 const DEFAULTS = {
   daamiPercent: 0,
@@ -16,10 +26,26 @@ const DEFAULTS = {
   mazduriPerBagRate: 0,
   kantaRate: 0,
   closingDate: null as string | null,
+  ...BUSINESS_DEFAULTS,
 };
 
 function toNumber(value: unknown) {
   return Number(value);
+}
+
+function optionalTrimmed(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+function requireNonEmpty(value: string | undefined, fieldLabel: string): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new AppError(400, `${fieldLabel} is required`);
+  }
+  return trimmed;
 }
 
 function mapPreferences(row: {
@@ -38,6 +64,12 @@ function mapPreferences(row: {
   mazduriPerBagRate: unknown;
   kantaRate: unknown;
   closingDate: string | null;
+  businessName: string;
+  proprietorName: string;
+  phone: string;
+  mobile: string | null;
+  email: string | null;
+  ntnNumber: string | null;
   updatedAt: Date;
 }) {
   return {
@@ -56,6 +88,12 @@ function mapPreferences(row: {
     mazduriPerBagRate: toNumber(row.mazduriPerBagRate),
     kantaRate: toNumber(row.kantaRate),
     closingDate: row.closingDate,
+    businessName: row.businessName,
+    proprietorName: row.proprietorName,
+    phone: row.phone,
+    mobile: row.mobile,
+    email: row.email,
+    ntnNumber: row.ntnNumber,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -63,16 +101,61 @@ function mapPreferences(row: {
 export async function getSystemPreferences() {
   let row = await prisma.systemPreference.findUnique({ where: { id: 1 } });
   if (!row) {
-    row = await prisma.systemPreference.create({ data: { id: 1 } });
+    row = await prisma.systemPreference.create({ data: { id: 1, ...DEFAULTS } });
   }
   return mapPreferences(row);
 }
 
-export async function updateSystemPreferences(data: Partial<typeof DEFAULTS>) {
+export type SystemPreferenceUpdate = Partial<{
+  daamiPercent: number;
+  paleDariPercent: number;
+  brokeryPercent: number;
+  marketFeeRate: number;
+  bardanaRate: number;
+  taxPercent: number;
+  kaatPercent: number;
+  mazduriPercent: number;
+  commissionPercent: number;
+  dalaliPercent: number;
+  sutliRate: number;
+  markeetFeeRate: number;
+  mazduriPerBagRate: number;
+  kantaRate: number;
+  closingDate: string | null;
+  businessName: string;
+  proprietorName: string;
+  phone: string;
+  mobile: string | null;
+  email: string | null;
+  ntnNumber: string | null;
+}>;
+
+export async function updateSystemPreferences(data: SystemPreferenceUpdate) {
+  const update: SystemPreferenceUpdate = { ...data };
+
+  if (data.businessName !== undefined) {
+    update.businessName = requireNonEmpty(data.businessName, 'Business Name');
+  }
+  if (data.proprietorName !== undefined) {
+    update.proprietorName = requireNonEmpty(data.proprietorName, 'Proprietor Name');
+  }
+  if (data.phone !== undefined) {
+    update.phone = requireNonEmpty(data.phone, 'Phone');
+  }
+  if (data.mobile !== undefined) {
+    update.mobile = optionalTrimmed(data.mobile);
+  }
+  if (data.email !== undefined) {
+    update.email = optionalTrimmed(data.email);
+  }
+  if (data.ntnNumber !== undefined) {
+    update.ntnNumber = optionalTrimmed(data.ntnNumber);
+  }
+
   const row = await prisma.systemPreference.upsert({
     where: { id: 1 },
-    create: { id: 1, ...DEFAULTS, ...data },
-    update: data,
+    create: { id: 1, ...DEFAULTS, ...update },
+    update,
   });
   return mapPreferences(row);
 }

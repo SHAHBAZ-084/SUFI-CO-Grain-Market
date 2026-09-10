@@ -22,7 +22,8 @@ type DailyFilterKey =
   | 'SALE_PAUNCH'
   | 'SALE_COMMISSION'
   | 'PURCHASE_GENERAL'
-  | 'SALE_GENERAL';
+  | 'SALE_GENERAL'
+  | 'GENERAL_TRADE';
 
 type DailyRow = Awaited<ReturnType<typeof api.getDailyReport>>['rows'][number];
 
@@ -37,6 +38,7 @@ const KIND_FILTERS: Array<{ value: DailyFilterKey; label: string }> = [
   { value: 'SALE_COMMISSION', label: 'Sale Commission' },
   { value: 'PURCHASE_GENERAL', label: 'Purchase Invoice' },
   { value: 'SALE_GENERAL', label: 'Sale Invoice' },
+  { value: 'GENERAL_TRADE', label: 'General Trade' },
 ];
 
 function todayInputValue() {

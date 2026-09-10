@@ -327,6 +327,7 @@ async function validateVoucherCreate(
     || data.type === 'SALE_COMMISSION'
     || data.type === 'PURCHASE_GENERAL'
     || data.type === 'SALE_GENERAL'
+    || data.type === 'GENERAL_TRADE'
   ) {
     throw new AppError(400, 'Invoice vouchers are created via invoice posting');
   }
@@ -1258,7 +1259,7 @@ async function nextMultiLegVoucherNumber(
   financialYearId: number,
   type: Extract<
     VoucherType,
-    'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION' | 'PURCHASE_GENERAL' | 'SALE_GENERAL'
+    'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION' | 'PURCHASE_GENERAL' | 'SALE_GENERAL' | 'GENERAL_TRADE'
   >,
 ): Promise<number> {
   return nextVoucherNumber(tx, financialYearId, type);
@@ -2256,7 +2257,7 @@ export async function createMultiLegVoucherInTx(
   data: {
     type: Extract<
       VoucherType,
-      'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION' | 'PURCHASE_GENERAL' | 'SALE_GENERAL'
+      'KACHI' | 'PURCHASE_MAAL' | 'SALE_PAUNCH' | 'SALE_COMMISSION' | 'PURCHASE_GENERAL' | 'SALE_GENERAL' | 'GENERAL_TRADE'
     >;
     legs: VoucherLeg[];
     amount: number;

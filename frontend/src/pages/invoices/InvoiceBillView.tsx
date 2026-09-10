@@ -1,5 +1,7 @@
-import { BILL_LETTERHEAD, BILL_TITLES } from '../../config/billPrint';
+import { BILL_TITLES } from '../../config/billPrint';
 import type { InvoiceDetail, SystemPreferences } from '../../lib/api';
+import { DEFAULT_BUSINESS_INFO, businessInfoFromPrefs } from '../../lib/businessInfo';
+import { formatBusinessContactLine } from '../../lib/reportExport';
 import {
   computeKachiDeductions,
   computeMaalBillFromTotals,
@@ -28,18 +30,21 @@ import { computeSaleCommissionInvoiceTotals } from '../../lib/saleCommissionCalc
 const billFont =
   'font-[Arial,Helvetica,sans-serif] text-[13px] leading-snug text-black lining-nums';
 
-function BillHeader({ title }: { title: string }) {
-  const h = BILL_LETTERHEAD;
+function BillHeader({
+  title,
+  prefs,
+}: {
+  title: string;
+  prefs?: SystemPreferences | null;
+}) {
+  const h = prefs ? businessInfoFromPrefs(prefs) : DEFAULT_BUSINESS_INFO;
   return (
     <header className="text-center">
       <h1 className="text-[22px] font-normal underline decoration-1 underline-offset-[3px]">
-        {h.companyName}
+        {h.businessName}
       </h1>
-      <p className="mt-0.5 text-[13px]">{h.subtitle}</p>
-      <p className="mt-1 text-[11px]">
-        Phone: {h.phone}&nbsp;&nbsp;Mobile: {h.mobile}&nbsp;&nbsp;Email: {h.email}
-      </p>
-      <p className="mt-0.5 text-[11px]">Proprietor: {h.proprietor}</p>
+      <p className="mt-0.5 text-[13px]">Proprietor: {h.proprietorName}</p>
+      <p className="mt-1 text-[11px]">{formatBusinessContactLine(h)}</p>
       <div className="my-3 border-b border-dashed border-black" />
       <h2 className="text-[15px] font-bold tracking-wide">{title}</h2>
     </header>
@@ -282,7 +287,7 @@ function MaalBillBody({
 
   return (
     <>
-      <BillHeader title={title} />
+      <BillHeader title={title} prefs={prefs} />
       <MetaRow
         invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
         date={formatBillDate(invoiceBillDate(invoice))}
@@ -360,7 +365,7 @@ function SalePaunchBillBody({
 
   return (
     <>
-      <BillHeader title="Sale Bill" />
+      <BillHeader title="Sale Bill" prefs={prefs} />
       <MetaRow
         invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
         date={formatBillDate(invoiceBillDate(invoice))}
@@ -530,7 +535,13 @@ function generalGoodsProductLabel(lines: Array<{ product?: { name?: string | nul
   return 'Multiple';
 }
 
-function PurchaseGeneralBillBody({ invoice }: { invoice: InvoiceDetail }) {
+function PurchaseGeneralBillBody({
+  invoice,
+  prefs,
+}: {
+  invoice: InvoiceDetail;
+  prefs: SystemPreferences;
+}) {
   const lines = invoice.generalPurchaseLines ?? [];
   const rows: GeneralGoodsBillRow[] = lines.map((line) => ({
     product: line.product?.name ?? '—',
@@ -554,7 +565,7 @@ function PurchaseGeneralBillBody({ invoice }: { invoice: InvoiceDetail }) {
 
   return (
     <>
-      <BillHeader title={BILL_TITLES.PURCHASE_GENERAL ?? 'Purchase Bill'} />
+      <BillHeader title={BILL_TITLES.PURCHASE_GENERAL ?? 'Purchase Bill'} prefs={prefs} />
       <MetaRow
         invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
         date={formatBillDate(invoiceBillDate(invoice))}
@@ -578,7 +589,13 @@ function PurchaseGeneralBillBody({ invoice }: { invoice: InvoiceDetail }) {
   );
 }
 
-function SaleGeneralBillBody({ invoice }: { invoice: InvoiceDetail }) {
+function SaleGeneralBillBody({
+  invoice,
+  prefs,
+}: {
+  invoice: InvoiceDetail;
+  prefs: SystemPreferences;
+}) {
   const lines = invoice.generalSaleLines ?? [];
   const rows: GeneralGoodsBillRow[] = lines.map((line) => ({
     product: line.product?.name ?? '—',
@@ -592,7 +609,7 @@ function SaleGeneralBillBody({ invoice }: { invoice: InvoiceDetail }) {
 
   return (
     <>
-      <BillHeader title={BILL_TITLES.SALE_GENERAL ?? 'Sale Bill'} />
+      <BillHeader title={BILL_TITLES.SALE_GENERAL ?? 'Sale Bill'} prefs={prefs} />
       <MetaRow
         invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
         date={formatBillDate(invoiceBillDate(invoice))}
@@ -609,6 +626,106 @@ function SaleGeneralBillBody({ invoice }: { invoice: InvoiceDetail }) {
       <TotalsStack
         lines={[{ label: 'Total Amount:', value: formatBillAmount(goodsTotal), bold: true }]}
         netAmount={formatBillAmount(Number(invoice.total))}
+      />
+      <BillSignature />
+    </>
+  );
+}
+
+function GeneralTradeBillBody({
+  invoice,
+  prefs,
+}: {
+  invoice: InvoiceDetail;
+  prefs: SystemPreferences;
+}) {
+  const purchaseLines = invoice.generalPurchaseLines ?? [];
+  const saleLines = invoice.generalSaleLines ?? [];
+  const rows = purchaseLines.map((purchase, index) => {
+    const sale = saleLines[index];
+    return {
+      product: purchase.product?.name ?? '—',
+      quantity: Number(purchase.quantity),
+      unit: purchase.product?.unit?.trim() || '—',
+      purchaseRate: Number(purchase.rate),
+      purchaseTotal: Number(purchase.lineTotal),
+      saleRate: Number(sale?.rate ?? 0),
+      saleTotal: Number(sale?.lineTotal ?? 0),
+    };
+  });
+  const purchaseTotal = rows.reduce((s, r) => s + r.purchaseTotal, 0);
+  const saleTotal = rows.reduce((s, r) => s + r.saleTotal, 0);
+  const mazduriTotal = purchaseLines.reduce(
+    (s, line) => s + Math.max(0, Number(line.mazduriAmount ?? 0)),
+    0,
+  );
+
+  return (
+    <>
+      <BillHeader title={BILL_TITLES.GENERAL_TRADE ?? 'General Trade Bill'} prefs={prefs} />
+      <MetaRow
+        invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
+        date={formatBillDate(invoiceBillDate(invoice))}
+        billNo={invoice.billNo ?? ''}
+        gariNo={invoice.gariNo ?? ''}
+      />
+      <PartyBlock
+        billToLabel="Buy from:"
+        partyCode={invoice.partyAccount?.code}
+        partyName={invoice.partyAccount?.name ?? '—'}
+        product={generalGoodsProductLabel(purchaseLines)}
+      />
+      <p className="mb-3 text-sm text-textPrimary">
+        <span className="font-semibold">Sell to:</span>{' '}
+        {invoice.salePartyAccount?.name ?? '—'}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-border text-textSecondary">
+              <th className="py-2 pr-2">Product</th>
+              <th className="py-2 pr-2 text-right">Qty</th>
+              <th className="py-2 pr-2 text-right">Buy rate</th>
+              <th className="py-2 pr-2 text-right">Buy total</th>
+              <th className="py-2 pr-2 text-right">Sale rate</th>
+              <th className="py-2 text-right">Sale total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-4 text-center text-textSecondary">
+                  No lines
+                </td>
+              </tr>
+            ) : (
+              rows.map((row, i) => (
+                <tr key={i} className="border-b border-border/60">
+                  <td className="py-2 pr-2">
+                    {row.product}
+                    {row.unit !== '—' ? ` (${row.unit})` : ''}
+                  </td>
+                  <td className="py-2 pr-2 text-right">{row.quantity}</td>
+                  <td className="py-2 pr-2 text-right">{formatBillAmount(row.purchaseRate)}</td>
+                  <td className="py-2 pr-2 text-right">{formatBillAmount(row.purchaseTotal)}</td>
+                  <td className="py-2 pr-2 text-right">{formatBillAmount(row.saleRate)}</td>
+                  <td className="py-2 text-right">{formatBillAmount(row.saleTotal)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <TotalsStack
+        lines={[
+          { label: 'Purchase goods:', value: formatBillAmount(purchaseTotal), bold: true },
+          ...(mazduriTotal > 0
+            ? [{ label: 'Mazduri (paid separately):', value: formatBillAmount(mazduriTotal) }]
+            : []),
+          { label: 'Sale total:', value: formatBillAmount(saleTotal), bold: true },
+        ]}
+        netAmount={formatBillAmount(Number(invoice.total))}
+        netLabel="Net Receivable (Sale):"
       />
       <BillSignature />
     </>
@@ -683,7 +800,7 @@ function SaleCommissionBillBody({
 
   return (
     <>
-      <BillHeader title="Sale Bill" />
+      <BillHeader title="Sale Bill" prefs={prefs} />
       <MetaRow
         invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
         date={formatBillDate(invoiceBillDate(invoice))}
@@ -735,6 +852,12 @@ const DEFAULT_PREFS: SystemPreferences = {
   markeetFeeRate: 0,
   kantaRate: 0,
   closingDate: null,
+  businessName: DEFAULT_BUSINESS_INFO.businessName,
+  proprietorName: DEFAULT_BUSINESS_INFO.proprietorName,
+  phone: DEFAULT_BUSINESS_INFO.phone,
+  mobile: DEFAULT_BUSINESS_INFO.mobile ?? null,
+  email: DEFAULT_BUSINESS_INFO.email ?? null,
+  ntnNumber: DEFAULT_BUSINESS_INFO.ntnNumber ?? null,
   updatedAt: '',
 };
 
@@ -759,8 +882,13 @@ export function InvoiceBillView({
       {invoice.type === 'SALE_COMMISSION' ? (
         <SaleCommissionBillBody invoice={invoice} prefs={p} />
       ) : null}
-      {invoice.type === 'PURCHASE_GENERAL' ? <PurchaseGeneralBillBody invoice={invoice} /> : null}
-      {invoice.type === 'SALE_GENERAL' ? <SaleGeneralBillBody invoice={invoice} /> : null}
+      {invoice.type === 'PURCHASE_GENERAL' ? (
+        <PurchaseGeneralBillBody invoice={invoice} prefs={p} />
+      ) : null}
+      {invoice.type === 'SALE_GENERAL' ? <SaleGeneralBillBody invoice={invoice} prefs={p} /> : null}
+      {invoice.type === 'GENERAL_TRADE' ? (
+        <GeneralTradeBillBody invoice={invoice} prefs={p} />
+      ) : null}
     </div>
   );
 }

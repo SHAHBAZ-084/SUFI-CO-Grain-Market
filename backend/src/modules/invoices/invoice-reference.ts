@@ -8,6 +8,7 @@ export const INVOICE_TYPE_PREFIX: Record<InvoiceType, string> = {
   KACHI_MAAL: 'KM',
   PURCHASE_GENERAL: 'PG',
   SALE_GENERAL: 'SG',
+  GENERAL_TRADE: 'GT',
 };
 
 export function buildInvoiceReference(type: InvoiceType, number: number): string {

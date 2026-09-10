@@ -26,6 +26,7 @@ import { approvePendingKachiMaalInvoice } from '../invoices/kachi-maal.service';
 import { approvePendingPurchaseMaalInvoice } from '../invoices/purchase-maal.service';
 import { approvePendingPurchaseGeneralInvoice } from '../invoices/purchase-general.service';
 import { approvePendingSaleGeneralInvoice } from '../invoices/sale-general.service';
+import { approvePendingGeneralTradeInvoice } from '../invoices/general-trade.service';
 import { approvePendingSaleCommissionInvoice } from '../invoices/sale-commission.service';
 import { approvePendingSalePaunchInvoice } from '../invoices/sale-paunch.service';
 import { approvePendingProductInTx } from '../products/products.service';
@@ -641,6 +642,8 @@ async function approveInTx(tx: Prisma.TransactionClient, kind: ApprovalKind, id:
           return approvePendingPurchaseGeneralInvoice(tx, id);
         case 'SALE_GENERAL':
           return approvePendingSaleGeneralInvoice(tx, id);
+        case 'GENERAL_TRADE':
+          return approvePendingGeneralTradeInvoice(tx, id);
         default:
           throw new AppError(400, 'Unsupported invoice type');
       }

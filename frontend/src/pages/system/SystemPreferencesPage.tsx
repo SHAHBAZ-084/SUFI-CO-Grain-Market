@@ -12,9 +12,14 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { api, SystemPreferences } from '../../lib/api';
 
 type PrefForm = Omit<SystemPreferences, 'updatedAt'>;
-type NumericPrefKey = Exclude<keyof PrefForm, 'closingDate'>;
+type NumericPrefKey = Exclude<
+  keyof PrefForm,
+  'closingDate' | 'businessName' | 'proprietorName' | 'phone' | 'mobile' | 'email' | 'ntnNumber'
+>;
+type BusinessPrefKey = 'businessName' | 'proprietorName' | 'phone' | 'mobile' | 'email' | 'ntnNumber';
 
 type PrefTab =
+  | 'business-info'
   | 'general'
   | 'kachi-maal'
   | 'purchase-maal'
@@ -26,6 +31,7 @@ type PrefTab =
 type PrefFieldDef = { key: NumericPrefKey; label: string; hint?: string };
 
 const PREF_TABS: Array<{ value: PrefTab; label: string }> = [
+  { value: 'business-info', label: 'Business Info' },
   { value: 'general', label: 'General' },
   { value: 'kachi-maal', label: 'Kachi Maal' },
   { value: 'purchase-maal', label: 'Purchase Maal' },
@@ -126,7 +132,7 @@ function PrefFieldInputs({
 
 export function SystemPreferencesPage() {
   const { theme, setTheme } = useTheme();
-  const [tab, setTab] = useState<PrefTab>('general');
+  const [tab, setTab] = useState<PrefTab>('business-info');
   const [form, setForm] = useState<PrefForm | null>(null);
   const [closingDate, setClosingDate] = useState('');
   const [saving, setSaving] = useState(false);
@@ -151,6 +157,10 @@ export function SystemPreferencesPage() {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
+  function setBusinessField(key: BusinessPrefKey, value: string) {
+    setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
   async function onSave(event: FormEvent) {
     event.preventDefault();
     if (!form) return;
@@ -158,11 +168,21 @@ export function SystemPreferencesPage() {
     setError('');
     setMessage('');
     try {
+      if (!form.businessName.trim()) throw new Error('Business Name is required');
+      if (!form.proprietorName.trim()) throw new Error('Proprietor Name is required');
+      if (!form.phone.trim()) throw new Error('Phone is required');
+
       const payload = {} as Partial<PrefForm>;
       for (const key of ALL_NUMERIC_FIELDS) {
         payload[key] = Number(form[key]) || 0;
       }
       payload.closingDate = closingDate.trim() || null;
+      payload.businessName = form.businessName.trim();
+      payload.proprietorName = form.proprietorName.trim();
+      payload.phone = form.phone.trim();
+      payload.mobile = form.mobile?.trim() || null;
+      payload.email = form.email?.trim() || null;
+      payload.ntnNumber = form.ntnNumber?.trim() || null;
       const updated = await api.updateSystemPreferences(payload);
       const { updatedAt: _, ...rest } = updated;
       setForm(rest);
@@ -224,6 +244,69 @@ export function SystemPreferencesPage() {
 
         {form ? (
           <form className="space-y-6" onSubmit={onSave}>
+            {tab === 'business-info' ? (
+              <Tile>
+                <p className="text-sm font-medium text-textPrimary">Business Info</p>
+                <p className="mt-1 text-xs text-textMuted">
+                  Letterhead used on invoice bills and every PDF/Excel report export.
+                </p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <FieldLabel>
+                      Business Name <span className="text-danger">*</span>
+                    </FieldLabel>
+                    <TextInput
+                      value={form.businessName}
+                      onChange={(e) => setBusinessField('businessName', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <FieldLabel>
+                      Proprietor Name <span className="text-danger">*</span>
+                    </FieldLabel>
+                    <TextInput
+                      value={form.proprietorName}
+                      onChange={(e) => setBusinessField('proprietorName', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>
+                      Phone <span className="text-danger">*</span>
+                    </FieldLabel>
+                    <TextInput
+                      value={form.phone}
+                      onChange={(e) => setBusinessField('phone', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Mobile</FieldLabel>
+                    <TextInput
+                      value={form.mobile ?? ''}
+                      onChange={(e) => setBusinessField('mobile', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Email</FieldLabel>
+                    <TextInput
+                      type="email"
+                      value={form.email ?? ''}
+                      onChange={(e) => setBusinessField('email', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>NTN No.</FieldLabel>
+                    <TextInput
+                      value={form.ntnNumber ?? ''}
+                      onChange={(e) => setBusinessField('ntnNumber', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </Tile>
+            ) : null}
+
             {tab === 'general' ? (
               <>
                 <Tile>

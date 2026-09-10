@@ -38,6 +38,7 @@ type QuickLinkVariant =
   | 'kachi-maal'
   | 'sale-general'
   | 'purchase-general'
+  | 'general-trade'
   | 'view'
   | 'report'
   | 'report-ledger'
@@ -58,6 +59,7 @@ const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideI
   '/invoices/kachi-maal': { variant: 'kachi-maal', icon: Wheat },
   '/invoices/sale-general': { variant: 'sale-general', icon: FileText },
   '/invoices/purchase-general': { variant: 'purchase-general', icon: ShoppingCart },
+  '/invoices/general-trade': { variant: 'general-trade', icon: TrendingUp },
   '/invoices/view-invoice': { variant: 'view', icon: Eye },
   '/accounts/categories/add': { variant: 'view', icon: FolderPlus },
   '/accounts/categories/edit': { variant: 'view', icon: Pencil },

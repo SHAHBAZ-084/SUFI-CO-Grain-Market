@@ -100,6 +100,12 @@ export type SystemPreferences = {
   mazduriPerBagRate: number;
   kantaRate: number;
   closingDate: string | null;
+  businessName: string;
+  proprietorName: string;
+  phone: string;
+  mobile: string | null;
+  email: string | null;
+  ntnNumber: string | null;
   updatedAt: string;
 };
 
@@ -546,6 +552,30 @@ export const api = {
     }[];
   }) {
     return request<KachiMaalInvoiceResult>('/api/invoices/sale-general', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getNextGeneralTradeReference() {
+    return request<{ reference: string }>('/api/invoices/general-trade/next-reference');
+  },
+
+  createGeneralTradeInvoice(data: {
+    invoiceDate: string;
+    partyAccountId: number;
+    salePartyAccountId: number;
+    billNo?: string;
+    tafseel?: string;
+    lines: {
+      productId: number;
+      quantity: number;
+      purchaseRate: number;
+      saleRate: number;
+      mazduriAmount?: number;
+    }[];
+  }) {
+    return request<KachiMaalInvoiceResult>('/api/invoices/general-trade', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -1001,7 +1031,8 @@ export const api = {
           | 'SALE_PAUNCH'
           | 'SALE_COMMISSION'
           | 'PURCHASE_GENERAL'
-          | 'SALE_GENERAL';
+          | 'SALE_GENERAL'
+          | 'GENERAL_TRADE';
         typeLabel: string;
         reference: string;
         amount: number;

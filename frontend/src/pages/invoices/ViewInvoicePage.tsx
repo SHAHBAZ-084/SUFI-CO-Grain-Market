@@ -25,6 +25,7 @@ const INVOICE_TYPE_PREFIX_CHECK: Record<string, true> = {
   KACHI_MAAL: true,
   PURCHASE_GENERAL: true,
   SALE_GENERAL: true,
+  GENERAL_TRADE: true,
 };
 
 function isInvoiceNotFoundError(err: unknown): boolean {

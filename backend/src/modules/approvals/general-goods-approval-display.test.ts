@@ -103,6 +103,37 @@ describe('invoiceApprovalAccounts', () => {
     expect(creditAmount).toBe(200);
   });
 
+  it('maps general trade debit=sale party (sale total), credit=purchase party (purchase total)', () => {
+    const { debitAccount, creditAccount, debitAmount, creditAmount } = invoiceApprovalAccounts({
+      type: 'GENERAL_TRADE',
+      partyAccount: { name: 'Supplier A', code: 'P-1' },
+      salePartyAccount: { name: 'Customer B', code: 'S-1' },
+      generalPurchaseLines: [
+        {
+          quantity: 10,
+          rate: 100,
+          lineTotal: 1000,
+          product: { name: 'Urea', code: 'U1', account: { name: 'Urea Inv', code: 'INV-U' } },
+        },
+      ],
+      generalSaleLines: [
+        {
+          quantity: 10,
+          rate: 150,
+          lineTotal: 1500,
+          unitCost: 100,
+          product: { name: 'Urea', code: 'U1', account: { name: 'Urea Inv', code: 'INV-U' } },
+        },
+      ],
+    });
+    expect(debitAccount?.name).toBe('Customer B');
+    expect(debitAccount?.amount).toBe(1500);
+    expect(creditAccount?.name).toBe('Supplier A');
+    expect(creditAccount?.amount).toBe(1000);
+    expect(debitAmount).toBe(1500);
+    expect(creditAmount).toBe(1000);
+  });
+
   it('aggregates Sale Paunch Maal Khata credits with netUpperAmount per account', () => {
     const { debitAccount, creditAccount, debitAmount, creditAmount } = invoiceApprovalAccounts({
       type: 'SALE_PAUNCH',

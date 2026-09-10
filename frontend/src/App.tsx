@@ -79,6 +79,7 @@ export default function App() {
                   <Route path="/invoices/sale-general" element={<InvoiceFormPage slug="sale-general" />} />
                   <Route path="/invoices/purchase-maal" element={<InvoiceFormPage slug="purchase-maal" />} />
                   <Route path="/invoices/purchase-general" element={<InvoiceFormPage slug="purchase-general" />} />
+                  <Route path="/invoices/general-trade" element={<InvoiceFormPage slug="general-trade" />} />
                   <Route path="/invoices/kachi-maal" element={<InvoiceFormPage slug="kachi-maal" />} />
                   <Route path="/invoices/view-invoice" element={<ViewInvoicePage />} />
 

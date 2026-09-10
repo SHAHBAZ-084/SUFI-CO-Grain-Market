@@ -13,6 +13,7 @@ import { getQuantityStockReport } from '../stock/stock.service';
 import { listPendingApprovals, getPendingApprovalDetail } from '../approvals/approvals.service';
 import { createPurchaseGeneralInvoice } from './purchase-general.service';
 import { createSaleGeneralInvoice } from './sale-general.service';
+import { createGeneralTradeInvoice } from './general-trade.service';
 import { AppError } from '../../utils/helpers';
 
 async function ensureAccountInCategory(
@@ -298,5 +299,111 @@ describe('General Goods purchase + sale', () => {
         createdById: userId,
       }),
     ).rejects.toBeInstanceOf(AppError);
+  });
+
+  it('creates and posts a General Trade buy+sell in one voucher with post-purchase WAC', async () => {
+    const stamp = Date.now();
+    const product = await createProduct({
+      name: `GT Trade ${stamp}`,
+      unit: 'bag',
+      categoryId: fertilizerCategoryId,
+      createdById: userId,
+    });
+    await approveProduct(product.id);
+
+    await expect(
+      createGeneralTradeInvoice({
+        invoiceDate,
+        partyAccountId: partyId,
+        salePartyAccountId: salePartyId,
+        lines: [
+          {
+            productId: product.id,
+            quantity: 4,
+            purchaseRate: 1000,
+            saleRate: 1300,
+          },
+        ],
+        createdById: userId,
+      }),
+    ).resolves.toMatchObject({ type: 'GENERAL_TRADE', status: 'PENDING_APPROVAL' });
+
+    // Mismatched quantities must be rejected (API shape uses one shared quantity field,
+    // so simulate unpaired lines via direct create after a paired success check).
+    await expect(
+      createGeneralTradeInvoice({
+        invoiceDate,
+        partyAccountId: partyId,
+        salePartyAccountId: salePartyId,
+        lines: [
+          {
+            productId: product.id,
+            quantity: 2,
+            purchaseRate: 1000,
+            saleRate: 0,
+          },
+        ],
+        createdById: userId,
+      }),
+    ).rejects.toBeInstanceOf(AppError);
+
+    const pending = await createGeneralTradeInvoice({
+      invoiceDate,
+      partyAccountId: partyId,
+      salePartyAccountId: salePartyId,
+      lines: [
+        {
+          productId: product.id,
+          quantity: 4,
+          purchaseRate: 1000,
+          saleRate: 1300,
+        },
+      ],
+      createdById: userId,
+    });
+    expect(Number(pending.total)).toBe(5200);
+    expect(pending.partyAccountId).toBe(partyId);
+    expect(pending.salePartyAccountId).toBe(salePartyId);
+    expect(pending.generalPurchaseLines).toHaveLength(1);
+    expect(pending.generalSaleLines).toHaveLength(1);
+    expect(Number(pending.generalSaleLines![0]!.unitCost)).toBe(1000);
+
+    const detail = await getPendingApprovalDetail('invoice', pending.id);
+    expect(detail.debitAccount?.name).toContain('GG Party Customer');
+    expect(detail.creditAccount?.name).toContain('GG Party Supplier');
+    expect(detail.debitAmount).toBe(5200);
+    expect(detail.creditAmount).toBe(4000);
+
+    await approveInvoice(pending.id);
+
+    const posted = await prisma.invoice.findUniqueOrThrow({
+      where: { id: pending.id },
+      include: {
+        vouchers: true,
+        generalSaleLines: true,
+      },
+    });
+    expect(posted.status).toBe('POSTED');
+    expect(posted.vouchers).toHaveLength(1);
+
+    const avg = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+    expect(Number(avg.averageCost)).toBe(1000);
+
+    const legs = await voucherLegs(posted.vouchers[0]!.voucherId);
+    const debits = legs.filter((l) => l.type === 'DEBIT').reduce((s, l) => s + l.amount, 0);
+    const credits = legs.filter((l) => l.type === 'CREDIT').reduce((s, l) => s + l.amount, 0);
+    expect(Math.abs(debits - credits)).toBeLessThan(0.01);
+
+    const purchaseCredit = legs.find((l) => l.type === 'CREDIT' && l.amount === 4000);
+    expect(purchaseCredit).toBeTruthy();
+    const saleDebit = legs.find((l) => l.type === 'DEBIT' && l.amount === 5200);
+    expect(saleDebit).toBeTruthy();
+    const profit = legs.find(
+      (l) => l.accountName === 'General Goods Sale Revenue' && l.type === 'CREDIT',
+    );
+    expect(profit?.amount).toBe(1200);
+
+    const stock = await getQuantityStockReport({ productId: product.id });
+    expect(stock.totals.netBalance).toBe(0);
   });
 });

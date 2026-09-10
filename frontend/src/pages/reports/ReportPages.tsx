@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api, type Account, type AccountCategory, type Voucher } from '../../lib/api';
-import { BILL_LETTERHEAD } from '../../config/billPrint';
+import { DEFAULT_BUSINESS_INFO, loadBusinessInfo } from '../../lib/businessInfo';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
-import { downloadExcel, downloadPdf } from '../../lib/reportExport';
+import { downloadExcel, downloadPdf, formatBusinessContactLine, type ReportBusinessInfo } from '../../lib/reportExport';
 import { useReportFinancialYear } from '../../contexts/ReportFinancialYearContext';
 import { ReportFinancialYearSelect } from '../../components/reports/ReportFinancialYearSelect';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -230,11 +230,13 @@ export function AccountReportsPage() {
     ]);
     const safeName = accountName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
     const base = `ledger-${safeName || 'account'}`;
-    if (format === 'excel') {
-      downloadExcel(`${base}.xlsx`, 'Ledger', headers, rows);
-    } else {
-      downloadPdf(`${base}.pdf`, title, headers, rows);
-    }
+    void loadBusinessInfo().then((businessInfo) => {
+      if (format === 'excel') {
+        downloadExcel(`${base}.xlsx`, 'Ledger', headers, rows, businessInfo);
+      } else {
+        downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
+      }
+    });
   }
 
   return (
@@ -410,11 +412,13 @@ export function TrialBalancePage() {
     rows.push(['Total', data.totalDebit.toFixed(2), data.totalCredit.toFixed(2)]);
     const fy = selectedYear?.label ? ` — FY ${selectedYear.label}` : '';
     const title = `Detail Trial Balance${fy}${data.isBalanced ? '' : ' (Out of balance)'}`;
-    if (format === 'excel') {
-      downloadExcel('trial-balance.xlsx', 'Trial Balance', headers, rows);
-    } else {
-      downloadPdf('trial-balance.pdf', title, headers, rows);
-    }
+    void loadBusinessInfo().then((businessInfo) => {
+      if (format === 'excel') {
+        downloadExcel('trial-balance.xlsx', 'Trial Balance', headers, rows, businessInfo);
+      } else {
+        downloadPdf('trial-balance.pdf', title, headers, rows, businessInfo);
+      }
+    });
   }
 
   return (
@@ -500,6 +504,7 @@ export function SalePurchaseReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [offset, setOffset] = useState(0);
+  const [businessInfo, setBusinessInfo] = useState<ReportBusinessInfo>(DEFAULT_BUSINESS_INFO);
 
   useEffect(() => {
     api.listAccounts()
@@ -508,6 +513,7 @@ export function SalePurchaseReportsPage() {
     api.listProducts()
       .then((rows) => setProducts(rows.map((p) => ({ id: p.id, name: p.name, code: p.code }))))
       .catch(() => setProducts([]));
+    void loadBusinessInfo().then(setBusinessInfo);
   }, []);
 
   useEffect(() => {
@@ -643,19 +649,16 @@ export function SalePurchaseReportsPage() {
     const headers = ['Invoice #', 'Product', 'Thela', 'Bori', 'Weight', 'Total Price', 'NetBill'];
     const rows = exportFlatRows(report);
     const base = `${report.mode.toLowerCase()}-report-${report.fromDate}-to-${report.toDate}`;
-    if (format === 'excel') {
-      downloadExcel(`${base}.xlsx`, report.title, headers, rows);
-    } else {
-      downloadPdf(`${base}.pdf`, report.title, headers, rows, {
-        subtitle: filterSummary(report),
-        letterhead: {
-          companyName: BILL_LETTERHEAD.companyName,
-          subtitle: BILL_LETTERHEAD.subtitle,
-          phone: BILL_LETTERHEAD.phone,
-          mobile: BILL_LETTERHEAD.mobile,
-        },
-      });
-    }
+    void loadBusinessInfo().then((info) => {
+      setBusinessInfo(info);
+      if (format === 'excel') {
+        downloadExcel(`${base}.xlsx`, report.title, headers, rows, info);
+      } else {
+        downloadPdf(`${base}.pdf`, report.title, headers, rows, info, {
+          subtitle: filterSummary(report),
+        });
+      }
+    });
   }
 
   function onPrint() {
@@ -747,11 +750,9 @@ export function SalePurchaseReportsPage() {
           </div>
 
           <div className="mb-6 text-center">
-            <p className="text-lg font-semibold text-textPrimary">{BILL_LETTERHEAD.companyName}</p>
-            <p className="text-sm text-textSecondary">{BILL_LETTERHEAD.subtitle}</p>
-            <p className="text-xs text-textMuted">
-              Ph: {BILL_LETTERHEAD.phone} · Mob: {BILL_LETTERHEAD.mobile}
-            </p>
+            <p className="text-lg font-semibold text-textPrimary">{businessInfo.businessName}</p>
+            <p className="text-sm text-textSecondary">{businessInfo.proprietorName}</p>
+            <p className="text-xs text-textMuted">{formatBusinessContactLine(businessInfo)}</p>
             <h2 className="mt-3 text-xl font-semibold text-financial">{report.title}</h2>
             <p className="mt-1 text-sm text-textSecondary">{filterSummary(report)}</p>
           </div>
@@ -1171,11 +1172,13 @@ export function AccountBalancePage() {
     const title = `Account Balance as of ${formatDate(datedOn)}${fy}`;
     const safeDate = datedOn.replace(/[^\d-]/g, '');
     const base = `account-balance-${safeDate}`;
-    if (format === 'excel') {
-      downloadExcel(`${base}.xlsx`, 'Account Balance', headers, rows);
-    } else {
-      downloadPdf(`${base}.pdf`, title, headers, rows);
-    }
+    void loadBusinessInfo().then((businessInfo) => {
+      if (format === 'excel') {
+        downloadExcel(`${base}.xlsx`, 'Account Balance', headers, rows, businessInfo);
+      } else {
+        downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
+      }
+    });
   }
 
   const showGrouped = !categoryId && (report?.groups.length ?? 0) > 0;
@@ -1383,11 +1386,13 @@ export function VouchersReportPage() {
     const fy = selectedYear?.label ? ` · FY ${selectedYear.label}` : '';
     const title = `Vouchers ${fromDate} to ${toDate}${fy}`;
     const base = `vouchers-${fromDate}-to-${toDate}`;
-    if (format === 'excel') {
-      downloadExcel(`${base}.xlsx`, 'Vouchers', headers, rows);
-    } else {
-      downloadPdf(`${base}.pdf`, title, headers, rows);
-    }
+    void loadBusinessInfo().then((businessInfo) => {
+      if (format === 'excel') {
+        downloadExcel(`${base}.xlsx`, 'Vouchers', headers, rows, businessInfo);
+      } else {
+        downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
+      }
+    });
   }
 
   return (

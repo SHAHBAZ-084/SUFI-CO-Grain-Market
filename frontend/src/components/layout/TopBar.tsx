@@ -15,15 +15,18 @@ function voucherNavLabelClass(label: string) {
 }
 
 function filterNavItems(items: NavItem[], isAdmin: boolean): NavItem[] {
-  return items.flatMap((item) => {
+  const next: NavItem[] = [];
+  for (const item of items) {
     if (item.kind === 'link') {
-      if (item.adminOnly && !isAdmin) return [];
-      return [item];
+      if (item.adminOnly && !isAdmin) continue;
+      next.push(item);
+      continue;
     }
     const children = item.children.filter((child) => isAdmin || !child.adminOnly);
-    if (children.length === 0) return [];
-    return [{ ...item, children }];
-  });
+    if (children.length === 0) continue;
+    next.push({ ...item, children });
+  }
+  return next;
 }
 
 function NavSubmenu({

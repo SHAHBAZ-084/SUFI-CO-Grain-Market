@@ -25,8 +25,10 @@ export async function postGeneralPurchaseQuantityIn(
     invoiceReference: string;
     invoiceDate: Date;
     lines: Array<{ productId: number; quantity: number }>;
+    invoiceType?: InvoiceType;
   },
 ) {
+  const invoiceType = data.invoiceType ?? InvoiceType.PURCHASE_GENERAL;
   for (const line of data.lines) {
     if (!(line.quantity > 0)) continue;
     await tx.productQuantityMovement.create({
@@ -36,7 +38,7 @@ export async function postGeneralPurchaseQuantityIn(
         quantity: line.quantity,
         date: data.invoiceDate,
         invoiceId: data.invoiceId,
-        invoiceType: InvoiceType.PURCHASE_GENERAL,
+        invoiceType,
         invoiceReference: data.invoiceReference,
         description: data.invoiceReference,
       },
@@ -51,8 +53,10 @@ export async function postGeneralSaleQuantityOut(
     invoiceReference: string;
     invoiceDate: Date;
     lines: Array<{ productId: number; quantity: number }>;
+    invoiceType?: InvoiceType;
   },
 ) {
+  const invoiceType = data.invoiceType ?? InvoiceType.SALE_GENERAL;
   for (const line of data.lines) {
     if (!(line.quantity > 0)) continue;
     await tx.productQuantityMovement.create({
@@ -62,7 +66,7 @@ export async function postGeneralSaleQuantityOut(
         quantity: line.quantity,
         date: data.invoiceDate,
         invoiceId: data.invoiceId,
-        invoiceType: InvoiceType.SALE_GENERAL,
+        invoiceType,
         invoiceReference: data.invoiceReference,
         description: data.invoiceReference,
       },

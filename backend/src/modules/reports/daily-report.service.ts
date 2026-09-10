@@ -25,6 +25,7 @@ const DAILY_INVOICE_TYPES: InvoiceType[] = [
   InvoiceType.SALE_COMMISSION,
   InvoiceType.PURCHASE_GENERAL,
   InvoiceType.SALE_GENERAL,
+  InvoiceType.GENERAL_TRADE,
 ];
 
 export type DailyReportFilterKey =
@@ -36,7 +37,8 @@ export type DailyReportFilterKey =
   | 'SALE_PAUNCH'
   | 'SALE_COMMISSION'
   | 'PURCHASE_GENERAL'
-  | 'SALE_GENERAL';
+  | 'SALE_GENERAL'
+  | 'GENERAL_TRADE';
 
 export type DailyReportAccountRef = {
   name: string;
@@ -114,6 +116,8 @@ function shortInvoiceTypeLabel(type: InvoiceType): string {
       return 'Purchase Invoice';
     case InvoiceType.SALE_GENERAL:
       return 'Sale Invoice';
+    case InvoiceType.GENERAL_TRADE:
+      return 'General Trade';
     default:
       return invoiceTypeLabel(type);
   }

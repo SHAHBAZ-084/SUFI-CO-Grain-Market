@@ -64,7 +64,7 @@ export type ComputedSaleGeneralLine = {
   profitAmount: number;
 };
 
-async function assertSalePartyAccount(tx: Prisma.TransactionClient, accountId: number) {
+export async function assertSalePartyAccount(tx: Prisma.TransactionClient, accountId: number) {
   const account = await tx.account.findFirst({
     where: { id: accountId, isActive: true, status: RecordStatus.ACTIVE },
     include: { category: true },

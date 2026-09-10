@@ -2832,6 +2832,26 @@
 
 
 
+  .quick-link-card--general-trade {
+
+    --ql-accent: var(--ql-sale-general);
+
+    --ql-bg: var(--ql-sale-general-bg);
+
+    --ql-hover: var(--ql-sale-general-hover);
+
+  }
+
+
+
+  .quick-link-card--general-trade .quick-link-title {
+
+    color: var(--ql-sale-general);
+
+  }
+
+
+
   .quick-link-card--view {
 
     --ql-accent: var(--ql-view);

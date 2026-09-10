@@ -11,6 +11,7 @@ import { registerPurchaseGeneralRoutes } from './purchase-general.routes';
 import { registerSaleCommissionRoutes } from './sale-commission.routes';
 import { registerSalePaunchRoutes } from './sale-paunch.routes';
 import { registerSaleGeneralRoutes } from './sale-general.routes';
+import { registerGeneralTradeRoutes } from './general-trade.routes';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
@@ -20,6 +21,7 @@ registerPurchaseMaalRoutes(invoicesRouter);
 registerPurchaseGeneralRoutes(invoicesRouter);
 registerSalePaunchRoutes(invoicesRouter);
 registerSaleGeneralRoutes(invoicesRouter);
+registerGeneralTradeRoutes(invoicesRouter);
 registerSaleCommissionRoutes(invoicesRouter);
 
 const itemSchema = z.object({
