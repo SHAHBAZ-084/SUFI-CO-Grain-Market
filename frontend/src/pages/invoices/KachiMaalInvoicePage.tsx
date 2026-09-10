@@ -409,7 +409,7 @@ export function KachiMaalInvoicePage() {
               </InvoiceHeaderRow>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Add dheri row">
+            <InvoiceFormSection label="Credit Side" labelClassName="text-ledgerCredit">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup label="Identity">
                   <InvoiceFieldRow cols={6}>
@@ -524,7 +524,7 @@ export function KachiMaalInvoicePage() {
               </InvoicePreviewGridShell>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Settlement (debit side)">
+            <InvoiceFormSection label="Debit Side" labelClassName="text-ledgerDebit">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup label="Debit account & totals">
                   <InvoiceFieldRow cols={4}>

@@ -1,3 +1,5 @@
+import type { VoucherType } from '@prisma/client';
+
 /** Signed ledger balance: previous + debit − credit (always use this formula). */
 export function computeLedgerBalance(
   previousBalance: number,
@@ -59,27 +61,70 @@ export function entryEffectiveDate(entry: {
   return entry.voucher?.date ?? entry.createdAt;
 }
 
-export function compareLedgerEntries(
-  a: {
-    id: number;
-    createdAt: Date;
-    isOpeningBalance: boolean;
-    voucher?: { date: Date; number: number } | null;
-  },
-  b: {
-    id: number;
-    createdAt: Date;
-    isOpeningBalance: boolean;
-    voucher?: { date: Date; number: number } | null;
-  },
-): number {
+/**
+ * Same-date secondary sort: cash vouchers, then journal, then sales, then purchases.
+ * Lower rank sorts first within each credit/debit group.
+ */
+export const VOUCHER_TYPE_LEDGER_RANK: Record<VoucherType, number> = {
+  RECEIPT: 1,
+  PAYMENT: 2,
+  JOURNAL: 3,
+  SALE_COMMISSION: 4,
+  SALE_PAUNCH: 5,
+  SALE_GENERAL: 6,
+  GENERAL_TRADE: 7,
+  PURCHASE_MAAL: 8,
+  PURCHASE_GENERAL: 9,
+  KACHI: 10,
+};
+
+const UNKNOWN_VOUCHER_TYPE_RANK = 99;
+
+export type LedgerSortEntry = {
+  id: number;
+  createdAt: Date;
+  isOpeningBalance: boolean;
+  /** Entry side on this ledger. Optional on synthetic recompute keys. */
+  type?: 'DEBIT' | 'CREDIT' | null;
+  voucher?: { date: Date; number: number; type?: VoucherType | null } | null;
+};
+
+function voucherTypeRank(type: VoucherType | null | undefined): number {
+  if (!type) return UNKNOWN_VOUCHER_TYPE_RANK;
+  return VOUCHER_TYPE_LEDGER_RANK[type] ?? UNKNOWN_VOUCHER_TYPE_RANK;
+}
+
+/** Credits before debits on this account (1 = credit first, 2 = debit). */
+function sideRank(type: 'DEBIT' | 'CREDIT' | null | undefined): number | null {
+  if (type === 'CREDIT') return 1;
+  if (type === 'DEBIT') return 2;
+  return null;
+}
+
+export function compareLedgerEntries(a: LedgerSortEntry, b: LedgerSortEntry): number {
   // Opening balance is always the first row in a ledger, regardless of createdAt.
   if (a.isOpeningBalance !== b.isOpeningBalance) {
     return a.isOpeningBalance ? -1 : 1;
   }
-  const cmp =
+
+  const dateCmp =
     new Date(entryEffectiveDate(a)).getTime() - new Date(entryEffectiveDate(b)).getTime();
-  if (cmp !== 0) return cmp;
+  if (dateCmp !== 0) return dateCmp;
+
+  // Same effective date: credits on this account before debits.
+  const aSide = sideRank(a.type);
+  const bSide = sideRank(b.type);
+  if (aSide != null && bSide != null && aSide !== bSide) {
+    return aSide - bSide;
+  }
+
+  // Within side: fixed voucher-type ranking (not creation order).
+  const aTypeRank = voucherTypeRank(a.voucher?.type);
+  const bTypeRank = voucherTypeRank(b.voucher?.type);
+  if (aTypeRank !== bTypeRank) {
+    return aTypeRank - bTypeRank;
+  }
+
   const aNo = a.isOpeningBalance ? 0 : (a.voucher?.number ?? 0);
   const bNo = b.isOpeningBalance ? 0 : (b.voucher?.number ?? 0);
   if (aNo !== bNo) return aNo - bNo;

@@ -14,9 +14,23 @@ import { api, SystemPreferences } from '../../lib/api';
 type PrefForm = Omit<SystemPreferences, 'updatedAt'>;
 type NumericPrefKey = Exclude<
   keyof PrefForm,
-  'closingDate' | 'businessName' | 'proprietorName' | 'phone' | 'mobile' | 'email' | 'ntnNumber'
+  | 'closingDate'
+  | 'businessName'
+  | 'proprietorName'
+  | 'phone'
+  | 'mobile'
+  | 'email'
+  | 'address'
+  | 'ntnNumber'
 >;
-type BusinessPrefKey = 'businessName' | 'proprietorName' | 'phone' | 'mobile' | 'email' | 'ntnNumber';
+type BusinessPrefKey =
+  | 'businessName'
+  | 'proprietorName'
+  | 'phone'
+  | 'mobile'
+  | 'email'
+  | 'address'
+  | 'ntnNumber';
 
 type PrefTab =
   | 'business-info'
@@ -269,6 +283,15 @@ export function SystemPreferencesPage() {
                       value={form.proprietorName}
                       onChange={(e) => setBusinessField('proprietorName', e.target.value)}
                       required
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <FieldLabel>Address</FieldLabel>
+                    <textarea
+                      className="app-input min-h-[4.5rem] w-full resize-y"
+                      rows={3}
+                      value={form.address ?? ''}
+                      onChange={(e) => setBusinessField('address', e.target.value)}
                     />
                   </div>
                   <div>

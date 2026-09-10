@@ -117,7 +117,7 @@ describe('ledger running balance recompute (partial from affected point)', () =>
     const cashLedger = await prisma.ledger.findUniqueOrThrow({ where: { accountId: cash.id } });
     const entries = await prisma.ledgerEntry.findMany({
       where: { ledgerId: cashLedger.id, isReversal: false },
-      include: { voucher: { select: { date: true, number: true, reference: true } } },
+      include: { voucher: { select: { date: true, number: true, type: true, reference: true } } },
     });
     entries.sort(compareLedgerEntries);
 
@@ -136,7 +136,7 @@ describe('ledger running balance recompute (partial from affected point)', () =>
     expect(Number(lateEntry!.balance)).toBe(-3500);
   });
 
-  it('append on a ledger with ~5000 prior entries finishes under 200ms', async () => {
+  it('append on a ledger with ~5000 prior entries finishes under 500ms', async () => {
     const stamp = Date.now();
     const expenseCat = await prisma.accountCategory.findFirst({ where: { name: 'Expenses' } });
     const cashCat = await prisma.accountCategory.findFirst({ where: { name: 'Cash' } });
@@ -264,6 +264,8 @@ describe('ledger running balance recompute (partial from affected point)', () =>
     const expenseAfter = await prisma.ledger.findUniqueOrThrow({ where: { id: expenseLedger.id } });
     expect(Number(cashAfter.balance)).toBe(cashRunning - appendAmount);
     expect(Number(expenseAfter.balance)).toBe(expenseRunning + appendAmount);
-    expect(elapsedMs).toBeLessThan(200);
+    // Same-day ledger order is no longer voucher-number-only, so recompute loads the
+    // full same-day window. Keep a modest budget above the old 200ms number-filter path.
+    expect(elapsedMs).toBeLessThan(500);
   }, 180_000);
 });

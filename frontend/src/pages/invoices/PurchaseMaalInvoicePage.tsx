@@ -415,7 +415,7 @@ export function PurchaseMaalInvoicePage() {
               </InvoiceHeaderRow>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Add dheri row">
+            <InvoiceFormSection label="Credit Side" labelClassName="text-ledgerCredit">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup label="Identity">
                   <InvoiceFieldRow cols={6}>
@@ -527,7 +527,7 @@ export function PurchaseMaalInvoicePage() {
               </InvoicePreviewGridShell>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Settlement (Maal Khata debit)">
+            <InvoiceFormSection label="Debit Side" labelClassName="text-ledgerDebit">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup>
                   <InvoiceFieldRow cols={5}>

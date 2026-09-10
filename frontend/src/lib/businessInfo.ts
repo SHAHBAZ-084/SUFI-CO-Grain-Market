@@ -8,13 +8,14 @@ export const DEFAULT_BUSINESS_INFO: ReportBusinessInfo = {
   phone: '0632501213',
   mobile: '03006982486',
   email: 'sufisaleemullah@gmail.com',
+  address: null,
   ntnNumber: null,
 };
 
 export function businessInfoFromPrefs(
   prefs: Pick<
     SystemPreferences,
-    'businessName' | 'proprietorName' | 'phone' | 'mobile' | 'email' | 'ntnNumber'
+    'businessName' | 'proprietorName' | 'phone' | 'mobile' | 'email' | 'address' | 'ntnNumber'
   >,
 ): ReportBusinessInfo {
   return {
@@ -23,6 +24,7 @@ export function businessInfoFromPrefs(
     phone: prefs.phone?.trim() || DEFAULT_BUSINESS_INFO.phone,
     mobile: prefs.mobile,
     email: prefs.email,
+    address: prefs.address,
     ntnNumber: prefs.ntnNumber,
   };
 }

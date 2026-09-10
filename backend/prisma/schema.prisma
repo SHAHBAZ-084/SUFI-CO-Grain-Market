@@ -582,6 +582,7 @@ model SystemPreference {
   phone             String   @default("0632501213")
   mobile            String?
   email             String?
+  address           String?
   ntnNumber         String?
   updatedAt         DateTime @updatedAt
 }

@@ -44,6 +44,9 @@ function BillHeader({
         {h.businessName}
       </h1>
       <p className="mt-0.5 text-[13px]">Proprietor: {h.proprietorName}</p>
+      {h.address?.trim() ? (
+        <p className="mt-0.5 whitespace-pre-line text-[11px]">{h.address.trim()}</p>
+      ) : null}
       <p className="mt-1 text-[11px]">{formatBusinessContactLine(h)}</p>
       <div className="my-3 border-b border-dashed border-black" />
       <h2 className="text-[15px] font-bold tracking-wide">{title}</h2>
@@ -857,6 +860,7 @@ const DEFAULT_PREFS: SystemPreferences = {
   phone: DEFAULT_BUSINESS_INFO.phone,
   mobile: DEFAULT_BUSINESS_INFO.mobile ?? null,
   email: DEFAULT_BUSINESS_INFO.email ?? null,
+  address: DEFAULT_BUSINESS_INFO.address ?? null,
   ntnNumber: DEFAULT_BUSINESS_INFO.ntnNumber ?? null,
   updatedAt: '',
 };

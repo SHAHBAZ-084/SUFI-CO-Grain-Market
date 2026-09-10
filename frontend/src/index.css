@@ -74,6 +74,8 @@
 
     height: auto;
 
+    border-radius: 50%;
+
   }
 
 }
@@ -192,7 +194,11 @@
 
     height: 2rem;
 
-    width: auto;
+    width: 2rem;
+
+    border-radius: 50%;
+
+    object-fit: cover;
 
   }
 
@@ -561,6 +567,8 @@
     height: auto;
 
     margin: 0 auto;
+
+    border-radius: 50%;
 
   }
 

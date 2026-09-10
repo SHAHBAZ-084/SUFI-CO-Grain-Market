@@ -40,13 +40,15 @@ describe('compareLedgerEntries', () => {
       id: 2,
       createdAt: new Date('2026-07-20'),
       isOpeningBalance: false,
-      voucher: { date: new Date('2026-07-01'), number: 2 },
+      type: 'DEBIT' as const,
+      voucher: { date: new Date('2026-07-01'), number: 2, type: 'PAYMENT' as const },
     };
     const late = {
       id: 1,
       createdAt: new Date('2026-07-01'),
       isOpeningBalance: false,
-      voucher: { date: new Date('2026-07-15'), number: 1 },
+      type: 'DEBIT' as const,
+      voucher: { date: new Date('2026-07-15'), number: 1, type: 'PAYMENT' as const },
     };
     expect(compareLedgerEntries(early, late)).toBeLessThan(0);
   });
@@ -56,16 +58,56 @@ describe('compareLedgerEntries', () => {
       id: 99,
       createdAt: new Date('2026-07-30T18:00:00'),
       isOpeningBalance: true,
+      type: 'DEBIT' as const,
       voucher: null,
     };
     const payment = {
       id: 1,
       createdAt: new Date('2026-07-30T10:00:00'),
       isOpeningBalance: false,
-      voucher: { date: new Date('2026-07-30T12:00:00'), number: 1 },
+      type: 'CREDIT' as const,
+      voucher: { date: new Date('2026-07-30T12:00:00'), number: 1, type: 'PAYMENT' as const },
     };
     expect(compareLedgerEntries(opening, payment)).toBeLessThan(0);
     expect(compareLedgerEntries(payment, opening)).toBeGreaterThan(0);
+  });
+
+  it('on the same date, credits this account before debits regardless of voucher number', () => {
+    const debit = {
+      id: 1,
+      createdAt: new Date('2026-07-30'),
+      isOpeningBalance: false,
+      type: 'DEBIT' as const,
+      voucher: { date: new Date('2026-07-30'), number: 1, type: 'RECEIPT' as const },
+    };
+    const credit = {
+      id: 2,
+      createdAt: new Date('2026-07-30'),
+      isOpeningBalance: false,
+      type: 'CREDIT' as const,
+      voucher: { date: new Date('2026-07-30'), number: 99, type: 'PAYMENT' as const },
+    };
+    expect(compareLedgerEntries(credit, debit)).toBeLessThan(0);
+    expect(compareLedgerEntries(debit, credit)).toBeGreaterThan(0);
+  });
+
+  it('on the same date and side, sorts by voucher-type rank not voucher number', () => {
+    const payment = {
+      id: 1,
+      createdAt: new Date('2026-07-30'),
+      isOpeningBalance: false,
+      type: 'CREDIT' as const,
+      voucher: { date: new Date('2026-07-30'), number: 1, type: 'PAYMENT' as const },
+    };
+    const receipt = {
+      id: 2,
+      createdAt: new Date('2026-07-30'),
+      isOpeningBalance: false,
+      type: 'CREDIT' as const,
+      voucher: { date: new Date('2026-07-30'), number: 50, type: 'RECEIPT' as const },
+    };
+    expect(compareLedgerEntries(receipt, payment)).toBeLessThan(0);
+    expect(compareLedgerEntries(payment, receipt)).toBeGreaterThan(0);
   });
 });
 

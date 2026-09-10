@@ -7,6 +7,7 @@ const BUSINESS_DEFAULTS = {
   phone: '0632501213',
   mobile: '03006982486' as string | null,
   email: 'sufisaleemullah@gmail.com' as string | null,
+  address: null as string | null,
   ntnNumber: null as string | null,
 };
 
@@ -69,6 +70,7 @@ function mapPreferences(row: {
   phone: string;
   mobile: string | null;
   email: string | null;
+  address: string | null;
   ntnNumber: string | null;
   updatedAt: Date;
 }) {
@@ -93,6 +95,7 @@ function mapPreferences(row: {
     phone: row.phone,
     mobile: row.mobile,
     email: row.email,
+    address: row.address,
     ntnNumber: row.ntnNumber,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -127,6 +130,7 @@ export type SystemPreferenceUpdate = Partial<{
   phone: string;
   mobile: string | null;
   email: string | null;
+  address: string | null;
   ntnNumber: string | null;
 }>;
 
@@ -147,6 +151,9 @@ export async function updateSystemPreferences(data: SystemPreferenceUpdate) {
   }
   if (data.email !== undefined) {
     update.email = optionalTrimmed(data.email);
+  }
+  if (data.address !== undefined) {
+    update.address = optionalTrimmed(data.address);
   }
   if (data.ntnNumber !== undefined) {
     update.ntnNumber = optionalTrimmed(data.ntnNumber);

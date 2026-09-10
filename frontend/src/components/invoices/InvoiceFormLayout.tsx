@@ -8,14 +8,16 @@ export function InvoiceFormSection({
   label,
   children,
   className = '',
+  labelClassName = '',
 }: {
   label?: string;
   children: ReactNode;
   className?: string;
+  labelClassName?: string;
 }) {
   return (
     <section className={`inv-section ${className}`.trim()}>
-      {label ? <h2 className="inv-section-title">{label}</h2> : null}
+      {label ? <h2 className={`inv-section-title ${labelClassName}`.trim()}>{label}</h2> : null}
       <div className={label ? 'inv-section-body' : undefined}>{children}</div>
     </section>
   );

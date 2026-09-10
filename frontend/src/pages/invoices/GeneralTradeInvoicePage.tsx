@@ -47,6 +47,7 @@ type Draft = {
   productId: string;
   quantity: string;
   purchaseRate: string;
+  saleRate: string;
   mazduriEnabled: boolean;
   mazduriAmount: string;
   gridRows: GridRow[];
@@ -116,8 +117,12 @@ export function GeneralTradeInvoicePage() {
   const [productId, setProductId] = useState(() => restoredState?.productId ?? '');
   const [quantity, setQuantity] = useState(() => restoredState?.quantity ?? '');
   const [purchaseRate, setPurchaseRate] = useState(() => restoredState?.purchaseRate ?? '');
+  const [saleRate, setSaleRate] = useState(() => restoredState?.saleRate ?? '');
   const [mazduriEnabled, setMazduriEnabled] = useState(() => restoredState?.mazduriEnabled ?? false);
   const [mazduriAmount, setMazduriAmount] = useState(() => restoredState?.mazduriAmount ?? '');
+
+  /** Backend allows one purchase party + one sale party per invoice. */
+  const partiesLocked = gridRows.length > 0;
 
   const purchasePartyOptions = useMemo(
     () => flatAccountOptions(categories, accounts, PURCHASE_PARTY_CATEGORIES),
@@ -191,6 +196,14 @@ export function GeneralTradeInvoicePage() {
   function addToGrid() {
     setError('');
     setMessage('');
+    if (!partyAccountId) {
+      setError('Select a purchase party');
+      return;
+    }
+    if (!salePartyAccountId) {
+      setError('Select a sale party');
+      return;
+    }
     if (!productId) {
       setError('Select a product');
       return;
@@ -202,8 +215,17 @@ export function GeneralTradeInvoicePage() {
     }
     const qty = parseNum(quantity);
     const buyRate = parseNum(purchaseRate);
-    if (!(qty > 0) || !(buyRate > 0)) {
-      setError('Quantity and purchase rate must be greater than zero');
+    const sellRate = parseNum(saleRate);
+    if (!(qty > 0)) {
+      setError('Quantity must be greater than zero');
+      return;
+    }
+    if (!(buyRate > 0)) {
+      setError('Purchase rate must be greater than zero');
+      return;
+    }
+    if (!(sellRate > 0)) {
+      setError('Sale rate must be greater than zero');
       return;
     }
     const maz = mazduriEnabled ? Math.max(0, parseNum(mazduriAmount)) : 0;
@@ -218,29 +240,15 @@ export function GeneralTradeInvoicePage() {
         purchaseRate: buyRate,
         purchaseTotal: roundMoney(qty * buyRate),
         mazduriAmount: roundMoney(maz),
-        saleRate: 0,
-        saleTotal: 0,
+        saleRate: sellRate,
+        saleTotal: roundMoney(qty * sellRate),
       },
     ]);
     setProductId('');
     setQuantity('');
     setPurchaseRate('');
+    setSaleRate('');
     setMazduriAmount('');
-  }
-
-  function updateSaleRate(key: string, value: string) {
-    const rate = Math.max(0, parseNum(value));
-    setGridRows((rows) =>
-      rows.map((row) =>
-        row.key === key
-          ? {
-              ...row,
-              saleRate: rate,
-              saleTotal: roundMoney(row.quantity * rate),
-            }
-          : row,
-      ),
-    );
   }
 
   async function onSave(event: FormEvent) {
@@ -257,11 +265,6 @@ export function GeneralTradeInvoicePage() {
     }
     if (gridRows.length === 0) {
       setError('Add at least one line to the grid');
-      return;
-    }
-    const missingSale = gridRows.find((r) => !(r.saleRate > 0));
-    if (missingSale) {
-      setError(`Enter a sale rate for ${missingSale.productName}`);
       return;
     }
     setSaving(true);
@@ -327,31 +330,75 @@ export function GeneralTradeInvoicePage() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <FieldLabel>Purchase Party</FieldLabel>
-                <SearchSelect
-                  value={partyAccountId}
-                  onChange={setPartyAccountId}
-                  options={purchasePartyOptions}
-                  placeholder="Search purchase party…"
-                />
+              <div className="rounded-md border border-border border-l-4 border-l-ledgerCredit bg-surface1/40 p-3">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ledgerCredit">
+                  Purchase
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <FieldLabel>Purchase Party</FieldLabel>
+                    <SearchSelect
+                      value={partyAccountId}
+                      onChange={setPartyAccountId}
+                      options={purchasePartyOptions}
+                      placeholder="Search purchase party…"
+                      disabled={partiesLocked}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Purchase Rate</FieldLabel>
+                    <TextInput
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={purchaseRate}
+                      onChange={(e) => setPurchaseRate(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <FieldLabel>Sale Party</FieldLabel>
-                <SearchSelect
-                  value={salePartyAccountId}
-                  onChange={setSalePartyAccountId}
-                  options={salePartyOptions}
-                  placeholder="Search sale party…"
-                />
+
+              <div className="rounded-md border border-border border-l-4 border-l-ledgerDebit bg-surface1/40 p-3">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ledgerDebit">
+                  Sale
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <FieldLabel>Sale Party</FieldLabel>
+                    <SearchSelect
+                      value={salePartyAccountId}
+                      onChange={setSalePartyAccountId}
+                      options={salePartyOptions}
+                      placeholder="Search sale party…"
+                      disabled={partiesLocked}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Sale Rate</FieldLabel>
+                    <TextInput
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={saleRate}
+                      onChange={(e) => setSaleRate(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
+            {partiesLocked ? (
+              <p className="text-xs text-textMuted">
+                Parties apply to the whole invoice. Remove all grid lines to change them.
+              </p>
+            ) : (
+              <p className="text-xs text-textMuted">Parties apply to the whole invoice.</p>
+            )}
 
             <div className="rounded-md border border-border bg-surface1/40 p-3">
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-textSecondary">
-                Purchase line
+                Line details
               </h3>
-              <div className="grid gap-3 md:grid-cols-6 md:items-end">
+              <div className="grid gap-3 md:grid-cols-5 md:items-end">
                 <div className="md:col-span-2">
                   <FieldLabel>Product category</FieldLabel>
                   <SearchSelect
@@ -386,16 +433,6 @@ export function GeneralTradeInvoicePage() {
                     onChange={(e) => setQuantity(e.target.value)}
                   />
                 </div>
-                <div>
-                  <FieldLabel>Purchase rate</FieldLabel>
-                  <TextInput
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={purchaseRate}
-                    onChange={(e) => setPurchaseRate(e.target.value)}
-                  />
-                </div>
               </div>
               <label className="mt-3 flex items-center gap-2 text-sm">
                 <input
@@ -426,7 +463,7 @@ export function GeneralTradeInvoicePage() {
 
             <div>
               <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-textSecondary">
-                Trade grid (qty locked — enter sale rate)
+                Trade grid
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-left text-sm">
@@ -451,7 +488,7 @@ export function GeneralTradeInvoicePage() {
                           colSpan={showMazduriColumn ? 8 : 7}
                           className="py-6 text-center text-textSecondary"
                         >
-                          No lines yet — add a purchase line above.
+                          No lines yet — set parties, rates, and line details above, then add.
                         </td>
                       </tr>
                     ) : (
@@ -462,30 +499,21 @@ export function GeneralTradeInvoicePage() {
                             {row.unit ? ` (${row.unit})` : ''}
                           </td>
                           <td className="py-2 pr-3 text-right tabular-nums">{row.quantity}</td>
-                          <td className="py-2 pr-3 text-right">
+                          <td className="py-2 pr-3 text-right tabular-nums">
                             {formatLedgerAmount(row.purchaseRate)}
                           </td>
-                          <td className="py-2 pr-3 text-right">
+                          <td className="py-2 pr-3 text-right tabular-nums">
                             {formatLedgerAmount(row.purchaseTotal)}
                           </td>
                           {showMazduriColumn ? (
-                            <td className="py-2 pr-3 text-right">
+                            <td className="py-2 pr-3 text-right tabular-nums">
                               {formatLedgerAmount(row.mazduriAmount)}
                             </td>
                           ) : null}
-                          <td className="py-2 pr-3 text-right">
-                            <TextInput
-                              type="number"
-                              min="0"
-                              step="any"
-                              className="ml-auto w-28 text-right"
-                              value={row.saleRate > 0 ? String(row.saleRate) : ''}
-                              onChange={(e) => updateSaleRate(row.key, e.target.value)}
-                              placeholder="Sale rate"
-                              required
-                            />
+                          <td className="py-2 pr-3 text-right tabular-nums">
+                            {formatLedgerAmount(row.saleRate)}
                           </td>
-                          <td className="py-2 pr-3 text-right">
+                          <td className="py-2 pr-3 text-right tabular-nums">
                             {formatLedgerAmount(row.saleTotal)}
                           </td>
                           <td className="py-2 text-right">
@@ -535,6 +563,7 @@ export function GeneralTradeInvoicePage() {
                         productId,
                         quantity,
                         purchaseRate,
+                        saleRate,
                         mazduriEnabled,
                         mazduriAmount,
                         gridRows,

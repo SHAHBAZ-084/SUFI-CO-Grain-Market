@@ -218,7 +218,7 @@ function combineTradeLegs(params: {
   partyAccountId: number;
   salePartyAccountId: number;
   mazduriAccountId: number;
-  saleRevenueAccountId: number;
+  generalTradeRevenueAccountId: number;
   reference: string;
 }) {
   const purchaseBuilt = buildPurchaseGeneralLedgerLegs(
@@ -230,7 +230,7 @@ function combineTradeLegs(params: {
   const saleBuilt = buildSaleGeneralLedgerLegs(
     params.saleComputed,
     params.salePartyAccountId,
-    params.saleRevenueAccountId,
+    params.generalTradeRevenueAccountId,
     params.reference,
   );
   const legs = [...purchaseBuilt.legs, ...saleBuilt.legs];
@@ -262,7 +262,7 @@ export async function createGeneralTradeInvoice(data: CreateGeneralTradeInput) {
       partyAccountId: data.partyAccountId,
       salePartyAccountId: data.salePartyAccountId,
       mazduriAccountId: systemAccounts.mazduri.id,
-      saleRevenueAccountId: systemAccounts.saleRevenue.id,
+      generalTradeRevenueAccountId: systemAccounts.generalTradeRevenue.id,
       reference,
     });
 
@@ -407,7 +407,7 @@ export async function approvePendingGeneralTradeInvoice(
     partyAccountId: invoice.partyAccountId,
     salePartyAccountId: invoice.salePartyAccountId,
     mazduriAccountId: systemAccounts.mazduri.id,
-    saleRevenueAccountId: systemAccounts.saleRevenue.id,
+    generalTradeRevenueAccountId: systemAccounts.generalTradeRevenue.id,
     reference: invoice.reference,
   });
 

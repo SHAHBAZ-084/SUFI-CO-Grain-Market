@@ -368,7 +368,7 @@ export function SalePaunchInvoicePage() {
       return;
     }
     if (!salePartyAccountId) {
-      setError('Select a sale party for settlement');
+      setError('Select a sale party for the debit side');
       return;
     }
     const lowerRate = lowerRatePerMaund.trim() ? parseNum(lowerRatePerMaund) : 0;
@@ -492,7 +492,7 @@ export function SalePaunchInvoicePage() {
               </InvoiceHeaderRow>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Add dheri row">
+            <InvoiceFormSection label="Credit Side" labelClassName="text-ledgerCredit">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup label="Identity">
                   <InvoiceFieldRow cols={6}>
@@ -610,13 +610,13 @@ export function SalePaunchInvoicePage() {
               </InvoicePreviewGridShell>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Settlement (party debit)">
+            <InvoiceFormSection label="Debit Side" labelClassName="text-ledgerDebit">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup>
                   <InvoiceFieldRow cols={5}>
                     <InvoiceField wide>
                       <FlatAccountSelect
-                        label="Settlement party"
+                        label="Debit party"
                         categoryNames={SALE_PARTY_CATEGORIES}
                         categories={categories}
                         accounts={accounts}
@@ -683,7 +683,7 @@ export function SalePaunchInvoicePage() {
                 </InvoiceFieldGroup>
               </InvoiceFieldStack>
               <InvoiceFormFooter
-                totalLabel="Settlement total debit"
+                totalLabel="Debit side total"
                 totalValue={invoiceTotals.lowerNetTotal}
                 error={error}
                 message={message}

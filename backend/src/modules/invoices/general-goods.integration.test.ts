@@ -371,8 +371,9 @@ describe('General Goods purchase + sale', () => {
     const detail = await getPendingApprovalDetail('invoice', pending.id);
     expect(detail.debitAccount?.name).toContain('GG Party Customer');
     expect(detail.creditAccount?.name).toContain('GG Party Supplier');
+    expect(detail.creditAccount?.name).toContain('General Trade Revenue');
     expect(detail.debitAmount).toBe(5200);
-    expect(detail.creditAmount).toBe(4000);
+    expect(detail.creditAmount).toBe(5200);
 
     await approveInvoice(pending.id);
 
@@ -399,7 +400,7 @@ describe('General Goods purchase + sale', () => {
     const saleDebit = legs.find((l) => l.type === 'DEBIT' && l.amount === 5200);
     expect(saleDebit).toBeTruthy();
     const profit = legs.find(
-      (l) => l.accountName === 'General Goods Sale Revenue' && l.type === 'CREDIT',
+      (l) => l.accountName === 'General Trade Revenue' && l.type === 'CREDIT',
     );
     expect(profit?.amount).toBe(1200);
 

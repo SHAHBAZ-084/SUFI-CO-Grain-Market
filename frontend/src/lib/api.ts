@@ -105,6 +105,7 @@ export type SystemPreferences = {
   phone: string;
   mobile: string | null;
   email: string | null;
+  address: string | null;
   ntnNumber: string | null;
   updatedAt: string;
 };

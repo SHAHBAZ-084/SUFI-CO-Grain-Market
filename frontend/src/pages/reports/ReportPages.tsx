@@ -8,6 +8,7 @@ import { ReportFinancialYearSelect } from '../../components/reports/ReportFinanc
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { DateField } from '../../components/ui/DateField';
+import { Modal } from '../../components/ui/Modal';
 import { FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton } from '../../components/ui/PageShell';
 import { VoucherDetailCard } from '../vouchers/VoucherPages';
 
@@ -17,6 +18,38 @@ type BalanceSideFilter = 'debit' | 'credit' | 'both';
 type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | 'PURCHASE_MAAL';
 
 const REPORT_PAGE_SIZE = 100;
+
+/** Shared on-screen letterhead used above every report results block. */
+function ReportLetterheadBlock({
+  businessInfo,
+  title,
+  subtitle,
+}: {
+  businessInfo: ReportBusinessInfo;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="mb-6 text-center">
+      <p className="text-lg font-semibold tracking-wide text-textPrimary">{businessInfo.businessName}</p>
+      <p className="text-sm text-textSecondary">{businessInfo.proprietorName}</p>
+      {businessInfo.address?.trim() ? (
+        <p className="whitespace-pre-line text-xs text-textSecondary">{businessInfo.address.trim()}</p>
+      ) : null}
+      <p className="text-xs text-textMuted">{formatBusinessContactLine(businessInfo)}</p>
+      <h2 className="mt-3 text-xl font-semibold text-financial">{title}</h2>
+      {subtitle ? <p className="mt-1 text-sm text-textSecondary">{subtitle}</p> : null}
+    </div>
+  );
+}
+
+function useReportBusinessInfo() {
+  const [businessInfo, setBusinessInfo] = useState<ReportBusinessInfo>(DEFAULT_BUSINESS_INFO);
+  useEffect(() => {
+    void loadBusinessInfo().then(setBusinessInfo);
+  }, []);
+  return businessInfo;
+}
 
 function reportPageLabel(offset: number, limit: number, total: number) {
   if (total <= 0) return 'No rows';
@@ -109,9 +142,11 @@ export function AccountReportsPage() {
   const [toDate, setToDate] = useState('');
   const [ledger, setLedger] = useState<LedgerResult | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [offset, setOffset] = useState(0);
+  const businessInfo = useReportBusinessInfo();
 
   const filteredAccounts = useMemo(
     () => accounts.filter((a) => categoryId && String(a.categoryId) === categoryId),
@@ -176,6 +211,7 @@ export function AccountReportsPage() {
       setLedger(result);
       setOffset(result.offset);
       setLoaded(true);
+      setFiltersOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load ledger');
       setLedger(null);
@@ -187,9 +223,8 @@ export function AccountReportsPage() {
   async function exportLedger(format: 'pdf' | 'excel') {
     if (!ledger) return;
     const accountName = ledger.account.name;
-    const fyLabel = selectedYear?.label;
     const period = [fromDate, toDate].filter(Boolean).join(' to ') || 'All dates';
-    const title = `Account Ledger — ${accountName}${fyLabel ? ` · FY ${fyLabel}` : ''} (${period})`;
+    const title = `Account Ledger — ${accountName} (${period})`;
     const headers = ['Date', 'Voucher#', 'Ref#', 'Type', 'Description', 'Debit', 'Credit', 'Balance'];
 
     let exportRows = ledger.rows;
@@ -230,13 +265,11 @@ export function AccountReportsPage() {
     ]);
     const safeName = accountName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
     const base = `ledger-${safeName || 'account'}`;
-    void loadBusinessInfo().then((businessInfo) => {
-      if (format === 'excel') {
-        downloadExcel(`${base}.xlsx`, 'Ledger', headers, rows, businessInfo);
-      } else {
-        downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
-      }
-    });
+    if (format === 'excel') {
+      downloadExcel(`${base}.xlsx`, 'Ledger', headers, rows, businessInfo);
+    } else {
+      downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
+    }
   }
 
   return (
@@ -248,9 +281,20 @@ export function AccountReportsPage() {
           : 'View ledger entries for any account'
       }
     >
-      <Panel className="overflow-visible">
-        <h2 className="mb-4 text-lg font-semibold text-textPrimary">Account Ledger</h2>
-        <div className="mb-4 grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] xl:items-end">
+      <Modal
+        open={filtersOpen}
+        title="Account Ledger"
+        onClose={() => setFiltersOpen(false)}
+        maxWidthClassName="max-w-5xl"
+        footer={
+          <>
+            <PrimaryButton type="button" onClick={() => void loadLedger(0)} disabled={loading || !financialYearId}>
+              {loading ? 'Loading…' : 'Generate Report'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <div className="grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-5 xl:items-end">
           <ReportFinancialYearSelect
             value={financialYearId}
             years={years}
@@ -284,21 +328,34 @@ export function AccountReportsPage() {
             <FieldLabel>To date</FieldLabel>
             <DateField value={toDate} onChange={setToDate} />
           </div>
-          <PrimaryButton type="button" onClick={() => void loadLedger(0)} disabled={loading || !financialYearId}>
-            {loading ? 'Loading…' : 'Load Ledger'}
-          </PrimaryButton>
         </div>
 
-        {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
+        {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+      </Modal>
 
-        {!loaded ? (
-          <p className="text-sm text-textSecondary">Select a category and account, then click Load Ledger</p>
-        ) : ledger && ledger.rows.length === 0 ? (
-          <p className="text-sm text-textSecondary">No entries in this period</p>
-        ) : ledger ? (
+      <Panel className="overflow-visible">
+        {!filtersOpen && !loaded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-textSecondary">Select filters to generate the account ledger.</p>
+            <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
+          </div>
+        ) : !filtersOpen && ledger && ledger.rows.length === 0 ? (
+          <>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
+            </div>
+            <ReportLetterheadBlock
+              businessInfo={businessInfo}
+              title={`Account Ledger — ${ledger.account.name}`}
+              subtitle={[fromDate, toDate].filter(Boolean).join(' to ') || 'All dates'}
+            />
+            <p className="text-sm text-textSecondary">No entries in this period</p>
+          </>
+        ) : !filtersOpen && ledger ? (
           <>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
+                <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
                 <SecondaryButton type="button" onClick={() => void exportLedger('pdf')}>Download PDF</SecondaryButton>
                 <SecondaryButton type="button" onClick={() => void exportLedger('excel')}>Download Excel</SecondaryButton>
               </div>
@@ -310,6 +367,11 @@ export function AccountReportsPage() {
                 onChange={(next) => void loadLedger(next)}
               />
             </div>
+            <ReportLetterheadBlock
+              businessInfo={businessInfo}
+              title={`Account Ledger — ${ledger.account.name}`}
+              subtitle={[fromDate, toDate].filter(Boolean).join(' to ') || 'All dates'}
+            />
             <div className="overflow-x-auto">
               <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
@@ -384,22 +446,37 @@ export function TrialBalancePage() {
     loading: yearsLoading,
   } = useReportFinancialYear();
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getTrialBalance>> | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const businessInfo = useReportBusinessInfo();
 
   useEffect(() => {
-    if (financialYearIdNum == null) return;
+    setLoaded(false);
+    setData(null);
+    setError('');
+  }, [financialYearId]);
+
+  async function loadTrialBalance() {
+    if (financialYearIdNum == null) {
+      setError('Select a financial year');
+      return;
+    }
     setLoading(true);
     setError('');
-    api
-      .getTrialBalance({ financialYearId: financialYearIdNum })
-      .then(setData)
-      .catch((err) => {
-        setData(null);
-        setError(err instanceof Error ? err.message : 'Failed to load trial balance');
-      })
-      .finally(() => setLoading(false));
-  }, [financialYearIdNum]);
+    try {
+      const result = await api.getTrialBalance({ financialYearId: financialYearIdNum });
+      setData(result);
+      setLoaded(true);
+      setFiltersOpen(false);
+    } catch (err) {
+      setData(null);
+      setError(err instanceof Error ? err.message : 'Failed to load trial balance');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function exportTrialBalance(format: 'pdf' | 'excel') {
     if (!data) return;
@@ -410,15 +487,12 @@ export function TrialBalancePage() {
       row.credit.toFixed(2),
     ]);
     rows.push(['Total', data.totalDebit.toFixed(2), data.totalCredit.toFixed(2)]);
-    const fy = selectedYear?.label ? ` — FY ${selectedYear.label}` : '';
-    const title = `Detail Trial Balance${fy}${data.isBalanced ? '' : ' (Out of balance)'}`;
-    void loadBusinessInfo().then((businessInfo) => {
-      if (format === 'excel') {
-        downloadExcel('trial-balance.xlsx', 'Trial Balance', headers, rows, businessInfo);
-      } else {
-        downloadPdf('trial-balance.pdf', title, headers, rows, businessInfo);
-      }
-    });
+    const title = `Detail Trial Balance${data.isBalanced ? '' : ' (Out of balance)'}`;
+    if (format === 'excel') {
+      downloadExcel('trial-balance.xlsx', 'Trial Balance', headers, rows, businessInfo);
+    } else {
+      downloadPdf('trial-balance.pdf', title, headers, rows, businessInfo);
+    }
   }
 
   return (
@@ -430,24 +504,44 @@ export function TrialBalancePage() {
           : 'Debit and credit totals by account'
       }
     >
+      <Modal
+        open={filtersOpen}
+        title="Detail Trial Balance"
+        onClose={() => setFiltersOpen(false)}
+        footer={
+          <>
+            <PrimaryButton type="button" onClick={() => void loadTrialBalance()} disabled={loading || !financialYearId}>
+              {loading ? 'Loading…' : 'Generate Report'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <ReportFinancialYearSelect
+          value={financialYearId}
+          years={years}
+          onChange={setFinancialYearId}
+          disabled={yearsLoading}
+        />
+        {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+      </Modal>
+
       <Panel>
-        <div className="mb-4 max-w-sm">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={setFinancialYearId}
-            disabled={yearsLoading}
-          />
-        </div>
-        {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
-        {loading ? (
-          <p className="text-sm text-textSecondary">Loading…</p>
-        ) : data ? (
+        {!filtersOpen && !loaded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-textSecondary">Select a financial year to generate the trial balance.</p>
+            <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
+          </div>
+        ) : !filtersOpen && data ? (
           <>
             <div className="mb-4 flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
               <SecondaryButton type="button" onClick={() => exportTrialBalance('pdf')}>Download PDF</SecondaryButton>
               <SecondaryButton type="button" onClick={() => exportTrialBalance('excel')}>Download Excel</SecondaryButton>
             </div>
+            <ReportLetterheadBlock
+              businessInfo={businessInfo}
+              title={`Detail Trial Balance${data.isBalanced ? '' : ' (Out of balance)'}`}
+            />
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-textSecondary">
@@ -479,9 +573,7 @@ export function TrialBalancePage() {
               {data.isBalanced ? 'Balanced' : 'Out of balance'}
             </p>
           </>
-        ) : (
-          <p className="text-sm text-textSecondary">Select a financial year to load data.</p>
-        )}
+        ) : null}
       </Panel>
     </PageShell>
   );
@@ -501,10 +593,12 @@ export function SalePurchaseReportsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [products, setProducts] = useState<Array<{ id: number; name: string; code: string }>>([]);
   const [report, setReport] = useState<ReportResult | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [offset, setOffset] = useState(0);
-  const [businessInfo, setBusinessInfo] = useState<ReportBusinessInfo>(DEFAULT_BUSINESS_INFO);
+  const businessInfo = useReportBusinessInfo();
 
   useEffect(() => {
     api.listAccounts()
@@ -513,7 +607,6 @@ export function SalePurchaseReportsPage() {
     api.listProducts()
       .then((rows) => setProducts(rows.map((p) => ({ id: p.id, name: p.name, code: p.code }))))
       .catch(() => setProducts([]));
-    void loadBusinessInfo().then(setBusinessInfo);
   }, []);
 
   useEffect(() => {
@@ -524,6 +617,7 @@ export function SalePurchaseReportsPage() {
     }
     setPartyAccountId('');
     setReport(null);
+    setLoaded(false);
     setOffset(0);
   }, [mode]);
 
@@ -564,6 +658,8 @@ export function SalePurchaseReportsPage() {
       });
       setReport(result);
       setOffset(result.offset);
+      setLoaded(true);
+      setFiltersOpen(false);
     } catch (err) {
       setReport(null);
       setError(err instanceof Error ? err.message : 'Failed to load report');
@@ -649,16 +745,13 @@ export function SalePurchaseReportsPage() {
     const headers = ['Invoice #', 'Product', 'Thela', 'Bori', 'Weight', 'Total Price', 'NetBill'];
     const rows = exportFlatRows(report);
     const base = `${report.mode.toLowerCase()}-report-${report.fromDate}-to-${report.toDate}`;
-    void loadBusinessInfo().then((info) => {
-      setBusinessInfo(info);
-      if (format === 'excel') {
-        downloadExcel(`${base}.xlsx`, report.title, headers, rows, info);
-      } else {
-        downloadPdf(`${base}.pdf`, report.title, headers, rows, info, {
-          subtitle: filterSummary(report),
-        });
-      }
-    });
+    if (format === 'excel') {
+      downloadExcel(`${base}.xlsx`, report.title, headers, rows, businessInfo);
+    } else {
+      downloadPdf(`${base}.pdf`, report.title, headers, rows, businessInfo, {
+        subtitle: filterSummary(report),
+      });
+    }
   }
 
   function onPrint() {
@@ -671,7 +764,19 @@ export function SalePurchaseReportsPage() {
 
   return (
     <PageShell title="Sale/Purchase Reports" subtitle="Combined invoice reporting (Kachi Maal excluded)">
-      <Panel className="print:hidden">
+      <Modal
+        open={filtersOpen}
+        title="Sale/Purchase Reports"
+        onClose={() => setFiltersOpen(false)}
+        maxWidthClassName="max-w-5xl"
+        footer={
+          <>
+            <FinancialButton type="button" onClick={onView} disabled={loading}>
+              {loading ? 'Loading…' : 'Generate Report'}
+            </FinancialButton>
+          </>
+        }
+      >
         <div className="grid gap-3 lg:grid-cols-6 lg:items-end">
           <div>
             <FieldLabel>Sale / Purchase</FieldLabel>
@@ -700,9 +805,6 @@ export function SalePurchaseReportsPage() {
             <FieldLabel>To</FieldLabel>
             <DateField value={toDate} onChange={setToDate} />
           </div>
-          <FinancialButton type="button" onClick={onView} disabled={loading}>
-            {loading ? 'Loading…' : 'View Report'}
-          </FinancialButton>
         </div>
 
         <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -730,9 +832,18 @@ export function SalePurchaseReportsPage() {
         </div>
 
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
-      </Panel>
+      </Modal>
 
-      {report ? (
+      {!filtersOpen && !loaded ? (
+        <Panel className="mt-4 print:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-textSecondary">Select filters to generate the sale/purchase report.</p>
+            <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
+          </div>
+        </Panel>
+      ) : null}
+
+      {!filtersOpen && report ? (
         <Panel className="mt-4 sale-purchase-report-print">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3 print:hidden">
             <ReportPager
@@ -743,19 +854,18 @@ export function SalePurchaseReportsPage() {
               onChange={(next) => void loadReport(next)}
             />
             <div className="flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
               <SecondaryButton type="button" onClick={onPrint}>Print</SecondaryButton>
               <SecondaryButton type="button" onClick={() => onExport('pdf')}>PDF</SecondaryButton>
               <SecondaryButton type="button" onClick={() => onExport('excel')}>Excel</SecondaryButton>
             </div>
           </div>
 
-          <div className="mb-6 text-center">
-            <p className="text-lg font-semibold text-textPrimary">{businessInfo.businessName}</p>
-            <p className="text-sm text-textSecondary">{businessInfo.proprietorName}</p>
-            <p className="text-xs text-textMuted">{formatBusinessContactLine(businessInfo)}</p>
-            <h2 className="mt-3 text-xl font-semibold text-financial">{report.title}</h2>
-            <p className="mt-1 text-sm text-textSecondary">{filterSummary(report)}</p>
-          </div>
+          <ReportLetterheadBlock
+            businessInfo={businessInfo}
+            title={report.title}
+            subtitle={filterSummary(report)}
+          />
 
           {report.rowCount === 0 ? (
             <p className="text-sm text-textSecondary">No invoices match these filters.</p>
@@ -853,9 +963,12 @@ export function StockReportPage() {
   const [productId, setProductId] = useState('');
   const [bagType, setBagType] = useState<StockBagType>('BORI');
   const [report, setReport] = useState<StockReportResult | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [offset, setOffset] = useState(0);
+  const businessInfo = useReportBusinessInfo();
 
   useEffect(() => {
     api.listProducts()
@@ -893,6 +1006,8 @@ export function StockReportPage() {
       });
       setReport(result);
       setOffset(result.offset);
+      setLoaded(true);
+      setFiltersOpen(false);
     } catch (err) {
       setReport(null);
       setError(err instanceof Error ? err.message : 'Failed to load stock report');
@@ -914,7 +1029,19 @@ export function StockReportPage() {
           : 'Bag stock from Purchase to Maal (IN) and Sale on Paunch (OUT)'
       }
     >
-      <Panel>
+      <Modal
+        open={filtersOpen}
+        title="Stock Report"
+        onClose={() => setFiltersOpen(false)}
+        maxWidthClassName="max-w-3xl"
+        footer={
+          <>
+            <FinancialButton type="button" onClick={onLoad} disabled={loading}>
+              {loading ? 'Loading…' : 'Generate Report'}
+            </FinancialButton>
+          </>
+        }
+      >
         <div className="grid gap-3 md:grid-cols-4 md:items-end">
           <div className="md:col-span-2">
             <FieldLabel>Product</FieldLabel>
@@ -945,15 +1072,31 @@ export function StockReportPage() {
               </p>
             </div>
           )}
-          <FinancialButton type="button" onClick={onLoad} disabled={loading}>
-            {loading ? 'Loading…' : 'Show report'}
-          </FinancialButton>
         </div>
 
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
+      </Modal>
 
-        {report ? (
-          <div className="mt-6 space-y-4">
+      <Panel>
+        {!filtersOpen && !loaded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-textSecondary">Select filters to generate the stock report.</p>
+            <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
+          </div>
+        ) : !filtersOpen && report ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
+            </div>
+            <ReportLetterheadBlock
+              businessInfo={businessInfo}
+              title={`Stock Report — ${report.product.name}`}
+              subtitle={
+                report.stockMode === 'QUANTITY'
+                  ? `Quantity stock${report.product.unit ? ` (${report.product.unit})` : ''}`
+                  : `${report.bagType === 'BORI' ? 'Bori' : 'Thela'} · from ${formatDate(report.trackingStartedAt)}`
+              }
+            />
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-textSecondary">
                 {report.stockMode === 'QUANTITY' ? (
@@ -1113,8 +1256,10 @@ export function AccountBalancePage() {
   const [side, setSide] = useState<BalanceSideFilter>('both');
   const [report, setReport] = useState<AccountBalanceResult | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const businessInfo = useReportBusinessInfo();
 
   useEffect(() => {
     api.listCategories()
@@ -1153,6 +1298,7 @@ export function AccountBalancePage() {
       });
       setReport(result);
       setLoaded(true);
+      setFiltersOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load report');
       setReport(null);
@@ -1168,17 +1314,14 @@ export function AccountBalancePage() {
       row.accountName,
       formatLedgerBalance(row.balance),
     ]);
-    const fy = selectedYear?.label ? ` · FY ${selectedYear.label}` : '';
-    const title = `Account Balance as of ${formatDate(datedOn)}${fy}`;
+    const title = `Account Balance as of ${formatDate(datedOn)}`;
     const safeDate = datedOn.replace(/[^\d-]/g, '');
     const base = `account-balance-${safeDate}`;
-    void loadBusinessInfo().then((businessInfo) => {
-      if (format === 'excel') {
-        downloadExcel(`${base}.xlsx`, 'Account Balance', headers, rows, businessInfo);
-      } else {
-        downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
-      }
-    });
+    if (format === 'excel') {
+      downloadExcel(`${base}.xlsx`, 'Account Balance', headers, rows, businessInfo);
+    } else {
+      downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
+    }
   }
 
   const showGrouped = !categoryId && (report?.groups.length ?? 0) > 0;
@@ -1192,8 +1335,20 @@ export function AccountBalancePage() {
           : 'Balances as of a selected date'
       }
     >
-      <Panel className="overflow-visible">
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
+      <Modal
+        open={filtersOpen}
+        title="Account Balance"
+        onClose={() => setFiltersOpen(false)}
+        maxWidthClassName="max-w-5xl"
+        footer={
+          <>
+            <FinancialButton type="button" onClick={loadReport} disabled={loading || !financialYearId}>
+              {loading ? 'Loading…' : 'Generate Report'}
+            </FinancialButton>
+          </>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-end">
           <ReportFinancialYearSelect
             value={financialYearId}
             years={years}
@@ -1230,23 +1385,39 @@ export function AccountBalancePage() {
               ]}
             />
           </div>
-          <FinancialButton type="button" onClick={loadReport} disabled={loading || !financialYearId}>
-            {loading ? 'Loading…' : 'View'}
-          </FinancialButton>
         </div>
 
-        {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
+        {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+      </Modal>
 
-        {!loaded ? (
-          <p className="text-sm text-textSecondary">Set filters and click View</p>
-        ) : report && report.accounts.length === 0 ? (
-          <p className="text-sm text-textSecondary">No accounts match these filters</p>
-        ) : report ? (
+      <Panel className="overflow-visible">
+        {!filtersOpen && !loaded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-textSecondary">Select filters to generate the account balance report.</p>
+            <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
+          </div>
+        ) : !filtersOpen && report && report.accounts.length === 0 ? (
           <>
             <div className="mb-4 flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
+            </div>
+            <ReportLetterheadBlock
+              businessInfo={businessInfo}
+              title={`Account Balance as of ${formatDate(datedOn)}`}
+            />
+            <p className="text-sm text-textSecondary">No accounts match these filters</p>
+          </>
+        ) : !filtersOpen && report ? (
+          <>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
               <SecondaryButton type="button" onClick={() => exportReport('pdf')}>Download PDF</SecondaryButton>
               <SecondaryButton type="button" onClick={() => exportReport('excel')}>Download Excel</SecondaryButton>
             </div>
+            <ReportLetterheadBlock
+              businessInfo={businessInfo}
+              title={`Account Balance as of ${formatDate(datedOn)}`}
+            />
             <div className="overflow-x-auto">
               {showGrouped ? (
                 <BalanceTable groups={report.groups} />
@@ -1277,11 +1448,13 @@ export function VouchersReportPage() {
   const [listTotal, setListTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Voucher | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const businessInfo = useReportBusinessInfo();
 
   const totals = useMemo(() => {
     const totalAmount = vouchers.reduce((sum, v) => sum + Number(v.amount), 0);
@@ -1332,6 +1505,7 @@ export function VouchersReportPage() {
       setListTotal(page.total);
       setOffset(page.offset);
       setLoaded(true);
+      setFiltersOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load vouchers');
       setVouchers([]);
@@ -1383,16 +1557,13 @@ export function VouchersReportPage() {
       v.status === 'CANCELLED' ? 'Cancelled' : 'Active',
     ]);
     rows.push(['Total', '', '', '', '', formatLedgerAmount(totals.totalAmount), '', '']);
-    const fy = selectedYear?.label ? ` · FY ${selectedYear.label}` : '';
-    const title = `Vouchers ${fromDate} to ${toDate}${fy}`;
+    const title = `Vouchers ${fromDate} to ${toDate}`;
     const base = `vouchers-${fromDate}-to-${toDate}`;
-    void loadBusinessInfo().then((businessInfo) => {
-      if (format === 'excel') {
-        downloadExcel(`${base}.xlsx`, 'Vouchers', headers, rows, businessInfo);
-      } else {
-        downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
-      }
-    });
+    if (format === 'excel') {
+      downloadExcel(`${base}.xlsx`, 'Vouchers', headers, rows, businessInfo);
+    } else {
+      downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
+    }
   }
 
   return (
@@ -1404,8 +1575,20 @@ export function VouchersReportPage() {
           : 'Filter and review posted vouchers'
       }
     >
-      <Panel>
-        <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
+      <Modal
+        open={filtersOpen}
+        title="Vouchers Report"
+        onClose={() => setFiltersOpen(false)}
+        maxWidthClassName="max-w-5xl"
+        footer={
+          <>
+            <FinancialButton type="button" onClick={() => void loadReport(0)} disabled={loading || !financialYearId}>
+              {loading ? 'Loading…' : 'Generate Report'}
+            </FinancialButton>
+          </>
+        }
+      >
+        <div className="grid gap-4 lg:grid-cols-4 lg:items-end">
           <ReportFinancialYearSelect
             value={financialYearId}
             years={years}
@@ -1436,13 +1619,13 @@ export function VouchersReportPage() {
               ]}
             />
           </div>
-          <FinancialButton type="button" onClick={() => void loadReport(0)} disabled={loading || !financialYearId}>
-            {loading ? 'Loading…' : 'View'}
-          </FinancialButton>
         </div>
 
-        {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
-        {loaded ? (
+        {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+      </Modal>
+
+      <Panel>
+        {!filtersOpen && loaded ? (
           <div className="mb-4">
             <ReportPager
               offset={offset}
@@ -1454,16 +1637,33 @@ export function VouchersReportPage() {
           </div>
         ) : null}
 
-        {!loaded ? (
-          <p className="text-sm text-textSecondary">Set filters and click View</p>
-        ) : vouchers.length === 0 ? (
-          <p className="text-sm text-textSecondary">No vouchers in this period</p>
-        ) : (
+        {!filtersOpen && !loaded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-textSecondary">Select filters to generate the vouchers report.</p>
+            <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
+          </div>
+        ) : !filtersOpen && vouchers.length === 0 ? (
           <>
             <div className="mb-4 flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
+            </div>
+            <ReportLetterheadBlock
+              businessInfo={businessInfo}
+              title={`Vouchers ${fromDate} to ${toDate}`}
+            />
+            <p className="text-sm text-textSecondary">No vouchers in this period</p>
+          </>
+        ) : !filtersOpen ? (
+          <>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
               <SecondaryButton type="button" onClick={() => exportReport('pdf')}>Download PDF</SecondaryButton>
               <SecondaryButton type="button" onClick={() => exportReport('excel')}>Download Excel</SecondaryButton>
             </div>
+            <ReportLetterheadBlock
+              businessInfo={businessInfo}
+              title={`Vouchers ${fromDate} to ${toDate}`}
+            />
             <div className="overflow-x-auto">
               <table className="w-full min-w-[960px] text-left text-sm">
                 <thead>
@@ -1541,7 +1741,7 @@ export function VouchersReportPage() {
               />
             </div>
           </>
-        )}
+        ) : null}
       </Panel>
 
       {selected ? (

@@ -1,6 +1,7 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DateField } from '../../components/ui/DateField';
+import { Modal } from '../../components/ui/Modal';
 import {
   FieldLabel,
   FinancialButton,
@@ -77,10 +78,11 @@ export function DailyReportPage() {
   const [rows, setRows] = useState<DailyRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [error, setError] = useState('');
   const [kindFilter, setKindFilter] = useState<DailyFilterKey>('all');
 
-  const loadReport = useCallback(async (day: string) => {
+  async function loadReport(day: string) {
     if (!day) {
       setError('Select a date');
       return;
@@ -92,18 +94,14 @@ export function DailyReportPage() {
       setRows(result.rows);
       setLoaded(true);
       setKindFilter('all');
+      setFiltersOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load daily report');
       setRows([]);
-      setLoaded(true);
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    void loadReport(date);
-  }, [date, loadReport]);
+  }
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -128,8 +126,19 @@ export function DailyReportPage() {
       title="Daily Report"
       subtitle="Posted vouchers and invoices for a single day"
     >
-      <Panel className="mb-4">
-        <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-4">
+      <Modal
+        open={filtersOpen}
+        title="Daily Report"
+        onClose={() => setFiltersOpen(false)}
+        footer={
+          <>
+            <FinancialButton type="submit" form="daily-report-filters" disabled={loading}>
+              {loading ? 'Loading…' : 'Generate Report'}
+            </FinancialButton>
+          </>
+        }
+      >
+        <form id="daily-report-filters" onSubmit={onSubmit} className="flex flex-wrap items-end gap-4">
           <div className="min-w-[180px]">
             <FieldLabel>Date</FieldLabel>
             <DateField
@@ -138,40 +147,41 @@ export function DailyReportPage() {
               required
             />
           </div>
-          <FinancialButton type="submit" disabled={loading}>
-            {loading ? 'Loading…' : 'View'}
-          </FinancialButton>
         </form>
-      </Panel>
+        {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+      </Modal>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {KIND_FILTERS.map((filter) => (
-          <SecondaryButton
-            key={filter.value}
-            type="button"
-            className={kindFilter === filter.value ? 'ring-2 ring-accent' : ''}
-            onClick={() => setKindFilter(filter.value)}
-            disabled={!loaded || loading}
-          >
-            {filter.label}
-            {filter.value === 'all'
-              ? ` (${rows.length})`
-              : ` (${rows.filter((row) => row.filterKey === filter.value).length})`}
+      {!filtersOpen && loaded ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>
+            Edit filters
           </SecondaryButton>
-        ))}
-        <SecondaryButton
-          type="button"
-          className="ml-auto"
-          onClick={() => void loadReport(date)}
-          disabled={loading}
-        >
-          Refresh
-        </SecondaryButton>
-      </div>
+          {KIND_FILTERS.map((filter) => (
+            <SecondaryButton
+              key={filter.value}
+              type="button"
+              className={kindFilter === filter.value ? 'ring-2 ring-accent' : ''}
+              onClick={() => setKindFilter(filter.value)}
+              disabled={loading}
+            >
+              {filter.label}
+              {filter.value === 'all'
+                ? ` (${rows.length})`
+                : ` (${rows.filter((row) => row.filterKey === filter.value).length})`}
+            </SecondaryButton>
+          ))}
+          <SecondaryButton
+            type="button"
+            className="ml-auto"
+            onClick={() => void loadReport(date)}
+            disabled={loading}
+          >
+            Refresh
+          </SecondaryButton>
+        </div>
+      ) : null}
 
-      {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
-
-      {loaded && !error ? (
+      {!filtersOpen && loaded && !error ? (
         <p className="mb-3 text-sm text-textSecondary">
           {filteredTotals.count} record{filteredTotals.count === 1 ? '' : 's'} · Total{' '}
           {formatLedgerAmount(filteredTotals.amount)}
@@ -179,11 +189,14 @@ export function DailyReportPage() {
       ) : null}
 
       <Panel className="p-0">
-        {loading && !loaded ? (
-          <p className="p-4 text-sm text-textMuted">Loading…</p>
-        ) : !loaded ? null : filteredRows.length === 0 ? (
+        {!filtersOpen && !loaded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <p className="text-sm text-textSecondary">Select a date to generate the daily report.</p>
+            <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
+          </div>
+        ) : !filtersOpen && filteredRows.length === 0 ? (
           <p className="p-4 text-sm text-textMuted">No posted work for this date.</p>
-        ) : (
+        ) : !filtersOpen ? (
           <LegacyTable className="border-0">
             <thead>
               <tr>
@@ -221,7 +234,7 @@ export function DailyReportPage() {
               })}
             </tbody>
           </LegacyTable>
-        )}
+        ) : null}
       </Panel>
     </PageShell>
   );

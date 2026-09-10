@@ -353,6 +353,8 @@ async function validateVoucherCreate(
 export type LedgerRecomputeFrom = {
   effectiveDate: Date;
   voucherNumber?: number | null;
+  voucherType?: VoucherType | null;
+  entryType?: LedgerEntryType | null;
   /** Tie-breaker; use -1 to include every entry at the same date/number. */
   entryId?: number | null;
   isOpeningBalance?: boolean;
@@ -365,23 +367,29 @@ type LedgerEntrySortRow = {
   type: LedgerEntryType;
   amount: Prisma.Decimal | number;
   balance: Prisma.Decimal | number;
-  voucher: { date: Date; number: number } | null;
+  voucher: { date: Date; number: number; type: VoucherType } | null;
 };
 
 function recomputeSortKey(from: LedgerRecomputeFrom): {
   id: number;
   createdAt: Date;
   isOpeningBalance: boolean;
-  voucher: { date: Date; number: number } | null;
+  type?: LedgerEntryType | null;
+  voucher: { date: Date; number: number; type?: VoucherType | null } | null;
 } {
   const isOpening = from.isOpeningBalance === true;
   return {
     id: from.entryId ?? -1,
     createdAt: from.effectiveDate,
     isOpeningBalance: isOpening,
+    type: from.entryType ?? null,
     voucher: isOpening
       ? null
-      : { date: from.effectiveDate, number: from.voucherNumber ?? 0 },
+      : {
+          date: from.effectiveDate,
+          number: from.voucherNumber ?? 0,
+          type: from.voucherType ?? null,
+        },
   };
 }
 
@@ -402,7 +410,7 @@ async function findPredecessorLedgerEntryInTx(
   sameDayCandidates?: LedgerEntrySortRow[],
 ): Promise<LedgerEntrySortRow | null> {
   const fromDay = startOfDay(fromKey.isOpeningBalance ? fromKey.createdAt : entryEffectiveDate(fromKey));
-  const voucherSelect = { select: { date: true, number: true } } as const;
+  const voucherSelect = { select: { date: true, number: true, type: true } } as const;
 
   const sameDayOrLater =
     sameDayCandidates
@@ -445,7 +453,7 @@ async function findPredecessorLedgerEntryInTx(
     return beforeOnOrAfterDay[beforeOnOrAfterDay.length - 1];
   }
 
-  const [lastVoucherBefore, lastOpeningBefore, lastOrphanBefore] = await Promise.all([
+  const [lastDayHint, lastOpeningBefore, lastOrphanBefore] = await Promise.all([
     tx.ledgerEntry.findFirst({
       where: {
         ledgerId,
@@ -456,12 +464,8 @@ async function findPredecessorLedgerEntryInTx(
           date: { gte: yearStart, lt: fromDay },
         },
       },
-      include: { voucher: voucherSelect },
-      orderBy: [
-        { voucher: { date: 'desc' } },
-        { voucher: { number: 'desc' } },
-        { id: 'desc' },
-      ],
+      include: { voucher: { select: { date: true } } },
+      orderBy: [{ voucher: { date: 'desc' } }, { id: 'desc' }],
     }),
     tx.ledgerEntry.findFirst({
       where: {
@@ -494,6 +498,49 @@ async function findPredecessorLedgerEntryInTx(
     }),
   ]);
 
+  let lastVoucherBefore: LedgerEntrySortRow | null = null;
+  if (lastDayHint?.voucher) {
+    const priorDayStart = startOfDay(lastDayHint.voucher.date);
+    const priorDayEnd = endOfDay(lastDayHint.voucher.date);
+    // Pick the last entry in compareLedgerEntries order without loading the whole day.
+    const ranked = await tx.$queryRaw<Array<{ id: number }>>`
+      SELECT le.id AS id
+      FROM LedgerEntry le
+      INNER JOIN Voucher v ON v.id = le.voucherId
+      WHERE le.ledgerId = ${ledgerId}
+        AND le.isReversal = 0
+        AND v.financialYearId = ${financialYearId}
+        AND v.status = ${VoucherStatus.ACTIVE}
+        AND v.date >= ${priorDayStart}
+        AND v.date <= ${priorDayEnd}
+      ORDER BY
+        CASE le.type WHEN 'DEBIT' THEN 2 WHEN 'CREDIT' THEN 1 ELSE 0 END DESC,
+        CASE v.type
+          WHEN 'RECEIPT' THEN 1
+          WHEN 'PAYMENT' THEN 2
+          WHEN 'JOURNAL' THEN 3
+          WHEN 'SALE_COMMISSION' THEN 4
+          WHEN 'SALE_PAUNCH' THEN 5
+          WHEN 'SALE_GENERAL' THEN 6
+          WHEN 'GENERAL_TRADE' THEN 7
+          WHEN 'PURCHASE_MAAL' THEN 8
+          WHEN 'PURCHASE_GENERAL' THEN 9
+          WHEN 'KACHI' THEN 10
+          ELSE 99
+        END DESC,
+        v.number DESC,
+        le.id DESC
+      LIMIT 1
+    `;
+    const lastId = ranked[0]?.id;
+    if (lastId != null) {
+      lastVoucherBefore = await tx.ledgerEntry.findUnique({
+        where: { id: lastId },
+        include: { voucher: voucherSelect },
+      });
+    }
+  }
+
   const candidates = [lastVoucherBefore, lastOpeningBefore, lastOrphanBefore].filter(
     (row): row is NonNullable<typeof row> => row != null,
   );
@@ -519,7 +566,7 @@ async function recomputeLedgerRunningBalancesInTx(
 
   const { balance: opening } = await getOpeningBalanceSnapshot(tx, ledger.accountId, financialYearId);
   const { yearStart, yearEnd } = await loadFinancialYearBounds(tx, financialYearId);
-  const voucherSelect = { select: { date: true, number: true } } as const;
+  const voucherSelect = { select: { date: true, number: true, type: true } } as const;
 
   let entries: LedgerEntrySortRow[];
   let running: number;
@@ -540,14 +587,14 @@ async function recomputeLedgerRunningBalancesInTx(
       fromKey.isOpeningBalance ? fromKey.createdAt : entryEffectiveDate(fromKey),
     );
     const fromDayEnd = endOfDay(fromDay);
-    const fromVoucherNumber = fromKey.voucher?.number ?? 0;
 
+    // Load the full same-day window (not number-filtered): same-day order is by
+    // credit/debit side then voucher type, so a lower voucher number can sort later.
     const forward = await tx.ledgerEntry.findMany({
       where: {
         ledgerId,
         isReversal: false,
         OR: [
-          // Strictly later calendar days
           {
             voucher: {
               financialYearId,
@@ -558,13 +605,11 @@ async function recomputeLedgerRunningBalancesInTx(
               },
             },
           },
-          // Same day at or after this voucher number (avoids reloading earlier same-day rows)
           {
             voucher: {
               financialYearId,
               status: VoucherStatus.ACTIVE,
               date: { gte: fromDay, lte: fromDayEnd },
-              number: { gte: fromVoucherNumber },
             },
           },
           {
@@ -592,22 +637,6 @@ async function recomputeLedgerRunningBalancesInTx(
     const startIndex = forward.findIndex((entry) => compareLedgerEntries(entry, fromKey) >= 0);
     entries = startIndex >= 0 ? forward.slice(startIndex) : [];
 
-    // Predecessor may sit earlier the same day (number < from) — load that narrow window.
-    const sameDayEarlier = await tx.ledgerEntry.findMany({
-      where: {
-        ledgerId,
-        isReversal: false,
-        voucher: {
-          financialYearId,
-          status: VoucherStatus.ACTIVE,
-          date: { gte: fromDay, lte: fromDayEnd },
-          number: { lt: fromVoucherNumber },
-        },
-      },
-      include: { voucher: voucherSelect },
-    });
-    const predecessorWindow = [...sameDayEarlier, ...forward];
-
     const predecessor = await findPredecessorLedgerEntryInTx(
       tx,
       ledgerId,
@@ -615,7 +644,7 @@ async function recomputeLedgerRunningBalancesInTx(
       yearStart,
       yearEnd,
       fromKey,
-      predecessorWindow,
+      forward,
     );
     running = predecessor != null ? Number(predecessor.balance) : opening;
   }
@@ -1597,6 +1626,7 @@ export const GENERAL_GOODS_CATEGORY_NAMES = {
 export type GeneralGoodsSystemAccounts = {
   mazduri: { id: number; name: string };
   saleRevenue: { id: number; name: string };
+  generalTradeRevenue: { id: number; name: string };
   inventoryCategoryId: number;
 };
 
@@ -1622,10 +1652,18 @@ export async function ensureGeneralGoodsAccounts(
     AccountType.REVENUE,
     'GG-PREV',
   );
+  const generalTradeRevenue = await ensureDefaultAccountInTx(
+    tx,
+    revenueEarn.id,
+    'General Trade Revenue',
+    AccountType.REVENUE,
+    'GT-PREV',
+  );
 
   return {
     mazduri: { id: mazduri.id, name: mazduri.name },
     saleRevenue: { id: saleRevenue.id, name: saleRevenue.name },
+    generalTradeRevenue: { id: generalTradeRevenue.id, name: generalTradeRevenue.name },
     inventoryCategoryId: inventory.id,
   };
 }
@@ -2165,7 +2203,7 @@ export async function postStandardVoucherLedgerEntriesInTx(
 ) {
   const voucher = await tx.voucher.findUniqueOrThrow({
     where: { id: voucherId },
-    select: { date: true, number: true },
+    select: { date: true, number: true, type: true },
   });
   const debitLedger = await tx.ledger.findUniqueOrThrow({ where: { accountId: debitAccountId } });
   const creditLedger = await tx.ledger.findUniqueOrThrow({ where: { accountId: creditAccountId } });
@@ -2196,6 +2234,7 @@ export async function postStandardVoucherLedgerEntriesInTx(
   const from: LedgerRecomputeFrom = {
     effectiveDate: voucher.date,
     voucherNumber: voucher.number,
+    voucherType: voucher.type,
     entryId: -1,
   };
   await recomputeLedgerRunningBalancesInTx(tx, debitLedger.id, financialYearId, from);
@@ -2217,7 +2256,7 @@ async function postMultiLegVoucherEntries(
 ) {
   const voucher = await tx.voucher.findUniqueOrThrow({
     where: { id: voucherId },
-    select: { date: true, number: true },
+    select: { date: true, number: true, type: true },
   });
   const ledgerByAccountId = new Map<number, number>();
 
@@ -2245,6 +2284,7 @@ async function postMultiLegVoucherEntries(
   const from: LedgerRecomputeFrom = {
     effectiveDate: voucher.date,
     voucherNumber: voucher.number,
+    voucherType: voucher.type,
     entryId: -1,
   };
   for (const ledgerId of ledgerByAccountId.values()) {
@@ -2633,6 +2673,7 @@ export async function updateVoucherAmount(
     const from: LedgerRecomputeFrom = {
       effectiveDate: voucher.date,
       voucherNumber: voucher.number,
+      voucherType: voucher.type,
       entryId: -1,
     };
     await recomputeLedgerRunningBalancesInTx(tx, debitEntry.ledgerId, voucher.financialYearId!, from);
@@ -2694,6 +2735,7 @@ export async function cancelVoucherInTx(
   const from: LedgerRecomputeFrom = {
     effectiveDate: voucher.date,
     voucherNumber: voucher.number,
+    voucherType: voucher.type,
     entryId: -1,
   };
   for (const ledgerId of ledgerIds) {
@@ -2784,7 +2826,7 @@ export async function getAccountBalancesAsOf(params: {
           ],
         },
         include: {
-          voucher: { select: { date: true, status: true, number: true } },
+          voucher: { select: { date: true, status: true, number: true, type: true } },
         },
       })
     : [];

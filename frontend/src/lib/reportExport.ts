@@ -8,6 +8,7 @@ export type ReportBusinessInfo = {
   phone: string;
   mobile?: string | null;
   email?: string | null;
+  address?: string | null;
   ntnNumber?: string | null;
 };
 
@@ -33,7 +34,7 @@ export function formatBusinessContactLine(info: ReportBusinessInfo): string {
   return parts.join('  ·  ');
 }
 
-/** Draws letterhead + report title. Returns Y position for the table start. */
+/** Draws centered company letterhead + left-aligned report title. Returns table start Y. */
 export function drawReportLetterhead(
   doc: jsPDF,
   businessInfo: ReportBusinessInfo,
@@ -43,44 +44,73 @@ export function drawReportLetterhead(
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 14;
   const contentWidth = pageWidth - margin * 2;
-  let y = 16;
+  const centerX = pageWidth / 2;
+  let y = 14;
+
+  const businessName = businessInfo.businessName.trim() || 'Business';
+  const proprietor = businessInfo.proprietorName.trim();
+  const contact = formatBusinessContactLine(businessInfo);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.setTextColor(30, 30, 36);
-  doc.text(businessInfo.businessName.trim() || 'Business', margin, y);
-  y += 6;
+  doc.setTextColor(28, 28, 34);
+  if (typeof doc.setCharSpace === 'function') {
+    doc.setCharSpace(0.35);
+  }
+  doc.text(businessName, centerX, y, { align: 'center' });
+  if (typeof doc.setCharSpace === 'function') {
+    doc.setCharSpace(0);
+  }
+  y += 5.2;
+
+  if (proprietor) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(78, 78, 88);
+    doc.text(proprietor, centerX, y, { align: 'center' });
+    y += 4.2;
+  }
+
+  const address = businessInfo.address?.trim();
+  if (address) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(96, 96, 106);
+    const addressLines = doc.splitTextToSize(address, contentWidth);
+    doc.text(addressLines, centerX, y, { align: 'center' });
+    y += addressLines.length * 3.4 + 0.6;
+  }
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(74, 74, 84);
-  doc.text(businessInfo.proprietorName.trim() || '', margin, y);
-  y += 5;
+  doc.setFontSize(7.5);
+  doc.setTextColor(112, 112, 122);
+  const contactLines = doc.splitTextToSize(contact, contentWidth);
+  doc.text(contactLines, centerX, y, { align: 'center' });
+  y += contactLines.length * 3.3 + 2.2;
 
-  doc.setFontSize(8);
-  doc.setTextColor(107, 107, 118);
-  const contactLines = doc.splitTextToSize(formatBusinessContactLine(businessInfo), contentWidth);
-  doc.text(contactLines, margin, y);
-  y += contactLines.length * 3.6 + 3;
-
-  doc.setDrawColor(180, 180, 188);
-  doc.setLineWidth(0.4);
+  // Dual-rule divider: soft full-width hairline + slightly heavier accent rule
+  doc.setDrawColor(200, 200, 208);
+  doc.setLineWidth(0.3);
   doc.line(margin, y, pageWidth - margin, y);
-  y += 7;
+  y += 0.85;
+  doc.setDrawColor(87, 83, 78);
+  doc.setLineWidth(0.65);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 5.5;
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(11.5);
   doc.setTextColor(30, 30, 36);
   doc.text(title, margin, y);
-  y += 5;
+  y += 4.8;
 
   if (subtitle?.trim()) {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(74, 74, 84);
     const lines = doc.splitTextToSize(subtitle.trim(), contentWidth);
     doc.text(lines, margin, y);
-    y += lines.length * 4 + 2;
+    y += lines.length * 3.8 + 1.5;
   }
 
   doc.setTextColor(30, 30, 36);
@@ -97,6 +127,28 @@ function drawReportFooter(doc: jsPDF) {
   doc.setTextColor(30, 30, 36);
 }
 
+/**
+ * Note: `xlsx` 0.18.5 (community SheetJS) does not persist cell styles on write.
+ * Alignment objects below are set for forward-compat / Pro builds, but Excel from
+ * this package will still show left-aligned merged text. On-screen + PDF letterheads
+ * are the reliable centered surfaces.
+ */
+function applyExcelHeaderCellMeta(
+  worksheet: XLSX.WorkSheet,
+  address: string,
+  opts: { bold?: boolean; center?: boolean; fontSize?: number },
+) {
+  const cell = worksheet[address];
+  if (!cell || typeof cell !== 'object') return;
+  cell.s = {
+    alignment: opts.center ? { horizontal: 'center', vertical: 'center', wrapText: true } : undefined,
+    font: {
+      bold: Boolean(opts.bold),
+      sz: opts.fontSize,
+    },
+  };
+}
+
 export function downloadExcel(
   filename: string,
   sheetName: string,
@@ -106,11 +158,18 @@ export function downloadExcel(
 ) {
   const colCount = Math.max(headers.length, 1);
   const contact = formatBusinessContactLine(businessInfo);
-  const aoa: (string | number)[][] = [
+  const address = businessInfo.address?.trim() || '';
+  const headerRows: (string | number)[][] = [
     [businessInfo.businessName],
     [businessInfo.proprietorName],
-    [contact],
-    [],
+  ];
+  if (address) {
+    headerRows.push([address]);
+  }
+  headerRows.push([contact], []);
+
+  const aoa: (string | number)[][] = [
+    ...headerRows,
     headers,
     ...rows,
     [],
@@ -118,24 +177,31 @@ export function downloadExcel(
   ];
 
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
-  const lastCol = XLSX.utils.encode_col(colCount - 1);
+  const headerMergeCount = address ? 4 : 3;
   worksheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } },
+    ...Array.from({ length: headerMergeCount }, (_, r) => ({
+      s: { r, c: 0 },
+      e: { r, c: colCount - 1 },
+    })),
     {
       s: { r: aoa.length - 1, c: 0 },
       e: { r: aoa.length - 1, c: colCount - 1 },
     },
   ];
 
-  // Widen first columns so merged header reads cleanly
+  applyExcelHeaderCellMeta(worksheet, 'A1', { bold: true, center: true, fontSize: 14 });
+  applyExcelHeaderCellMeta(worksheet, 'A2', { center: true, fontSize: 11 });
+  if (address) {
+    applyExcelHeaderCellMeta(worksheet, 'A3', { center: true, fontSize: 9 });
+    applyExcelHeaderCellMeta(worksheet, 'A4', { center: true, fontSize: 9 });
+  } else {
+    applyExcelHeaderCellMeta(worksheet, 'A3', { center: true, fontSize: 9 });
+  }
+  applyExcelHeaderCellMeta(worksheet, `A${aoa.length}`, { center: true, fontSize: 8 });
+
   worksheet['!cols'] = Array.from({ length: colCount }, (_, i) => ({
     wch: i === 0 ? 28 : 14,
   }));
-
-  // Touch last merged cell refs so Excel keeps width awareness
-  void lastCol;
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));

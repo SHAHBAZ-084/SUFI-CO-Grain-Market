@@ -292,7 +292,7 @@ export function SaleCommissionInvoicePage() {
       return;
     }
     if (!salePartyAccountId) {
-      setError('Select the Sale Party for settlement');
+      setError('Select the Sale Party for the debit side');
       return;
     }
     if (
@@ -300,7 +300,7 @@ export function SaleCommissionInvoicePage() {
       && invoiceTotals.settlementBardanaAmount > 0
       && !lowerBoriThela
     ) {
-      setError('Select Bori or Thela for settlement bardana');
+      setError('Select Bori or Thela for debit bardana');
       return;
     }
 
@@ -384,7 +384,7 @@ export function SaleCommissionInvoicePage() {
               </InvoiceHeaderRow>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Add dheri row">
+            <InvoiceFormSection label="Credit Side" labelClassName="text-ledgerCredit">
               <InvoiceFieldStack>
                 <InvoiceFieldGroup label="Identity">
                   <InvoiceFieldRow cols={6}>
@@ -499,13 +499,13 @@ export function SaleCommissionInvoicePage() {
               </InvoicePreviewGridShell>
             </InvoiceFormSection>
 
-            <InvoiceFormSection label="Settlement (party debit)">
+            <InvoiceFormSection label="Debit Side" labelClassName="text-ledgerDebit">
               <InvoiceFieldStack>
-                <InvoiceFieldGroup label="Settlement party & goods">
+                <InvoiceFieldGroup label="Debit party & goods">
                   <InvoiceFieldRow cols={4}>
                     <InvoiceField wide>
                       <FlatAccountSelect
-                        label="Settlement party"
+                        label="Debit party"
                         categoryNames={SALE_PARTY_CATEGORIES}
                         categories={categories}
                         accounts={accounts}
@@ -567,7 +567,7 @@ export function SaleCommissionInvoicePage() {
                 </InvoiceFieldGroup>
               </InvoiceFieldStack>
               <InvoiceFormFooter
-                totalLabel="Settlement net debit"
+                totalLabel="Debit side net"
                 totalValue={invoiceTotals.netSalePartyDebit}
                 error={error}
                 message={message}

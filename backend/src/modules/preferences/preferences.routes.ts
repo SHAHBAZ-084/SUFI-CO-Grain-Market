@@ -32,6 +32,7 @@ const updateSchema = z.object({
   phone: z.string().optional(),
   mobile: optionalText,
   email: optionalText,
+  address: optionalText,
   ntnNumber: optionalText,
 });
 
