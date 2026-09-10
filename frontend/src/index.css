@@ -16,7 +16,7 @@
 
     background-color: var(--surface-3, #E3E3E8);
 
-    color: var(--text-primary, #1E1E24);
+    color: var(--text-primary, #2A1F0C);
 
   }
 
@@ -30,7 +30,7 @@
 
     background-color: var(--surface-3, #E3E3E8);
 
-    color: var(--text-primary, #1E1E24);
+    color: var(--text-primary, #2A1F0C);
 
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 
@@ -1068,9 +1068,9 @@
 
   .btn-primary:hover:not(:disabled) {
 
-    background-color: var(--nav-bg-light, #2A2A32);
+    background-color: var(--nav-bg-light, #7A5614);
 
-    border-color: var(--nav-bg-light, #2A2A32);
+    border-color: var(--nav-bg-light, #7A5614);
 
   }
 
@@ -1108,7 +1108,7 @@
 
   .btn-financial:hover:not(:disabled) {
 
-    background-color: var(--nav-bg-light, #2A2A32);
+    background-color: var(--nav-bg-light, #7A5614);
 
   }
 
@@ -1157,6 +1157,72 @@
     cursor: not-allowed;
 
     opacity: 0.55;
+
+  }
+
+
+
+  /* ── Report filter modals: vertical, uniform field width ── */
+
+  .report-filter-stack {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 0.875rem;
+
+    width: 100%;
+
+  }
+
+
+
+  .report-filter-stack > * {
+
+    width: 100%;
+
+    min-width: 0;
+
+  }
+
+
+
+  .report-filter-stack .app-seg-control {
+
+    width: 100%;
+
+    flex-wrap: wrap;
+
+  }
+
+
+
+  .report-filter-stack .app-seg-control__btn {
+
+    flex: 1 1 auto;
+
+    min-width: 0;
+
+    justify-content: center;
+
+  }
+
+
+
+  .report-filter-stack input,
+
+  .report-filter-stack select,
+
+  .report-filter-stack .app-input,
+
+  .report-filter-stack [data-search-select-root],
+
+  .report-filter-stack .relative {
+
+    width: 100%;
+
+    box-sizing: border-box;
 
   }
 
@@ -1484,7 +1550,103 @@
 
   .inv-form-panel {
 
-    padding: 1rem 1.25rem !important;
+    width: 100%;
+
+    max-width: none;
+
+    padding: 0.5rem 0.65rem !important;
+
+  }
+
+
+
+  /* Invoice type accent — shared by border + page title */
+
+  .app-page--kachi-maal,
+
+  .app-page--sale-commission {
+
+    --invoice-accent: #1BB255;
+
+  }
+
+
+
+  .app-page--purchase-maal,
+
+  .app-page--general-trade {
+
+    --invoice-accent: #1A5FA8;
+
+  }
+
+
+
+  .app-page--sale-paunch {
+
+    --invoice-accent: #E6B800;
+
+  }
+
+
+
+  .app-page--kachi-maal .inv-form-panel,
+
+  .app-page--purchase-maal .inv-form-panel,
+
+  .app-page--sale-paunch .inv-form-panel,
+
+  .app-page--sale-commission .inv-form-panel,
+
+  .app-page--general-trade .inv-form-panel {
+
+    border: 2.5mm solid var(--invoice-accent) !important;
+
+  }
+
+
+
+  .app-page--kachi-maal .app-page-title-band,
+
+  .app-page--purchase-maal .app-page-title-band,
+
+  .app-page--sale-paunch .app-page-title-band,
+
+  .app-page--sale-commission .app-page-title-band,
+
+  .app-page--general-trade .app-page-title-band {
+
+    background: color-mix(in srgb, var(--invoice-accent) 28%, #ffffff) !important;
+
+  }
+
+
+
+  .app-page--kachi-maal .app-page-title-band--invoice,
+
+  .app-page--purchase-maal .app-page-title-band--invoice,
+
+  .app-page--sale-paunch .app-page-title-band--invoice,
+
+  .app-page--sale-commission .app-page-title-band--invoice,
+
+  .app-page--general-trade .app-page-title-band--invoice {
+
+    background: linear-gradient(
+
+      to right,
+
+      color-mix(in srgb, var(--invoice-accent) 8%, #ffffff) 0%,
+
+      color-mix(in srgb, var(--invoice-accent) 32%, #ffffff) 22%,
+
+      color-mix(in srgb, var(--invoice-accent) 48%, #ffffff) 50%,
+
+      color-mix(in srgb, var(--invoice-accent) 32%, #ffffff) 78%,
+
+      color-mix(in srgb, var(--invoice-accent) 8%, #ffffff) 100%
+
+    ) !important;
 
   }
 
@@ -1494,9 +1656,127 @@
 
     .inv-form-panel {
 
-      padding: 1.25rem 1.5rem !important;
+      padding: 0.65rem 0.85rem !important;
 
     }
+
+  }
+
+
+
+  /* Invoice pages: form fills the content area edge-to-edge */
+
+  .app-page--kachi-maal,
+
+  .app-page--purchase-maal,
+
+  .app-page--sale-paunch,
+
+  .app-page--sale-commission,
+
+  .app-page--general-trade {
+
+    display: flex;
+
+    flex-direction: column;
+
+    min-height: 100%;
+
+    padding: 0 !important;
+
+  }
+
+
+
+  .app-page--kachi-maal .app-page-title-band,
+
+  .app-page--purchase-maal .app-page-title-band,
+
+  .app-page--sale-paunch .app-page-title-band,
+
+  .app-page--sale-commission .app-page-title-band,
+
+  .app-page--general-trade .app-page-title-band {
+
+    margin: 0 !important;
+
+    flex-shrink: 0;
+
+  }
+
+
+
+  .app-page--kachi-maal .app-page-body,
+
+  .app-page--purchase-maal .app-page-body,
+
+  .app-page--sale-paunch .app-page-body,
+
+  .app-page--sale-commission .app-page-body,
+
+  .app-page--general-trade .app-page-body {
+
+    display: flex;
+
+    flex: 1;
+
+    flex-direction: column;
+
+    gap: 0;
+
+    min-height: 0;
+
+    width: 100%;
+
+  }
+
+
+
+  .app-page--kachi-maal .app-page-body > *,
+
+  .app-page--purchase-maal .app-page-body > *,
+
+  .app-page--sale-paunch .app-page-body > *,
+
+  .app-page--sale-commission .app-page-body > *,
+
+  .app-page--general-trade .app-page-body > * {
+
+    display: flex;
+
+    flex: 1;
+
+    flex-direction: column;
+
+    width: 100%;
+
+    min-height: 0;
+
+  }
+
+
+
+  .app-page--kachi-maal .inv-form-panel,
+
+  .app-page--purchase-maal .inv-form-panel,
+
+  .app-page--sale-paunch .inv-form-panel,
+
+  .app-page--sale-commission .inv-form-panel,
+
+  .app-page--general-trade .inv-form-panel {
+
+    flex: 1;
+
+    width: 100% !important;
+
+    max-width: none !important;
+
+    margin: 0 !important;
+
+    box-sizing: border-box;
+
+    border-radius: 0;
 
   }
 
@@ -1506,7 +1786,7 @@
 
     border-top: 1px solid var(--border);
 
-    padding-top: 1rem;
+    padding-top: 0.75rem;
 
     margin-top: 0;
 

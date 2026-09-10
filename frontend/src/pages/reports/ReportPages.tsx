@@ -31,13 +31,13 @@ function ReportLetterheadBlock({
 }) {
   return (
     <div className="mb-6 text-center">
-      <p className="text-lg font-semibold tracking-wide text-textPrimary">{businessInfo.businessName}</p>
-      <p className="text-sm text-textSecondary">{businessInfo.proprietorName}</p>
+      <p className="text-3xl font-bold tracking-wide text-textPrimary sm:text-4xl">{businessInfo.businessName}</p>
+      <p className="mt-1 text-sm text-textSecondary">{businessInfo.proprietorName}</p>
       {businessInfo.address?.trim() ? (
         <p className="whitespace-pre-line text-xs text-textSecondary">{businessInfo.address.trim()}</p>
       ) : null}
       <p className="text-xs text-textMuted">{formatBusinessContactLine(businessInfo)}</p>
-      <h2 className="mt-3 text-xl font-semibold text-financial">{title}</h2>
+      <h2 className="mt-3 text-lg font-semibold text-financial">{title}</h2>
       {subtitle ? <p className="mt-1 text-sm text-textSecondary">{subtitle}</p> : null}
     </div>
   );
@@ -127,12 +127,9 @@ function voucherToAccount(voucher: Voucher) {
 
 export function AccountReportsPage() {
   const {
-    years,
     financialYearId,
-    setFinancialYearId,
     financialYearIdNum,
     selectedYear,
-    loading: yearsLoading,
   } = useReportFinancialYear();
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -285,7 +282,6 @@ export function AccountReportsPage() {
         open={filtersOpen}
         title="Account Ledger"
         onClose={() => setFiltersOpen(false)}
-        maxWidthClassName="max-w-5xl"
         footer={
           <>
             <PrimaryButton type="button" onClick={() => void loadLedger(0)} disabled={loading || !financialYearId}>
@@ -294,13 +290,7 @@ export function AccountReportsPage() {
           </>
         }
       >
-        <div className="grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-5 xl:items-end">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={setFinancialYearId}
-            disabled={yearsLoading}
-          />
+        <div className="report-filter-stack">
           <div>
             <FieldLabel>Category</FieldLabel>
             <SearchSelect
@@ -516,12 +506,14 @@ export function TrialBalancePage() {
           </>
         }
       >
-        <ReportFinancialYearSelect
-          value={financialYearId}
-          years={years}
-          onChange={setFinancialYearId}
-          disabled={yearsLoading}
-        />
+        <div className="report-filter-stack">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={setFinancialYearId}
+            disabled={yearsLoading}
+          />
+        </div>
         {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
       </Modal>
 
@@ -768,7 +760,6 @@ export function SalePurchaseReportsPage() {
         open={filtersOpen}
         title="Sale/Purchase Reports"
         onClose={() => setFiltersOpen(false)}
-        maxWidthClassName="max-w-5xl"
         footer={
           <>
             <FinancialButton type="button" onClick={onView} disabled={loading}>
@@ -777,7 +768,7 @@ export function SalePurchaseReportsPage() {
           </>
         }
       >
-        <div className="grid gap-3 lg:grid-cols-6 lg:items-end">
+        <div className="report-filter-stack">
           <div>
             <FieldLabel>Sale / Purchase</FieldLabel>
             <SegmentedControl
@@ -789,7 +780,7 @@ export function SalePurchaseReportsPage() {
               ]}
             />
           </div>
-          <div className="lg:col-span-2">
+          <div>
             <FieldLabel>Type</FieldLabel>
             <SegmentedControl
               value={typeFilter}
@@ -805,9 +796,6 @@ export function SalePurchaseReportsPage() {
             <FieldLabel>To</FieldLabel>
             <DateField value={toDate} onChange={setToDate} />
           </div>
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
           <div>
             <FieldLabel>Account</FieldLabel>
             <SearchSelect
@@ -1033,7 +1021,6 @@ export function StockReportPage() {
         open={filtersOpen}
         title="Stock Report"
         onClose={() => setFiltersOpen(false)}
-        maxWidthClassName="max-w-3xl"
         footer={
           <>
             <FinancialButton type="button" onClick={onLoad} disabled={loading}>
@@ -1042,8 +1029,8 @@ export function StockReportPage() {
           </>
         }
       >
-        <div className="grid gap-3 md:grid-cols-4 md:items-end">
-          <div className="md:col-span-2">
+        <div className="report-filter-stack">
+          <div>
             <FieldLabel>Product</FieldLabel>
             <SearchSelect
               value={productId}
@@ -1243,12 +1230,9 @@ function BalanceTable({
 
 export function AccountBalancePage() {
   const {
-    years,
     financialYearId,
-    setFinancialYearId,
     financialYearIdNum,
     selectedYear,
-    loading: yearsLoading,
   } = useReportFinancialYear();
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [datedOn, setDatedOn] = useState(todayInputValue);
@@ -1339,7 +1323,6 @@ export function AccountBalancePage() {
         open={filtersOpen}
         title="Account Balance"
         onClose={() => setFiltersOpen(false)}
-        maxWidthClassName="max-w-5xl"
         footer={
           <>
             <FinancialButton type="button" onClick={loadReport} disabled={loading || !financialYearId}>
@@ -1348,13 +1331,7 @@ export function AccountBalancePage() {
           </>
         }
       >
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-end">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={setFinancialYearId}
-            disabled={yearsLoading}
-          />
+        <div className="report-filter-stack">
           <div>
             <FieldLabel>Dated On</FieldLabel>
             <DateField value={datedOn} onChange={setDatedOn} />
@@ -1579,7 +1556,6 @@ export function VouchersReportPage() {
         open={filtersOpen}
         title="Vouchers Report"
         onClose={() => setFiltersOpen(false)}
-        maxWidthClassName="max-w-5xl"
         footer={
           <>
             <FinancialButton type="button" onClick={() => void loadReport(0)} disabled={loading || !financialYearId}>
@@ -1588,7 +1564,7 @@ export function VouchersReportPage() {
           </>
         }
       >
-        <div className="grid gap-4 lg:grid-cols-4 lg:items-end">
+        <div className="report-filter-stack">
           <ReportFinancialYearSelect
             value={financialYearId}
             years={years}

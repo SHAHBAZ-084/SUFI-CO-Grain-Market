@@ -138,8 +138,8 @@ export function DailyReportPage() {
           </>
         }
       >
-        <form id="daily-report-filters" onSubmit={onSubmit} className="flex flex-wrap items-end gap-4">
-          <div className="min-w-[180px]">
+        <form id="daily-report-filters" onSubmit={onSubmit} className="report-filter-stack">
+          <div>
             <FieldLabel>Date</FieldLabel>
             <DateField
               value={date}

@@ -52,7 +52,7 @@ export function drawReportLetterhead(
   const contact = formatBusinessContactLine(businessInfo);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
+  doc.setFontSize(22);
   doc.setTextColor(28, 28, 34);
   if (typeof doc.setCharSpace === 'function') {
     doc.setCharSpace(0.35);
@@ -61,7 +61,7 @@ export function drawReportLetterhead(
   if (typeof doc.setCharSpace === 'function') {
     doc.setCharSpace(0);
   }
-  y += 5.2;
+  y += 7;
 
   if (proprietor) {
     doc.setFont('helvetica', 'normal');

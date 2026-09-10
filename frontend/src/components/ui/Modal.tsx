@@ -21,7 +21,7 @@ export function Modal({
   onClose,
   children,
   footer,
-  maxWidthClassName = 'max-w-2xl',
+  maxWidthClassName = 'max-w-md',
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
