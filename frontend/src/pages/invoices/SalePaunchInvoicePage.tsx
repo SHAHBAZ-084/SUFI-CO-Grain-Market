@@ -23,7 +23,7 @@ import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useMinimizableForm } from '../../hooks/useMinimizableForm';
-import { api, Account, AccountCategory, SystemPreferences } from '../../lib/api';
+import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
@@ -64,6 +64,8 @@ type SalePaunchDraft = {
   predictedRef: string;
   gridRows: GridRow[];
   invoiceDate: string;
+  productId: string;
+  jins: string;
   billNo: string;
   gariNo: string;
   tafseel: string;
@@ -145,6 +147,7 @@ export function SalePaunchInvoicePage() {
 
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
   const [predictedRef, setPredictedRef] = useState(() => restoredState?.predictedRef ?? '');
   const [gridRows, setGridRows] = useState<GridRow[]>(() => restoredState?.gridRows ?? []);
@@ -153,6 +156,8 @@ export function SalePaunchInvoicePage() {
   const [error, setError] = useState('');
 
   const [invoiceDate, setInvoiceDate] = useState(() => restoredState?.invoiceDate ?? todayInputValue());
+  const [productId, setProductId] = useState(() => restoredState?.productId ?? '');
+  const [jins, setJins] = useState(() => restoredState?.jins ?? '');
   const [billNo, setBillNo] = useState(() => restoredState?.billNo ?? '');
   const [gariNo, setGariNo] = useState(() => restoredState?.gariNo ?? '');
   const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
@@ -179,10 +184,11 @@ export function SalePaunchInvoicePage() {
   const [lowerBardanaRate, setLowerBardanaRate] = useState(() => restoredState?.lowerBardanaRate ?? '');
 
   const reload = useCallback(async () => {
-    const base = await loadInvoiceFormBase();
+    const base = await loadInvoiceFormBase({ includeProducts: true });
     setAccounts(base.accounts);
     setCategories(base.categories);
     setPrefs(base.prefs);
+    setProducts(base.products ?? []);
     try {
       const refRow = await api.getNextSalePaunchReference();
       if (keepRestoredPredictedRef.current) {
@@ -199,6 +205,17 @@ export function SalePaunchInvoicePage() {
   useEffect(() => {
     reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
+
+  const productOptions = useMemo(
+    () => products.map((p) => ({ value: String(p.id), label: p.name })),
+    [products],
+  );
+
+  function onProductChange(id: string) {
+    setProductId(id);
+    const product = products.find((p) => String(p.id) === id);
+    setJins(product?.name ?? '');
+  }
 
   const prefRates = useMemo(
     () => ({
@@ -377,6 +394,10 @@ export function SalePaunchInvoicePage() {
       setError('Select Bori or Thela for bardana');
       return;
     }
+    if (!jins.trim()) {
+      setError('Select جنس (product) before saving');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -385,6 +406,7 @@ export function SalePaunchInvoicePage() {
         salePartyAccountId: Number(salePartyAccountId),
         billNo: billNo.trim() || undefined,
         gariNo: gariNo.trim() || undefined,
+        jins: jins.trim(),
         tafseel: tafseel.trim() || undefined,
         taxAmount: taxAmount.trim() ? parseNum(taxAmount) : undefined,
         miscAmount: miscAmount.trim() ? parseNum(miscAmount) : undefined,
@@ -397,6 +419,7 @@ export function SalePaunchInvoicePage() {
         lowerBardanaRate: lowerBardanaRate.trim() ? parseNum(lowerBardanaRate) : null,
         lines: gridRows.map((row) => ({
           maalKhataAccountId: row.maalKhataAccountId,
+          jins: jins.trim(),
           boriOrThelaMode: row.boriOrThelaMode,
           bagCount: row.bagCount,
           thelaCount: row.thelaCount,
@@ -444,6 +467,15 @@ export function SalePaunchInvoicePage() {
                 <InvoiceField>
                   <FieldLabel>Invoice #</FieldLabel>
                   <div className="app-input-static app-input-static--emphasis tabular-nums">{predictedRef || '…'}</div>
+                </InvoiceField>
+                <InvoiceField>
+                  <FieldLabel>جنس</FieldLabel>
+                  <SearchSelect
+                    value={productId}
+                    onChange={onProductChange}
+                    options={productOptions}
+                    placeholder="Select product…"
+                  />
                 </InvoiceField>
                 <InvoiceField>
                   <FieldLabel>Bill #</FieldLabel>
@@ -663,6 +695,8 @@ export function SalePaunchInvoicePage() {
                       predictedRef,
                       gridRows,
                       invoiceDate,
+                      productId,
+                      jins,
                       billNo,
                       gariNo,
                       tafseel,

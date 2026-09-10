@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../../middleware/auth';
+import { requireAdmin, requireAuth } from '../../middleware/auth';
 import { asyncHandler, param, validateBody } from '../../utils/helpers';
 import * as partiesService from './parties.service';
 
@@ -52,6 +52,7 @@ partiesRouter.patch(
 
 partiesRouter.delete(
   '/sale-parties/:id',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     res.json(await partiesService.removeSaleParty(parseInt(param(req.params.id), 10)));
   }),
@@ -100,6 +101,7 @@ partiesRouter.patch(
 
 partiesRouter.delete(
   '/purchase-parties/:id',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     res.json(await partiesService.removePurchaseParty(parseInt(param(req.params.id), 10)));
   }),

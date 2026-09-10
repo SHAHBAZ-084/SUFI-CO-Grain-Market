@@ -256,6 +256,11 @@ function isBankOrCashCategory(name: string) {
   return n.includes('bank') || n.includes('cash');
 }
 
+function isCashCategory(name: string) {
+  const n = name.trim().toLowerCase();
+  return n.includes('cash') && !n.includes('bank');
+}
+
 async function loadAccounts(
   tx: Prisma.TransactionClient,
   debitAccountId: number,
@@ -2427,7 +2432,7 @@ export async function getDashboardSummary() {
 
   let cashBalance = 0;
   for (const account of accounts) {
-    if (account.category && isBankOrCashCategory(account.category.name) && account.ledger) {
+    if (account.category && isCashCategory(account.category.name) && account.ledger) {
       cashBalance += Number(account.ledger.balance);
     }
   }

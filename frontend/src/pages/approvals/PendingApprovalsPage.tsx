@@ -46,7 +46,11 @@ function rowKey(row: { kind: ApprovalKind; id: number }) {
 
 function accountCellLabel(account: ApprovalAccountRef | null | undefined) {
   if (!account) return '—';
-  return account.code ? `${account.name} (${account.code})` : account.name;
+  return account.name;
+}
+
+function amountCell(value: number | null | undefined) {
+  return value != null ? formatLedgerAmount(value) : '—';
 }
 
 function recordCreatedById(record: Record<string, unknown>): number | null {
@@ -286,6 +290,32 @@ function ApprovalEditModal({
                     </p>
                   </div>
                 ) : null}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <FieldLabel>Debit Account</FieldLabel>
+                    <p className="rounded-lg border border-border bg-surface1 px-3 py-2 text-sm font-medium text-ledgerDebit">
+                      {accountCellLabel(detail.debitAccount)}
+                    </p>
+                  </div>
+                  <div>
+                    <FieldLabel>Debit Amount</FieldLabel>
+                    <p className="rounded-lg border border-border bg-surface1 px-3 py-2 text-sm tabular-nums text-ledgerDebit">
+                      {amountCell(detail.debitAmount)}
+                    </p>
+                  </div>
+                  <div>
+                    <FieldLabel>Credit Account</FieldLabel>
+                    <p className="rounded-lg border border-border bg-surface1 px-3 py-2 text-sm font-medium text-ledgerCredit">
+                      {accountCellLabel(detail.creditAccount)}
+                    </p>
+                  </div>
+                  <div>
+                    <FieldLabel>Credit Amount</FieldLabel>
+                    <p className="rounded-lg border border-border bg-surface1 px-3 py-2 text-sm tabular-nums text-ledgerCredit">
+                      {amountCell(detail.creditAmount)}
+                    </p>
+                  </div>
+                </div>
                 <div>
                   <FieldLabel>Invoice date</FieldLabel>
                   <DateField
@@ -596,9 +626,10 @@ export function PendingApprovalsPage() {
                 <th>Reference</th>
                 <th>Date</th>
                 <th>Debit Account</th>
+                <th className="text-right">Debit Amount</th>
                 <th>Credit Account</th>
+                <th className="text-right">Credit Amount</th>
                 <th>Creator</th>
-                <th className="text-right">Amount</th>
                 <th>Description</th>
                 <th>Actions</th>
               </tr>
@@ -620,14 +651,17 @@ export function PendingApprovalsPage() {
                     <td className="whitespace-nowrap font-medium text-ledgerDebit">
                       {accountCellLabel(row.debitAccount)}
                     </td>
+                    <td className="whitespace-nowrap text-right tabular-nums text-ledgerDebit">
+                      {amountCell(row.debitAmount)}
+                    </td>
                     <td className="whitespace-nowrap font-medium text-ledgerCredit">
                       {accountCellLabel(row.creditAccount)}
                     </td>
+                    <td className="whitespace-nowrap text-right tabular-nums text-ledgerCredit">
+                      {amountCell(row.creditAmount)}
+                    </td>
                     <td className="whitespace-nowrap">
                       {row.createdBy?.displayName ?? row.createdBy?.username ?? '—'}
-                    </td>
-                    <td className="whitespace-nowrap text-right tabular-nums">
-                      {row.amount != null ? formatLedgerAmount(row.amount) : '—'}
                     </td>
                     <td className="max-w-[14rem] truncate" title={row.description ?? undefined}>
                       {row.description?.trim() ? row.description : '—'}

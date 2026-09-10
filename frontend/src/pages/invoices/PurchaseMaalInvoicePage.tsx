@@ -542,9 +542,6 @@ export function PurchaseMaalInvoicePage() {
                       ) : (
                         <div className="app-input-static font-medium text-textPrimary">
                           {maalKhataAccount?.name ?? '—'}
-                          {maalKhataAccount?.code ? (
-                            <span className="ml-2 font-normal text-textMuted">({maalKhataAccount.code})</span>
-                          ) : null}
                         </div>
                       )}
                     </InvoiceField>

@@ -37,7 +37,7 @@ export function AccountAdjustmentPage() {
 
   const accountOptions = eligibleAccounts.map((a) => ({
     value: String(a.id),
-    label: `${a.name} (${a.code})`,
+    label: a.name,
   }));
 
   async function onSubmit(event: FormEvent) {

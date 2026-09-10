@@ -78,7 +78,7 @@ function MetaRow({
 
 function PartyBlock({
   billToLabel,
-  partyCode,
+  partyCode: _partyCode,
   partyName,
   address,
   phone,
@@ -94,13 +94,9 @@ function PartyBlock({
   /** When true, Product sits inside the Bill To box (Sale Commission style). */
   productInsideBox?: boolean;
 }) {
-  const codePrefix = partyCode ? `[${partyCode}] ` : '';
   const partyContent = (
     <>
-      <div>
-        {codePrefix}
-        {partyName}
-      </div>
+      <div>{partyName}</div>
       {address ? <div className="mt-0.5 whitespace-pre-wrap">{address}</div> : null}
       {phone ? <div className="mt-0.5">{phone}</div> : null}
     </>

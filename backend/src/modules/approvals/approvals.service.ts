@@ -35,6 +35,7 @@ import {
   invoiceTypeLabel,
   invoiceApprovalAccounts,
   invoiceApprovalDescription,
+  resolveApprovalSideAmounts,
   sideAccounts,
   voucherApprovalAccounts,
   voucherApprovalTypeLabel,
@@ -120,6 +121,12 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
             },
           },
         },
+        salePaunchLines: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            maalKhataAccount: { select: { name: true, code: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -157,12 +164,20 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
         accountRef(row.name, row.code),
         amount ?? 0,
       );
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'account',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
       return {
         kind: 'account' as const,
         id: row.id,
         label: row.name,
         sublabel: row.code,
         amount,
+        debitAmount,
+        creditAmount,
         reference: row.code,
         recordType: row.type,
         recordDate: row.createdAt.toISOString(),
@@ -185,6 +200,12 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
         ? accountRef(linked.name, linked.code)
         : accountRef(row.name, row.code);
       const { debitAccount, creditAccount } = sideAccounts(side, primary, amount ?? 0);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'product',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
       return {
         kind: 'product' as const,
         id: row.id,
@@ -194,6 +215,8 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
         recordDate: row.createdAt.toISOString(),
         typeLabel: 'New Product',
         amount,
+        debitAmount,
+        creditAmount,
         debitAccount,
         creditAccount,
         description: row.unit ? `Unit: ${row.unit}` : null,
@@ -202,13 +225,22 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
       };
     }),
     ...vouchers.map((row) => {
-      const { debitAccount, creditAccount } = voucherApprovalAccounts(row);
+      const amount = Number(row.amount);
+      const { debitAccount, creditAccount } = voucherApprovalAccounts(row, amount);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'voucher',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
       return {
         kind: 'voucher' as const,
         id: row.id,
         label: `${row.type} #${row.number}`,
         sublabel: row.reference,
-        amount: Number(row.amount),
+        amount,
+        debitAmount,
+        creditAmount,
         reference: row.reference,
         recordType: row.type,
         recordDate: row.date.toISOString(),
@@ -221,19 +253,30 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
       };
     }),
     ...invoices.map((row) => {
-      const { debitAccount, creditAccount } = invoiceApprovalAccounts(row);
+      const accounts = invoiceApprovalAccounts(row);
+      const amount = Number(row.total);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'invoice',
+        amount,
+        debitAccount: accounts.debitAccount,
+        creditAccount: accounts.creditAccount,
+        invoiceDebitAmount: accounts.debitAmount,
+        invoiceCreditAmount: accounts.creditAmount,
+      });
       return {
         kind: 'invoice' as const,
         id: row.id,
         label: row.reference,
         sublabel: row.type,
-        amount: Number(row.total),
+        amount,
+        debitAmount,
+        creditAmount,
         reference: row.reference,
         recordType: row.type,
         recordDate: (row.invoiceDate ?? row.createdAt).toISOString(),
         typeLabel: invoiceTypeLabel(row.type),
-        debitAccount,
-        creditAccount,
+        debitAccount: accounts.debitAccount,
+        creditAccount: accounts.creditAccount,
         description: invoiceApprovalDescription(row),
         createdAt: row.createdAt.toISOString(),
         createdBy: row.createdBy,
@@ -243,12 +286,20 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
       const primary = accountRef(row.account.name, row.account.code);
       const amount = Number(row.amount);
       const { debitAccount, creditAccount } = sideAccounts(row.side, primary, amount);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'account-adjustment',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
       return {
         kind: 'account-adjustment' as const,
         id: row.id,
         label: row.account.name,
         sublabel: `${row.side} adjustment`,
         amount,
+        debitAmount,
+        creditAmount,
         reference: row.account.code,
         recordType: row.side,
         recordDate: row.adjustmentDate.toISOString(),
@@ -264,12 +315,20 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
       const primary = accountRef(row.product.account.name, row.product.account.code);
       const amount = Number(row.amount);
       const { debitAccount, creditAccount } = sideAccounts(row.side, primary, amount);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'stock-adjustment',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
       return {
         kind: 'stock-adjustment' as const,
         id: row.id,
         label: row.product.name,
         sublabel: `${row.direction} ${row.bagType}`,
         amount,
+        debitAmount,
+        creditAmount,
         reference: row.product.code,
         recordType: `${row.direction}/${row.bagType}`,
         recordDate: row.adjustmentDate.toISOString(),
@@ -298,7 +357,21 @@ export async function getPendingApprovalDetail(kind: ApprovalKind, id: number) {
         },
       });
       if (!account) throw new AppError(404, 'Pending account not found');
-      return { kind, record: account };
+      const amount =
+        account.pendingOpeningBalance != null ? Number(account.pendingOpeningBalance) : null;
+      const side = account.pendingOpeningBalanceSide ?? OpeningBalanceSide.DR;
+      const { debitAccount, creditAccount } = sideAccounts(
+        side,
+        accountRef(account.name, account.code),
+        amount ?? 0,
+      );
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'account',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
+      return { kind, record: account, debitAccount, creditAccount, debitAmount, creditAmount };
     }
     case 'product': {
       const product = await prisma.product.findFirst({
@@ -309,7 +382,21 @@ export async function getPendingApprovalDetail(kind: ApprovalKind, id: number) {
         },
       });
       if (!product) throw new AppError(404, 'Pending product not found');
-      return { kind, record: product };
+      const linked = product.account;
+      const amount =
+        linked?.pendingOpeningBalance != null ? Number(linked.pendingOpeningBalance) : null;
+      const side = linked?.pendingOpeningBalanceSide ?? OpeningBalanceSide.DR;
+      const primary = linked
+        ? accountRef(linked.name, linked.code)
+        : accountRef(product.name, product.code);
+      const { debitAccount, creditAccount } = sideAccounts(side, primary, amount ?? 0);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'product',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
+      return { kind, record: product, debitAccount, creditAccount, debitAmount, creditAmount };
     }
     case 'voucher': {
       const voucher = await prisma.voucher.findFirst({
@@ -321,7 +408,15 @@ export async function getPendingApprovalDetail(kind: ApprovalKind, id: number) {
         },
       });
       if (!voucher) throw new AppError(404, 'Pending voucher not found');
-      return { kind, record: voucher };
+      const amount = Number(voucher.amount);
+      const { debitAccount, creditAccount } = voucherApprovalAccounts(voucher, amount);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'voucher',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
+      return { kind, record: voucher, debitAccount, creditAccount, debitAmount, creditAmount };
     }
     case 'invoice': {
       const invoice = await prisma.invoice.findFirst({
@@ -330,11 +425,22 @@ export async function getPendingApprovalDetail(kind: ApprovalKind, id: number) {
           debitAccount: true,
           partyAccount: true,
           salePartyAccount: true,
-          product: true,
+          product: {
+            select: {
+              name: true,
+              code: true,
+              account: { select: { name: true, code: true } },
+            },
+          },
           kachiMaalLines: { orderBy: { sortOrder: 'asc' } },
           purchaseMaalLines: { orderBy: { sortOrder: 'asc' } },
           saleCommissionLines: { orderBy: { sortOrder: 'asc' } },
-          salePaunchLines: { orderBy: { sortOrder: 'asc' } },
+          salePaunchLines: {
+            orderBy: { sortOrder: 'asc' },
+            include: {
+              maalKhataAccount: { select: { name: true, code: true } },
+            },
+          },
           generalPurchaseLines: {
             orderBy: { sortOrder: 'asc' },
             include: {
@@ -351,22 +457,51 @@ export async function getPendingApprovalDetail(kind: ApprovalKind, id: number) {
         },
       });
       if (!invoice) throw new AppError(404, 'Pending invoice not found');
-      const { debitAccount, creditAccount } = invoiceApprovalAccounts(invoice);
+      const accounts = invoiceApprovalAccounts(invoice);
+      const amount = Number(invoice.total);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'invoice',
+        amount,
+        debitAccount: accounts.debitAccount,
+        creditAccount: accounts.creditAccount,
+        invoiceDebitAmount: accounts.debitAmount,
+        invoiceCreditAmount: accounts.creditAmount,
+      });
       return {
         kind,
         record: invoice,
         approvalDescription: invoiceApprovalDescription(invoice),
-        debitAccount,
-        creditAccount,
+        debitAccount: accounts.debitAccount,
+        creditAccount: accounts.creditAccount,
+        debitAmount,
+        creditAmount,
       };
     }
     case 'account-adjustment': {
       const adjustment = await getPendingAccountAdjustmentDetail(id);
-      return { kind, record: adjustment };
+      const amount = Number(adjustment.amount);
+      const primary = accountRef(adjustment.account.name, adjustment.account.code);
+      const { debitAccount, creditAccount } = sideAccounts(adjustment.side, primary, amount);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'account-adjustment',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
+      return { kind, record: adjustment, debitAccount, creditAccount, debitAmount, creditAmount };
     }
     case 'stock-adjustment': {
       const adjustment = await getPendingStockAdjustmentDetail(id);
-      return { kind, record: adjustment };
+      const amount = Number(adjustment.amount);
+      const primary = accountRef(adjustment.product.account.name, adjustment.product.account.code);
+      const { debitAccount, creditAccount } = sideAccounts(adjustment.side, primary, amount);
+      const { debitAmount, creditAmount } = resolveApprovalSideAmounts({
+        kind: 'stock-adjustment',
+        amount,
+        debitAccount,
+        creditAccount,
+      });
+      return { kind, record: adjustment, debitAccount, creditAccount, debitAmount, creditAmount };
     }
     default:
       throw new AppError(400, 'Invalid approval type');

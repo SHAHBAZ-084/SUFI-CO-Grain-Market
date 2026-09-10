@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SIDEBAR_NAV, NavItem, sectionIsActive, TOP_NAV_SECTION_IDS } from '../../config/navigation';
 import { APP_BRAND_NAME } from '../../config/brand';
+import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import { APPROVALS_CHANGED_EVENT } from '../../lib/approvals';
 import { voucherTypeColorClass } from '../../lib/format';
@@ -11,6 +12,18 @@ function voucherNavLabelClass(label: string) {
   if (label.startsWith('Receipt')) return voucherTypeColorClass('RECEIPT');
   if (label.startsWith('Journal')) return voucherTypeColorClass('JOURNAL');
   return '';
+}
+
+function filterNavItems(items: NavItem[], isAdmin: boolean): NavItem[] {
+  return items.flatMap((item) => {
+    if (item.kind === 'link') {
+      if (item.adminOnly && !isAdmin) return [];
+      return [item];
+    }
+    const children = item.children.filter((child) => isAdmin || !child.adminOnly);
+    if (children.length === 0) return [];
+    return [{ ...item, children }];
+  });
 }
 
 function NavSubmenu({
@@ -145,9 +158,24 @@ function ApprovalNavLink({ active }: { active: boolean }) {
 
 export function TopBar() {
   const location = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const dashboardActive = location.pathname === '/';
   const approvalsActive = location.pathname === '/approvals';
-  const sectionsById = Object.fromEntries(SIDEBAR_NAV.map((section) => [section.id, section]));
+  const sectionsById = useMemo(
+    () => Object.fromEntries(SIDEBAR_NAV.map((section) => [section.id, section])),
+    [],
+  );
+  const visibleSections = useMemo(
+    () =>
+      Object.fromEntries(
+        SIDEBAR_NAV.map((section) => [
+          section.id,
+          { ...section, items: filterNavItems(section.items, Boolean(isAdmin)) },
+        ]),
+      ),
+    [isAdmin],
+  );
 
   return (
     <header className="app-topnav">
@@ -163,14 +191,14 @@ export function TopBar() {
 
         <nav className="app-topnav-nav">
           {TOP_NAV_SECTION_IDS.map((sectionId) => {
-            const section = sectionsById[sectionId];
+            const section = visibleSections[sectionId];
             if (!section) return null;
             return (
               <NavDropdown
                 key={section.id}
                 label={section.label}
                 children={section.items}
-                active={sectionIsActive(location.pathname, section)}
+                active={sectionIsActive(location.pathname, sectionsById[sectionId]!)}
               />
             );
           })}

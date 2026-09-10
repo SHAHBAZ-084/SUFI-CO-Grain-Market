@@ -236,6 +236,7 @@ export type ApprovalKind =
 export type ApprovalAccountRef = {
   name: string;
   code: string;
+  amount?: number;
 };
 
 export type PendingApprovalItem = {
@@ -244,6 +245,8 @@ export type PendingApprovalItem = {
   label: string;
   sublabel?: string | null;
   amount?: number | null;
+  debitAmount?: number | null;
+  creditAmount?: number | null;
   reference?: string | null;
   recordType?: string | null;
   recordDate?: string | null;
@@ -260,6 +263,10 @@ export type PendingApprovalDetail = {
   record: Record<string, unknown>;
   /** Computed summary for General Goods invoices. */
   approvalDescription?: string | null;
+  debitAccount?: ApprovalAccountRef | null;
+  creditAccount?: ApprovalAccountRef | null;
+  debitAmount?: number | null;
+  creditAmount?: number | null;
 };
 
 export type VoucherLedgerEntry = {

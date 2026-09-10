@@ -14,6 +14,8 @@ export type NavLink = {
   label: string;
   to: string;
   description?: string;
+  /** When true, only ADMIN users see this nav item. */
+  adminOnly?: boolean;
 };
 
 export type NavItem =
@@ -44,7 +46,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
         children: [
           { label: 'Add Category', to: '/accounts/categories/add' },
           { label: 'Edit Category', to: '/accounts/categories/edit' },
-          { label: 'Remove Category', to: '/accounts/categories/remove' },
+          { label: 'Remove Category', to: '/accounts/categories/remove', adminOnly: true },
         ],
       },
       {
@@ -53,7 +55,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
         children: [
           { label: 'Add Account', to: '/accounts/manage/add' },
           { label: 'Edit Account', to: '/accounts/manage/edit' },
-          { label: 'Remove Account', to: '/accounts/manage/remove' },
+          { label: 'Remove Account', to: '/accounts/manage/remove', adminOnly: true },
         ],
       },
       { kind: 'link', label: 'Sale Party', to: '/accounts/sale-parties' },
@@ -67,7 +69,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     icon: Package,
     items: [
       { kind: 'link', label: 'Add Product', to: '/accounts/products/add' },
-      { kind: 'link', label: 'Remove Product', to: '/accounts/products/remove' },
+      { kind: 'link', label: 'Remove Product', to: '/accounts/products/remove', adminOnly: true },
       { kind: 'link', label: 'Stock Adjustment', to: '/accounts/products/stock-adjustment' },
     ],
   },
@@ -101,7 +103,6 @@ export const SIDEBAR_NAV: SidebarSection[] = [
     label: 'Reports',
     icon: BarChart3,
     items: [
-      { kind: 'link', label: 'Reports Hub', to: '/reports' },
       {
         kind: 'submenu',
         label: 'Account Reports',

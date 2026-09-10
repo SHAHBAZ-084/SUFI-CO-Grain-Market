@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { api, type Product, type ProductCategory } from '../../lib/api';
 import { formatLedgerBalance } from '../../lib/format';
+import { useAuth } from '../../contexts/AuthContext';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 
 export function ProductAddPage() {
@@ -146,6 +148,8 @@ export function ProductAddPage() {
 }
 
 export function ProductRemovePage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedId, setSelectedId] = useState<number | ''>('');
   const [message, setMessage] = useState('');
@@ -154,6 +158,10 @@ export function ProductRemovePage() {
   useEffect(() => {
     api.listProducts().then(setProducts).catch(() => setProducts([]));
   }, []);
+
+  if (!isAdmin) {
+    return <Navigate to="/accounts/products/add" replace />;
+  }
 
   async function onRemove() {
     setError('');

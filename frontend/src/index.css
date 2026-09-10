@@ -2094,6 +2094,252 @@
 
 
 
+  .dashboard-section-title {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 0.5rem;
+
+    padding-left: 0.65rem;
+
+    border-left: 4px solid var(--section-accent, var(--fill-financial));
+
+  }
+
+
+
+  .dashboard-section-title--vouchers {
+
+    --section-accent: var(--ql-receipt);
+
+    color: var(--ql-receipt);
+
+  }
+
+
+
+  .dashboard-section-title--invoices {
+
+    --section-accent: var(--ql-sale-commission);
+
+    color: var(--ql-sale-commission);
+
+  }
+
+
+
+  .dashboard-section-title--reports {
+
+    --section-accent: var(--ql-report);
+
+    color: var(--ql-report);
+
+  }
+
+
+
+  .dashboard-section-title--recent {
+
+    --section-accent: var(--ql-purchase-maal);
+
+    color: var(--ql-purchase-maal);
+
+  }
+
+
+
+  .dashboard-metric {
+
+    border-radius: 0.65rem;
+
+    border-color: color-mix(in srgb, var(--metric-accent, var(--border)) 35%, var(--border));
+
+    background: var(--metric-bg, var(--surface-2));
+
+    box-shadow: 0 1px 2px rgba(10, 46, 92, 0.05);
+
+    border-left-width: 4px;
+
+    border-left-color: var(--metric-accent, var(--border-strong));
+
+  }
+
+
+
+  .dashboard-metric-label {
+
+    margin: 0;
+
+    font-size: 0.75rem;
+
+    font-weight: 700;
+
+    letter-spacing: 0.04em;
+
+    text-transform: uppercase;
+
+    color: var(--metric-accent, var(--text-muted));
+
+  }
+
+
+
+  .dashboard-metric-value {
+
+    margin-top: 0.25rem;
+
+    font-size: 1.35rem;
+
+    font-weight: 700;
+
+    font-variant-numeric: tabular-nums;
+
+    color: var(--metric-accent, var(--text-financial));
+
+  }
+
+
+
+  .dashboard-metric-link {
+
+    font-size: 0.75rem;
+
+    font-weight: 600;
+
+    color: var(--metric-accent, var(--text-financial));
+
+    text-decoration: underline;
+
+    text-underline-offset: 2px;
+
+  }
+
+
+
+  .dashboard-metric--cash {
+
+    --metric-bg: var(--metric-cash-bg);
+
+    --metric-accent: var(--metric-cash-accent);
+
+  }
+
+
+
+  .dashboard-metric--stock {
+
+    --metric-bg: var(--metric-stock-bg);
+
+    --metric-accent: var(--metric-stock-accent);
+
+  }
+
+
+
+  .dashboard-metric--vouchers {
+
+    --metric-bg: var(--metric-vouchers-bg);
+
+    --metric-accent: var(--metric-vouchers-accent);
+
+  }
+
+
+
+  .dashboard-stock-num {
+
+    color: var(--metric-stock-accent);
+
+  }
+
+
+
+  .dashboard-approvals-banner {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    margin-bottom: 1rem;
+
+    border: 1px solid color-mix(in srgb, var(--metric-approvals-accent) 35%, var(--border));
+
+    border-left: 4px solid var(--metric-approvals-accent);
+
+    border-radius: 0.65rem;
+
+    background: var(--metric-approvals-bg);
+
+    padding: 0.75rem 1rem;
+
+    font-size: 0.875rem;
+
+    color: var(--text-primary);
+
+    text-decoration: none;
+
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+  }
+
+
+
+  .dashboard-approvals-banner:hover {
+
+    filter: brightness(0.98);
+
+    transform: translateY(-1px);
+
+  }
+
+
+
+  .dashboard-approvals-banner.is-pending {
+
+    border-color: color-mix(in srgb, var(--metric-approvals-pending-accent) 40%, var(--border));
+
+    border-left-color: var(--metric-approvals-pending-accent);
+
+    background: var(--metric-approvals-pending-bg);
+
+  }
+
+
+
+  .dashboard-approvals-badge {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    border-radius: 999px;
+
+    background: var(--metric-approvals-pending-accent);
+
+    padding: 0.15rem 0.55rem;
+
+    font-size: 0.75rem;
+
+    font-weight: 700;
+
+    color: #fff;
+
+  }
+
+
+
+  .dashboard-recent-table .legacy-table thead tr {
+
+    background: color-mix(in srgb, var(--ql-purchase-maal) 12%, var(--surface-2));
+
+  }
+
+
+
   .app-page {
 
     padding: 1rem 1.25rem 1.5rem;
@@ -2261,6 +2507,8 @@
     display: block;
 
     border: 1px solid var(--border);
+
+    border-left: 4px solid var(--ql-accent, var(--fill-financial));
 
     border-radius: 0.75rem;
 
@@ -2468,7 +2716,17 @@
 
     --ql-accent: var(--ql-sale-commission);
 
+    --ql-bg: var(--ql-sale-commission-bg);
+
     --ql-hover: var(--ql-sale-commission-hover);
+
+  }
+
+
+
+  .quick-link-card--sale-commission .quick-link-title {
+
+    color: var(--ql-sale-commission);
 
   }
 
@@ -2478,7 +2736,17 @@
 
     --ql-accent: var(--ql-sale-paunch);
 
+    --ql-bg: var(--ql-sale-paunch-bg);
+
     --ql-hover: var(--ql-sale-paunch-hover);
+
+  }
+
+
+
+  .quick-link-card--sale-paunch .quick-link-title {
+
+    color: var(--ql-sale-paunch);
 
   }
 
@@ -2488,7 +2756,17 @@
 
     --ql-accent: var(--ql-purchase-maal);
 
+    --ql-bg: var(--ql-purchase-maal-bg);
+
     --ql-hover: var(--ql-purchase-maal-hover);
+
+  }
+
+
+
+  .quick-link-card--purchase-maal .quick-link-title {
+
+    color: var(--ql-purchase-maal);
 
   }
 
@@ -2498,7 +2776,57 @@
 
     --ql-accent: var(--ql-kachi-maal);
 
+    --ql-bg: var(--ql-kachi-maal-bg);
+
     --ql-hover: var(--ql-kachi-maal-hover);
+
+  }
+
+
+
+  .quick-link-card--kachi-maal .quick-link-title {
+
+    color: var(--ql-kachi-maal);
+
+  }
+
+
+
+  .quick-link-card--sale-general {
+
+    --ql-accent: var(--ql-sale-general);
+
+    --ql-bg: var(--ql-sale-general-bg);
+
+    --ql-hover: var(--ql-sale-general-hover);
+
+  }
+
+
+
+  .quick-link-card--sale-general .quick-link-title {
+
+    color: var(--ql-sale-general);
+
+  }
+
+
+
+  .quick-link-card--purchase-general {
+
+    --ql-accent: var(--ql-purchase-general);
+
+    --ql-bg: var(--ql-purchase-general-bg);
+
+    --ql-hover: var(--ql-purchase-general-hover);
+
+  }
+
+
+
+  .quick-link-card--purchase-general .quick-link-title {
+
+    color: var(--ql-purchase-general);
 
   }
 
@@ -2508,7 +2836,17 @@
 
     --ql-accent: var(--ql-view);
 
+    --ql-bg: var(--ql-view-bg);
+
     --ql-hover: var(--ql-view-hover);
+
+  }
+
+
+
+  .quick-link-card--view .quick-link-title {
+
+    color: var(--ql-view);
 
   }
 
@@ -2518,7 +2856,137 @@
 
     --ql-accent: var(--ql-report);
 
+    --ql-bg: var(--ql-report-bg);
+
     --ql-hover: var(--ql-report-hover);
+
+  }
+
+
+
+  .quick-link-card--report .quick-link-title {
+
+    color: var(--ql-report);
+
+  }
+
+
+
+  .quick-link-card--report-ledger {
+
+    --ql-accent: var(--ql-report-ledger);
+
+    --ql-bg: var(--ql-report-ledger-bg);
+
+    --ql-hover: var(--ql-report-ledger-hover);
+
+  }
+
+
+
+  .quick-link-card--report-ledger .quick-link-title {
+
+    color: var(--ql-report-ledger);
+
+  }
+
+
+
+  .quick-link-card--report-balance {
+
+    --ql-accent: var(--ql-report-balance);
+
+    --ql-bg: var(--ql-report-balance-bg);
+
+    --ql-hover: var(--ql-report-balance-hover);
+
+  }
+
+
+
+  .quick-link-card--report-balance .quick-link-title {
+
+    color: var(--ql-report-balance);
+
+  }
+
+
+
+  .quick-link-card--report-vouchers {
+
+    --ql-accent: var(--ql-report-vouchers);
+
+    --ql-bg: var(--ql-report-vouchers-bg);
+
+    --ql-hover: var(--ql-report-vouchers-hover);
+
+  }
+
+
+
+  .quick-link-card--report-vouchers .quick-link-title {
+
+    color: var(--ql-report-vouchers);
+
+  }
+
+
+
+  .quick-link-card--report-trial {
+
+    --ql-accent: var(--ql-report-trial);
+
+    --ql-bg: var(--ql-report-trial-bg);
+
+    --ql-hover: var(--ql-report-trial-hover);
+
+  }
+
+
+
+  .quick-link-card--report-trial .quick-link-title {
+
+    color: var(--ql-report-trial);
+
+  }
+
+
+
+  .quick-link-card--report-sale {
+
+    --ql-accent: var(--ql-report-sale);
+
+    --ql-bg: var(--ql-report-sale-bg);
+
+    --ql-hover: var(--ql-report-sale-hover);
+
+  }
+
+
+
+  .quick-link-card--report-sale .quick-link-title {
+
+    color: var(--ql-report-sale);
+
+  }
+
+
+
+  .quick-link-card--report-stock {
+
+    --ql-accent: var(--ql-report-stock);
+
+    --ql-bg: var(--ql-report-stock-bg);
+
+    --ql-hover: var(--ql-report-stock-hover);
+
+  }
+
+
+
+  .quick-link-card--report-stock .quick-link-title {
+
+    color: var(--ql-report-stock);
 
   }
 

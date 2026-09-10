@@ -12,6 +12,7 @@ export type ApprovalKind = (typeof APPROVAL_KINDS)[number];
 export type ApprovalAccountRef = {
   name: string;
   code: string;
+  amount?: number;
 };
 
 export type PendingApprovalItem = {
@@ -20,6 +21,8 @@ export type PendingApprovalItem = {
   label: string;
   sublabel?: string | null;
   amount?: number | null;
+  debitAmount?: number | null;
+  creditAmount?: number | null;
   reference?: string | null;
   recordType?: string | null;
   recordDate?: string | null;

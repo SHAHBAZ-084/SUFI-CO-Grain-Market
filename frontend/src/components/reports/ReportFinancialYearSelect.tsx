@@ -7,7 +7,7 @@ export function financialYearOptionLabel(year: FinancialYear): string {
   return `${year.label} (${status})`;
 }
 
-/** Financial Year dropdown — intended for the Reports hub only. */
+/** Financial Year dropdown for FY-scoped report pages. */
 export function ReportFinancialYearSelect({
   value,
   years,

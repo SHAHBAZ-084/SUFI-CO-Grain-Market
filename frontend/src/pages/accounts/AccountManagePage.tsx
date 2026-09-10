@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { formatLedgerBalance } from '../../lib/format';
 import { api, type Account, type AccountCategory } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 
 type Mode = 'add' | 'edit' | 'remove';
@@ -38,6 +40,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMessage: string)
 }
 
 export function AccountManagePage({ mode }: { mode: Mode }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categoryId, setCategoryId] = useState<number | ''>('');
@@ -71,6 +75,10 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
     () => categories.find((c) => c.id === categoryId),
     [categories, categoryId],
   );
+
+  if (mode === 'remove' && !isAdmin) {
+    return <Navigate to="/accounts/manage/add" replace />;
+  }
 
   async function reload() {
     setCategories(await api.listCategories());

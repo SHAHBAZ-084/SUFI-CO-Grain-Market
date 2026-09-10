@@ -32,7 +32,7 @@ export function StockAdjustmentPage() {
 
   const productOptions = products.map((p) => ({
     value: String(p.id),
-    label: `${p.name} (${p.code})`,
+    label: p.name,
   }));
 
   async function onSubmit(event: FormEvent) {

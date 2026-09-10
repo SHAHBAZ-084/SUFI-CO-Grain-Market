@@ -49,7 +49,7 @@ function todayInputValue() {
 
 function accountCellLabel(account: { name: string; code: string } | null | undefined) {
   if (!account) return '—';
-  return account.code ? `${account.name} (${account.code})` : account.name;
+  return account.name;
 }
 
 function viewHref(row: DailyRow): string | null {

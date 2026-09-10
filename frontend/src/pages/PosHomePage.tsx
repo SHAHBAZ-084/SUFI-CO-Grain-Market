@@ -12,12 +12,13 @@ const DASHBOARD_INVOICE_LINKS = INVOICE_QUICK_LINKS.filter(
 );
 
 type DashboardSummary = Awaited<ReturnType<typeof api.getDashboardSummary>>;
+type MetricTone = 'cash' | 'stock' | 'vouchers';
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value, tone }: { label: string; value: string; tone: MetricTone }) {
   return (
-    <Tile className="min-h-[4.5rem]">
-      <p className="text-xs font-semibold uppercase tracking-wide text-textMuted">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums text-financial">{value}</p>
+    <Tile className={`dashboard-metric dashboard-metric--${tone} min-h-[4.5rem]`}>
+      <p className="dashboard-metric-label">{label}</p>
+      <p className="dashboard-metric-value">{value}</p>
     </Tile>
   );
 }
@@ -25,13 +26,17 @@ function StatBox({ label, value }: { label: string; value: string }) {
 function QuickLinkSection({
   title,
   links,
+  tone,
 }: {
   title: string;
   links: Array<{ label: string; to: string; description?: string }>;
+  tone: 'vouchers' | 'invoices' | 'reports';
 }) {
   return (
     <div className="mb-6">
-      <h2 className="legacy-section-title">{title}</h2>
+      <h2 className={`legacy-section-title dashboard-section-title dashboard-section-title--${tone}`}>
+        {title}
+      </h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {links.map((link) => (
           <QuickLinkCard
@@ -82,12 +87,12 @@ export function PosHomePage() {
 
       <Link
         to="/approvals"
-        className="mb-4 flex items-center justify-between rounded-sm border border-border bg-surface2 px-4 py-3 text-sm hover:bg-surface1"
+        className={`dashboard-approvals-banner ${pendingCount > 0 ? 'is-pending' : ''}`}
       >
-        <span className="font-medium text-textPrimary">Approval</span>
-        <span className="text-textSecondary">
+        <span className="font-medium">Approval</span>
+        <span>
           {pendingCount > 0 ? (
-            <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-bold text-white">
+            <span className="dashboard-approvals-badge">
               {pendingCount} waiting
             </span>
           ) : (
@@ -100,13 +105,12 @@ export function PosHomePage() {
         <StatBox
           label="Cash Balance"
           value={summary ? formatLedgerAmount(summary.cashBalance) : '—'}
+          tone="cash"
         />
-        <Tile className="min-h-[4.5rem] sm:col-span-2">
+        <Tile className="dashboard-metric dashboard-metric--stock min-h-[4.5rem] sm:col-span-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-textMuted">
-              Stock bags
-            </p>
-            <Link to="/reports/stock" className="text-xs font-medium text-financial hover:underline">
+            <p className="dashboard-metric-label">Stock bags</p>
+            <Link to="/reports/stock" className="dashboard-metric-link">
               Stock Report
             </Link>
           </div>
@@ -128,10 +132,10 @@ export function PosHomePage() {
                   {summary.productStock.map((row) => (
                     <tr key={row.productId} className="border-t border-border">
                       <td className="py-1 pr-2 text-textPrimary">{row.name}</td>
-                      <td className="py-1 pr-2 text-right tabular-nums font-medium text-financial">
+                      <td className="dashboard-stock-num py-1 pr-2 text-right tabular-nums font-medium">
                         {row.bori}
                       </td>
-                      <td className="py-1 text-right tabular-nums font-medium text-financial">
+                      <td className="dashboard-stock-num py-1 text-right tabular-nums font-medium">
                         {row.thela}
                       </td>
                     </tr>
@@ -144,12 +148,13 @@ export function PosHomePage() {
         <StatBox
           label="Vouchers Today"
           value={summary ? String(summary.vouchersToday) : '—'}
+          tone="vouchers"
         />
       </div>
 
-      <QuickLinkSection title="Vouchers" links={VOUCHER_QUICK_LINKS} />
-      <QuickLinkSection title="Invoices" links={DASHBOARD_INVOICE_LINKS} />
-      <QuickLinkSection title="Reports" links={REPORT_QUICK_LINKS} />
+      <QuickLinkSection title="Vouchers" links={VOUCHER_QUICK_LINKS} tone="vouchers" />
+      <QuickLinkSection title="Invoices" links={DASHBOARD_INVOICE_LINKS} tone="invoices" />
+      <QuickLinkSection title="Reports" links={REPORT_QUICK_LINKS} tone="reports" />
 
       <PanelSection summary={summary} />
     </PageShell>
@@ -159,13 +164,15 @@ export function PosHomePage() {
 function PanelSection({ summary }: { summary: DashboardSummary | null }) {
   return (
     <div>
-      <h2 className="legacy-section-title">Recent Vouchers</h2>
+      <h2 className="legacy-section-title dashboard-section-title dashboard-section-title--recent">
+        Recent Vouchers
+      </h2>
       {!summary ? (
         <p className="text-sm text-textMuted">Loading…</p>
       ) : summary.recentVouchers.length === 0 ? (
         <p className="text-sm text-textMuted">No vouchers posted yet this year.</p>
       ) : (
-        <LegacyTable>
+        <LegacyTable className="dashboard-recent-table">
           <thead>
             <tr>
               <th>#</th>

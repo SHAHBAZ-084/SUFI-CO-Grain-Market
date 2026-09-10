@@ -6,6 +6,9 @@ import {
   isBardanaLedgerNote,
   purchaseMaalBlendedLegDescription,
   rowLegDescription,
+  salePaunchCreditLegDescription,
+  salePaunchDebitLegDescription,
+  salePaunchFeeLegDescription,
   voucherReferenceFromBillNo,
 } from './invoice-voucher-descriptions';
 
@@ -52,6 +55,48 @@ describe('invoice-voucher-descriptions', () => {
     expect(isBardanaLedgerNote('Bardana against SC-00007')).toBe(true);
     expect(isBardanaLedgerNote('Bardana 1000 kg @ Rs 2,000/maund')).toBe(true);
     expect(isBardanaLedgerNote('6000 kg @ Rs 4,275/maund')).toBe(false);
+  });
+
+  it('builds Sale Paunch credit description with jins, net weight, rate, amount, and kanta', () => {
+    expect(
+      salePaunchCreditLegDescription(
+        [
+          {
+            netWeightKg: 980,
+            upperRatePerMaund: 4200,
+            netUpperAmount: 102_900,
+            kanta: 500,
+          },
+        ],
+        { tafseel: 'Lot A', gariNo: 'G-1' },
+        'Wheat',
+      ),
+    ).toBe(
+      'Wheat 980 kg @ Rs 4,200/maund = Rs 102,900 — less kanta 500 — Tafseel: Lot A, Gari#: G-1',
+    );
+  });
+
+  it('builds Sale Paunch debit description with jins, lower net weight, rate, and amount', () => {
+    expect(
+      salePaunchDebitLegDescription(
+        [
+          {
+            lowerNetWeightKg: 990,
+            lowerRatePerMaund: 4500,
+            lowerAmount: 111_375,
+          },
+        ],
+        { gariNo: 'G-1' },
+        'Wheat',
+        111_375,
+      ),
+    ).toBe('Wheat 990 kg @ Rs 4,500/maund = Rs 111,375 — Gari#: G-1');
+  });
+
+  it('builds fee description for debit-side accounts like Bilty Kiraya', () => {
+    expect(salePaunchFeeLegDescription('Bilty Kiraya', 1_200, { gariNo: '9' }, 'Wheat')).toBe(
+      'Wheat — Bilty Kiraya Rs 1,200 — Gari#: 9',
+    );
   });
 
   describe('purchaseMaalBlendedLegDescription', () => {

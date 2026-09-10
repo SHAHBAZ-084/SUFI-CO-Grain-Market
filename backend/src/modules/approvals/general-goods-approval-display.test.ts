@@ -37,7 +37,7 @@ describe('general-goods-descriptions', () => {
 
 describe('invoiceApprovalAccounts', () => {
   it('maps purchase general product debits and party/mazduri credits', () => {
-    const { debitAccount, creditAccount } = invoiceApprovalAccounts({
+    const { debitAccount, creditAccount, debitAmount, creditAmount } = invoiceApprovalAccounts({
       type: 'PURCHASE_GENERAL',
       partyAccount: { name: 'Supplier A', code: 'P-1' },
       generalPurchaseLines: [
@@ -64,13 +64,19 @@ describe('invoiceApprovalAccounts', () => {
       ],
     });
     expect(debitAccount?.name).toContain('Urea Inv');
+    expect(debitAccount?.name).toContain('250');
     expect(debitAccount?.name).toContain('DAP Inv');
+    expect(debitAccount?.name).toContain('200');
     expect(creditAccount?.name).toContain('Supplier A');
+    expect(creditAccount?.name).toContain('400');
     expect(creditAccount?.name).toContain('General Goods Mazduri');
+    expect(creditAccount?.name).toContain('50');
+    expect(debitAmount).toBe(450);
+    expect(creditAmount).toBe(450);
   });
 
   it('maps sale general party debit and product/revenue credits', () => {
-    const { debitAccount, creditAccount } = invoiceApprovalAccounts({
+    const { debitAccount, creditAccount, debitAmount, creditAmount } = invoiceApprovalAccounts({
       type: 'SALE_GENERAL',
       salePartyAccount: { name: 'Customer B', code: 'S-1' },
       generalSaleLines: [
@@ -88,8 +94,41 @@ describe('invoiceApprovalAccounts', () => {
     });
     expect(debitAccount?.name).toBe('Customer B');
     expect(debitAccount?.code).toBe('S-1');
+    expect(debitAccount?.amount).toBe(200);
     expect(creditAccount?.name).toContain('Urea Inv');
+    expect(creditAccount?.name).toContain('80');
     expect(creditAccount?.name).toContain('General Goods Sale Revenue');
+    expect(creditAccount?.name).toContain('120');
+    expect(debitAmount).toBe(200);
+    expect(creditAmount).toBe(200);
+  });
+
+  it('aggregates Sale Paunch Maal Khata credits with netUpperAmount per account', () => {
+    const { debitAccount, creditAccount, debitAmount, creditAmount } = invoiceApprovalAccounts({
+      type: 'SALE_PAUNCH',
+      total: 70000,
+      debitAccount: { name: 'Sale Party', code: 'SP-1' },
+      salePaunchLines: [
+        {
+          netUpperAmount: 30000,
+          maalKhataAccount: { name: 'Wheat Maal Khata', code: '105001' },
+        },
+        {
+          netUpperAmount: 20000,
+          maalKhataAccount: { name: 'Wheat Maal Khata', code: '105001' },
+        },
+        {
+          netUpperAmount: 20000,
+          maalKhataAccount: { name: 'Paddy Maal Khata', code: '105002' },
+        },
+      ],
+    });
+    expect(debitAccount?.name).toBe('Sale Party');
+    expect(debitAccount?.amount).toBe(70000);
+    expect(creditAccount?.name).toContain('Wheat Maal Khata: 50,000');
+    expect(creditAccount?.name).toContain('Paddy Maal Khata: 20,000');
+    expect(creditAmount).toBe(70000);
+    expect(debitAmount).toBe(70000);
   });
 });
 

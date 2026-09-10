@@ -29,6 +29,7 @@ accountingRouter.post(
 
 accountingRouter.delete(
   '/categories/:id',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const category = await accountingService.softDeleteAccountCategory(
       parseInt(param(req.params.id), 10),
@@ -190,6 +191,7 @@ accountingRouter.patch(
 
 accountingRouter.delete(
   '/vouchers/:voucherId',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const voucher = await accountingService.cancelVoucher(
       parseInt(param(req.params.voucherId), 10),
@@ -333,6 +335,7 @@ accountingRouter.patch(
 
 accountingRouter.delete(
   '/accounts/:id',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const account = await accountingService.softDeleteAccount(parseInt(param(req.params.id), 10));
     res.json(account);

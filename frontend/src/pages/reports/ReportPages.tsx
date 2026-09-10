@@ -4,6 +4,7 @@ import { BILL_LETTERHEAD } from '../../config/billPrint';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
 import { downloadExcel, downloadPdf } from '../../lib/reportExport';
 import { useReportFinancialYear } from '../../contexts/ReportFinancialYearContext';
+import { ReportFinancialYearSelect } from '../../components/reports/ReportFinancialYearSelect';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { DateField } from '../../components/ui/DateField';
@@ -93,9 +94,12 @@ function voucherToAccount(voucher: Voucher) {
 
 export function AccountReportsPage() {
   const {
+    years,
     financialYearId,
+    setFinancialYearId,
     financialYearIdNum,
     selectedYear,
+    loading: yearsLoading,
   } = useReportFinancialYear();
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -244,7 +248,13 @@ export function AccountReportsPage() {
     >
       <Panel className="overflow-visible">
         <h2 className="mb-4 text-lg font-semibold text-textPrimary">Account Ledger</h2>
-        <div className="mb-4 grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
+        <div className="mb-4 grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] xl:items-end">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={setFinancialYearId}
+            disabled={yearsLoading}
+          />
           <div>
             <FieldLabel>Category</FieldLabel>
             <SearchSelect
@@ -363,7 +373,14 @@ export function AccountReportsPage() {
 }
 
 export function TrialBalancePage() {
-  const { financialYearIdNum, selectedYear } = useReportFinancialYear();
+  const {
+    years,
+    financialYearId,
+    setFinancialYearId,
+    financialYearIdNum,
+    selectedYear,
+    loading: yearsLoading,
+  } = useReportFinancialYear();
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getTrialBalance>> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -410,6 +427,14 @@ export function TrialBalancePage() {
       }
     >
       <Panel>
+        <div className="mb-4 max-w-sm">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={setFinancialYearId}
+            disabled={yearsLoading}
+          />
+        </div>
         {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
         {loading ? (
           <p className="text-sm text-textSecondary">Loading…</p>
@@ -451,7 +476,7 @@ export function TrialBalancePage() {
             </p>
           </>
         ) : (
-          <p className="text-sm text-textSecondary">Select a financial year on the Reports hub to load data.</p>
+          <p className="text-sm text-textSecondary">Select a financial year to load data.</p>
         )}
       </Panel>
     </PageShell>
@@ -502,7 +527,7 @@ export function SalePurchaseReportsPage() {
     const allowed = mode === 'SALE' ? saleCats : purchaseCats;
     return accounts
       .filter((a) => a.category && allowed.has(a.category.name))
-      .map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }));
+      .map((a) => ({ value: String(a.id), label: a.name }));
   }, [accounts, mode]);
 
   const typeOptions = mode === 'SALE'
@@ -694,7 +719,7 @@ export function SalePurchaseReportsPage() {
               onChange={setProductId}
               options={[
                 { value: '', label: 'All Products' },
-                ...products.map((p) => ({ value: String(p.id), label: `${p.code} — ${p.name}` })),
+                ...products.map((p) => ({ value: String(p.id), label: p.name })),
               ]}
               placeholder="All Products"
             />
@@ -895,7 +920,7 @@ export function StockReportPage() {
             <SearchSelect
               value={productId}
               onChange={setProductId}
-              options={products.map((p) => ({ value: String(p.id), label: `${p.code} — ${p.name}` }))}
+              options={products.map((p) => ({ value: String(p.id), label: p.name }))}
               placeholder="Search product…"
             />
           </div>
@@ -1073,7 +1098,14 @@ function BalanceTable({
 }
 
 export function AccountBalancePage() {
-  const { financialYearId, financialYearIdNum, selectedYear } = useReportFinancialYear();
+  const {
+    years,
+    financialYearId,
+    setFinancialYearId,
+    financialYearIdNum,
+    selectedYear,
+    loading: yearsLoading,
+  } = useReportFinancialYear();
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [datedOn, setDatedOn] = useState(todayInputValue);
   const [categoryId, setCategoryId] = useState('');
@@ -1158,7 +1190,13 @@ export function AccountBalancePage() {
       }
     >
       <Panel className="overflow-visible">
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={setFinancialYearId}
+            disabled={yearsLoading}
+          />
           <div>
             <FieldLabel>Dated On</FieldLabel>
             <DateField value={datedOn} onChange={setDatedOn} />
@@ -1221,7 +1259,14 @@ export function AccountBalancePage() {
 }
 
 export function VouchersReportPage() {
-  const { financialYearId, financialYearIdNum, selectedYear } = useReportFinancialYear();
+  const {
+    years,
+    financialYearId,
+    setFinancialYearId,
+    financialYearIdNum,
+    selectedYear,
+    loading: yearsLoading,
+  } = useReportFinancialYear();
   const [fromDate, setFromDate] = useState(monthStartInputValue);
   const [toDate, setToDate] = useState(monthEndInputValue);
   const [voucherType, setVoucherType] = useState<VoucherTypeFilter>('all');
@@ -1355,7 +1400,13 @@ export function VouchersReportPage() {
       }
     >
       <Panel>
-        <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+        <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
+          <ReportFinancialYearSelect
+            value={financialYearId}
+            years={years}
+            onChange={setFinancialYearId}
+            disabled={yearsLoading}
+          />
           <div>
             <FieldLabel>From Date</FieldLabel>
             <DateField value={fromDate} onChange={setFromDate} />

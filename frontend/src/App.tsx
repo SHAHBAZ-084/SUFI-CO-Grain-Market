@@ -16,7 +16,6 @@ import { ViewInvoicePage } from './pages/invoices/ViewInvoicePage';
 import { LoginPage } from './pages/LoginPage';
 import { BackupPage } from './pages/BackupPage';
 import { PosHomePage } from './pages/PosHomePage';
-import { ReportsHubPage } from './pages/reports/ReportsHubPage';
 import { DailyReportPage } from './pages/reports/DailyReportPage';
 import {
   AccountReportsPage,
@@ -91,7 +90,7 @@ export default function App() {
                   <Route path="/vouchers/view" element={<VoucherListPage />} />
 
                   <Route path="/reports" element={<ReportsLayout />}>
-                    <Route index element={<ReportsHubPage />} />
+                    <Route index element={<Navigate to="/reports/daily" replace />} />
                     <Route path="accounts" element={<AccountReportsPage />} />
                     <Route path="account-balance" element={<AccountBalancePage />} />
                     <Route path="vouchers" element={<VouchersReportPage />} />

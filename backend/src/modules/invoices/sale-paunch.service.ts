@@ -21,8 +21,9 @@ import { isMaalKhataCategoryName } from '../products/maal-khata';
 import { getSystemPreferences } from '../preferences/preferences.service';
 import {
   bardanaAgainstInvoiceDescription,
-  blendedLegDescription,
-  invoiceVoucherHeaderSuffix,
+  salePaunchCreditLegDescription,
+  salePaunchDebitLegDescription,
+  salePaunchFeeLegDescription,
   type InvoiceVoucherHeader,
   voucherReferenceFromBillNo,
 } from './invoice-voucher-descriptions';
@@ -137,23 +138,6 @@ async function assertSalePaunchLineAccount(tx: Prisma.TransactionClient, account
 
 type ComputedLine = SalePaunchLineInput & ReturnType<typeof computeSalePaunchRow>;
 
-function toVoucherLine(line: ComputedLine) {
-  return {
-    totalWeightKg: line.totalWeightKg,
-    ratePerMaund: line.upperRatePerMaund,
-    kanta: line.kanta,
-    upperRatePerMaund: line.upperRatePerMaund,
-    lowerRatePerMaund: line.lowerRatePerMaund,
-  };
-}
-
-function toVoucherLines(lines: ComputedLine[]) {
-  return lines.map((line) => ({
-    totalWeightKg: line.totalWeightKg,
-    ratePerMaund: line.upperRatePerMaund,
-  }));
-}
-
 function buildComputedLines(
   lines: SalePaunchLineInput[],
   prefs: { daamiPercent: number },
@@ -201,10 +185,12 @@ function buildLedgerLegs(
   biltyKirayaAmount: number,
   miscAmount: number,
   invoiceReference: string,
+  product?: string | null,
 ) {
   const legs: VoucherLeg[] = [];
   const allLines = computedLines;
   const bardanaDesc = bardanaAgainstInvoiceDescription(invoiceReference);
+  const jins = product?.trim() || null;
 
   const maalKhataByAccount = new Map<number, number>();
   for (const line of computedLines) {
@@ -221,12 +207,15 @@ function buildLedgerLegs(
       accountId,
       type: LedgerEntryType.CREDIT,
       amount,
-      description: blendedLegDescription(
+      description: salePaunchCreditLegDescription(
         rowLines.map((line) => ({
-          totalWeightKg: line.totalWeightKg,
-          ratePerMaund: line.upperRatePerMaund,
+          netWeightKg: line.netWeightKg,
+          upperRatePerMaund: line.upperRatePerMaund,
+          netUpperAmount: line.netUpperAmount,
+          kanta: line.kanta,
         })),
         header,
+        jins,
       ),
     });
   }
@@ -236,7 +225,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.commission.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.totalDammiAmount,
-      description: blendedLegDescription(toVoucherLines(allLines), header),
+      description: salePaunchFeeLegDescription('Dammi', totals.totalDammiAmount, header, jins),
     });
   }
 
@@ -280,35 +269,38 @@ function buildLedgerLegs(
   }
 
   if (taxAmount > 0) {
+    const taxDesc = salePaunchFeeLegDescription('Tax', taxAmount, header, jins);
     legs.push(
       {
         accountId: systemAccounts.taxDeduction.id,
         type: LedgerEntryType.DEBIT,
         amount: taxAmount,
-        description: `Tax${invoiceVoucherHeaderSuffix(header)}`,
+        description: taxDesc,
       },
       {
         accountId: salePartyAccountId,
         type: LedgerEntryType.CREDIT,
         amount: taxAmount,
-        description: `Tax${invoiceVoucherHeaderSuffix(header)}`,
+        description: taxDesc,
       },
     );
   }
 
   if (biltyKirayaAmount > 0) {
+    // Bilty Kiraya posts Dr on Bilty account — keep description on that debit side.
+    const biltyDesc = salePaunchFeeLegDescription('Bilty Kiraya', biltyKirayaAmount, header, jins);
     legs.push(
       {
         accountId: systemAccounts.biltyKiraya.id,
         type: LedgerEntryType.DEBIT,
         amount: biltyKirayaAmount,
-        description: `Bilty Kiraya${invoiceVoucherHeaderSuffix(header)}`,
+        description: biltyDesc,
       },
       {
         accountId: salePartyAccountId,
         type: LedgerEntryType.CREDIT,
         amount: biltyKirayaAmount,
-        description: `Bilty Kiraya${invoiceVoucherHeaderSuffix(header)}`,
+        description: biltyDesc,
       },
     );
   }
@@ -318,7 +310,7 @@ function buildLedgerLegs(
       accountId: systemAccounts.misc.id,
       type: LedgerEntryType.CREDIT,
       amount: miscAmount,
-      description: `Misc${invoiceVoucherHeaderSuffix(header)}`,
+      description: salePaunchFeeLegDescription('Misc', miscAmount, header, jins),
     });
   }
 
@@ -327,7 +319,16 @@ function buildLedgerLegs(
       accountId: salePartyAccountId,
       type: LedgerEntryType.DEBIT,
       amount: totals.lowerNetTotal,
-      description: blendedLegDescription(toVoucherLines(allLines), header),
+      description: salePaunchDebitLegDescription(
+        allLines.map((line) => ({
+          lowerNetWeightKg: line.lowerNetWeightKg,
+          lowerRatePerMaund: line.lowerRatePerMaund,
+          lowerAmount: line.lowerAmount,
+        })),
+        header,
+        jins,
+        totals.totalLowerAmount,
+      ),
     });
   }
 
@@ -340,7 +341,12 @@ function buildLedgerLegs(
       accountId: systemAccounts.paunchRevenue.id,
       type: revenueDiff > 0 ? LedgerEntryType.CREDIT : LedgerEntryType.DEBIT,
       amount: Math.abs(revenueDiff),
-      description: `Paunch revenue plug${invoiceVoucherHeaderSuffix(header)}`,
+      description: salePaunchFeeLegDescription(
+        'Paunch revenue plug',
+        Math.abs(revenueDiff),
+        header,
+        jins,
+      ),
     });
   }
 
@@ -390,6 +396,7 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
     };
 
     const reference = await nextReference(tx);
+    const product = data.jins?.trim() || computedLines[0]?.jins?.trim() || null;
     const { legs, totalDebits, totalCredits } = buildLedgerLegs(
       data.salePartyAccountId,
       computedLines,
@@ -401,6 +408,7 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
       biltyKirayaAmount,
       miscAmount,
       reference,
+      product,
     );
 
     if (Math.abs(totalDebits - totalCredits) > 0.01) {
@@ -436,8 +444,8 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
         salePaunchLines: {
           create: computedLines.map((line, index) => ({
             maalKhataAccountId: line.maalKhataAccountId,
-            jins: line.jins?.trim() || null,
-            qism: line.qism?.trim() || null,
+            jins: line.jins?.trim() || data.jins?.trim() || null,
+            qism: line.qism?.trim() || data.qism?.trim() || null,
             boriOrThelaMode: line.boriOrThelaMode,
             bagCount: line.bagCount,
             thelaCount: line.thelaCount ?? 0,
@@ -566,6 +574,9 @@ export async function approvePendingSalePaunchInvoice(
     biltyKirayaAmount,
     miscAmount,
     invoice.reference,
+    invoice.jins?.trim()
+      || invoice.salePaunchLines[0]?.jins?.trim()
+      || null,
   );
 
   if (Math.abs(totalDebits - totalCredits) > 0.01) {

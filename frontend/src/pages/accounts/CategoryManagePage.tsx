@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { api, type AccountCategory } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 
 type Mode = 'add' | 'edit' | 'remove';
@@ -11,6 +13,8 @@ const copy: Record<Mode, { title: string; subtitle: string }> = {
 };
 
 export function CategoryManagePage({ mode }: { mode: Mode }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [name, setName] = useState('');
   const [selectedId, setSelectedId] = useState<number | ''>('');
@@ -20,6 +24,10 @@ export function CategoryManagePage({ mode }: { mode: Mode }) {
   useEffect(() => {
     api.listCategories().then(setCategories).catch(() => setCategories([]));
   }, []);
+
+  if (mode === 'remove' && !isAdmin) {
+    return <Navigate to="/accounts/categories/add" replace />;
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();

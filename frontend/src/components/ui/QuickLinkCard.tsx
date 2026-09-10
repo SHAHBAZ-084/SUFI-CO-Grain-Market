@@ -36,8 +36,16 @@ type QuickLinkVariant =
   | 'sale-paunch'
   | 'purchase-maal'
   | 'kachi-maal'
+  | 'sale-general'
+  | 'purchase-general'
   | 'view'
-  | 'report';
+  | 'report'
+  | 'report-ledger'
+  | 'report-balance'
+  | 'report-vouchers'
+  | 'report-trial'
+  | 'report-sale'
+  | 'report-stock';
 
 const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideIcon }> = {
   '/vouchers/payment': { variant: 'payment', icon: ArrowUpCircle },
@@ -48,6 +56,8 @@ const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideI
   '/invoices/sale-paunch': { variant: 'sale-paunch', icon: Scale },
   '/invoices/purchase-maal': { variant: 'purchase-maal', icon: ShoppingCart },
   '/invoices/kachi-maal': { variant: 'kachi-maal', icon: Wheat },
+  '/invoices/sale-general': { variant: 'sale-general', icon: FileText },
+  '/invoices/purchase-general': { variant: 'purchase-general', icon: ShoppingCart },
   '/invoices/view-invoice': { variant: 'view', icon: Eye },
   '/accounts/categories/add': { variant: 'view', icon: FolderPlus },
   '/accounts/categories/edit': { variant: 'view', icon: Pencil },
@@ -59,14 +69,14 @@ const QUICK_LINK_META: Record<string, { variant: QuickLinkVariant; icon: LucideI
   '/accounts/purchase-parties': { variant: 'view', icon: Truck },
   '/accounts/products/add': { variant: 'view', icon: PackagePlus },
   '/accounts/products/remove': { variant: 'view', icon: PackageMinus },
-  '/reports/accounts': { variant: 'report', icon: ScrollText },
-  '/reports/account-balance': { variant: 'report', icon: Wallet },
-  '/reports/vouchers': { variant: 'report', icon: Receipt },
+  '/reports/accounts': { variant: 'report-ledger', icon: ScrollText },
+  '/reports/account-balance': { variant: 'report-balance', icon: Wallet },
+  '/reports/vouchers': { variant: 'report-vouchers', icon: Receipt },
   '/reports/daily': { variant: 'report', icon: CalendarDays },
-  '/reports/trial-balance': { variant: 'report', icon: BarChart3 },
-  '/reports/sale-purchase': { variant: 'report', icon: TrendingUp },
-  '/reports/stock': { variant: 'report', icon: Package },
-  '/inventory/bardana': { variant: 'report', icon: Package },
+  '/reports/trial-balance': { variant: 'report-trial', icon: BarChart3 },
+  '/reports/sale-purchase': { variant: 'report-sale', icon: TrendingUp },
+  '/reports/stock': { variant: 'report-stock', icon: Package },
+  '/inventory/bardana': { variant: 'report-stock', icon: Package },
   '/system/preferences': { variant: 'view', icon: Settings },
 };
 

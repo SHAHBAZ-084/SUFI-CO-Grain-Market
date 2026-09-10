@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ProductStockMode } from '@prisma/client';
 import { z } from 'zod';
-import { requireAuth } from '../../middleware/auth';
+import { requireAdmin, requireAuth } from '../../middleware/auth';
 import { asyncHandler, param, validateBody } from '../../utils/helpers';
 import * as productsService from './products.service';
 import * as productCategories from './product-categories';
@@ -78,6 +78,7 @@ productsRouter.post(
 
 productsRouter.delete(
   '/:id',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     res.json(await productsService.removeProduct(parseInt(param(req.params.id), 10)));
   }),

@@ -6,6 +6,7 @@ import { DangerButton, FieldLabel, PageShell, Panel, PrimaryButton, SecondaryBut
 import { DateField } from '../../components/ui/DateField';
 import { FormActionFooter } from '../../components/ui/FormActionFooter';
 import { SearchSelect } from '../../components/ui/SearchSelect';
+import { useAuth } from '../../contexts/AuthContext';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useMinimizableForm } from '../../hooks/useMinimizableForm';
 import type { MinimizedFormKind } from '../../stores/minimizedFormsStore';
@@ -499,6 +500,8 @@ export function VoucherDetailCard({
   cancelling: boolean;
   updating: boolean;
 }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const isCancelled = voucher.status === 'CANCELLED';
   const isKachi = voucher.type === 'KACHI';
   const isPurchaseMaal = voucher.type === 'PURCHASE_MAAL';
@@ -577,12 +580,14 @@ export function VoucherDetailCard({
             {!isMultiLeg && !editingAmount && (
               <SecondaryButton onClick={() => setEditingAmount(true)}>Update Amount</SecondaryButton>
             )}
-            <DangerButton
-              disabled={cancelling || editingAmount}
-              onClick={onCancel}
-            >
-              {cancelling ? 'Cancelling…' : 'Cancel'}
-            </DangerButton>
+            {isAdmin ? (
+              <DangerButton
+                disabled={cancelling || editingAmount}
+                onClick={onCancel}
+              >
+                {cancelling ? 'Cancelling…' : 'Cancel'}
+              </DangerButton>
+            ) : null}
           </div>
         )}
       </div>

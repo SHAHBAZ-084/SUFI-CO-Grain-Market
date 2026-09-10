@@ -135,6 +135,108 @@ export function salePaunchRowLegDescription(
   return core + invoiceVoucherHeaderSuffix(header);
 }
 
+function formatMoneyAmount(amount: number) {
+  return Number(amount).toLocaleString('en-PK', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+export type SalePaunchCreditDescLine = {
+  netWeightKg: number;
+  upperRatePerMaund: number;
+  netUpperAmount: number;
+  kanta?: number;
+};
+
+export type SalePaunchDebitDescLine = {
+  lowerNetWeightKg: number;
+  lowerRatePerMaund: number;
+  lowerAmount: number;
+};
+
+/**
+ * Maal Khata (credit) goods text:
+ * `Wheat 980 kg @ Rs 4,200/maund = Rs 102,900 — less kanta 500 — Tafseel: …`
+ */
+export function salePaunchCreditLegDescription(
+  lines: SalePaunchCreditDescLine[],
+  header: InvoiceVoucherHeader,
+  product?: string | null,
+): string {
+  const totalNetKg = lines.reduce((sum, line) => sum + Number(line.netWeightKg), 0);
+  const totalAmount = lines.reduce((sum, line) => sum + Number(line.netUpperAmount), 0);
+  const totalKanta = lines.reduce((sum, line) => sum + Math.max(0, Number(line.kanta ?? 0)), 0);
+
+  if (totalNetKg <= 0) {
+    const suffix = invoiceVoucherHeaderSuffix(header);
+    const fallback = product?.trim() || (suffix ? suffix.replace(/^ — /, '') : '—');
+    return fallback;
+  }
+
+  let weightedRateSum = 0;
+  for (const line of lines) {
+    weightedRateSum += Number(line.netWeightKg) * Number(line.upperRatePerMaund);
+  }
+  const blendedRate = weightedRateSum / totalNetKg;
+
+  let core =
+    `${formatWeightKg(totalNetKg)} kg @ Rs ${formatRate(blendedRate)}/maund`
+    + ` = Rs ${formatMoneyAmount(totalAmount)}`;
+  if (totalKanta > 0) {
+    core += ` — less kanta ${formatMoneyAmount(totalKanta)}`;
+  }
+  const withProduct = product?.trim() ? `${product.trim()} ${core}` : core;
+  return withProduct + invoiceVoucherHeaderSuffix(header);
+}
+
+/**
+ * Sale party (debit) goods text:
+ * `Wheat 990 kg @ Rs 4,500/maund = Rs 111,375 — Tafseel: …`
+ */
+export function salePaunchDebitLegDescription(
+  lines: SalePaunchDebitDescLine[],
+  header: InvoiceVoucherHeader,
+  product?: string | null,
+  debitAmount?: number,
+): string {
+  const totalNetKg = lines.reduce((sum, line) => sum + Number(line.lowerNetWeightKg), 0);
+  const amount =
+    debitAmount != null && Number.isFinite(debitAmount)
+      ? Number(debitAmount)
+      : lines.reduce((sum, line) => sum + Number(line.lowerAmount), 0);
+
+  if (totalNetKg <= 0) {
+    const suffix = invoiceVoucherHeaderSuffix(header);
+    const fallback = product?.trim() || (suffix ? suffix.replace(/^ — /, '') : '—');
+    return fallback;
+  }
+
+  let weightedRateSum = 0;
+  for (const line of lines) {
+    weightedRateSum += Number(line.lowerNetWeightKg) * Number(line.lowerRatePerMaund);
+  }
+  const blendedRate = weightedRateSum / totalNetKg;
+
+  const core =
+    `${formatWeightKg(totalNetKg)} kg @ Rs ${formatRate(blendedRate)}/maund`
+    + ` = Rs ${formatMoneyAmount(amount)}`;
+  const withProduct = product?.trim() ? `${product.trim()} ${core}` : core;
+  return withProduct + invoiceVoucherHeaderSuffix(header);
+}
+
+/** Fee / plug legs that post to their own account (debit or credit side). */
+export function salePaunchFeeLegDescription(
+  label: string,
+  amount: number,
+  header: InvoiceVoucherHeader,
+  product?: string | null,
+): string {
+  const core = `${label} Rs ${formatMoneyAmount(amount)}`;
+  const withProduct = product?.trim() ? `${product.trim()} — ${core}` : core;
+  return withProduct + invoiceVoucherHeaderSuffix(header);
+}
+
 /** Separate bardana ledger legs — not weight/rate settlement text. */
 export function bardanaAgainstInvoiceDescription(invoiceReference: string): string {
   const ref = invoiceReference.trim();

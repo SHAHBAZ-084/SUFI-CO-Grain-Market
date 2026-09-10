@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, type Party } from '../../lib/api';
 import { formatLedgerBalance, ledgerBalanceColorClass } from '../../lib/format';
+import { useAuth } from '../../contexts/AuthContext';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
 
 function PartyPage({
@@ -16,6 +17,8 @@ function PartyPage({
   createFn: (data: Record<string, string>) => Promise<Party>;
   removeFn: (id: number) => Promise<unknown>;
 }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [parties, setParties] = useState<Party[]>([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -93,7 +96,7 @@ function PartyPage({
               <th className="py-2">Name</th>
               <th className="py-2">Phone</th>
               <th className="py-2">Balance</th>
-              <th className="py-2" />
+              {isAdmin ? <th className="py-2" /> : null}
             </tr>
           </thead>
           <tbody>
@@ -104,9 +107,11 @@ function PartyPage({
                 <td className={`py-2 tabular-nums ${ledgerBalanceColorClass(party.balance ?? 0)}`}>
                   {formatLedgerBalance(party.balance ?? 0)}
                 </td>
-                <td className="py-2 text-right">
-                  <SecondaryButton className="text-xs" onClick={() => onRemove(party.id)}>Remove</SecondaryButton>
-                </td>
+                {isAdmin ? (
+                  <td className="py-2 text-right">
+                    <SecondaryButton className="text-xs" onClick={() => onRemove(party.id)}>Remove</SecondaryButton>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
