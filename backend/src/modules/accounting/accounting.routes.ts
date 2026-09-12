@@ -144,11 +144,23 @@ accountingRouter.get(
         ? parseInt(financialYearIdParam, 10)
         : undefined;
 
+    const hasPagination = req.query.limit != null || req.query.offset != null;
+    const pagination = hasPagination
+      ? parsePagination(
+          {
+            limit: req.query.limit as string | undefined,
+            offset: req.query.offset as string | undefined,
+          },
+          { limit: 30, max: 500 },
+        )
+      : null;
+
     const report = await accountingService.getAccountBalancesAsOf({
       date,
       categoryId: Number.isFinite(categoryId) ? categoryId : undefined,
       side,
       financialYearId: Number.isFinite(financialYearId) ? financialYearId : undefined,
+      pagination,
     });
     res.json(report);
   }),
@@ -209,8 +221,19 @@ accountingRouter.get(
       financialYearIdParam && financialYearIdParam.trim() !== ''
         ? parseInt(financialYearIdParam, 10)
         : undefined;
+    const hasPagination = req.query.limit != null || req.query.offset != null;
+    const pagination = hasPagination
+      ? parsePagination(
+          {
+            limit: req.query.limit as string | undefined,
+            offset: req.query.offset as string | undefined,
+          },
+          { limit: 30, max: 500 },
+        )
+      : null;
     const trialBalance = await accountingService.getTrialBalance(
       Number.isFinite(financialYearId) ? financialYearId : undefined,
+      pagination,
     );
     res.json(trialBalance);
   }),

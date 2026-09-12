@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Account, type AccountCategory, type Voucher } from '../../lib/api';
 import { DEFAULT_BUSINESS_INFO, loadBusinessInfo } from '../../lib/businessInfo';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
@@ -17,7 +17,7 @@ type AccountBalanceResult = Awaited<ReturnType<typeof api.getAccountBalanceRepor
 type BalanceSideFilter = 'debit' | 'credit' | 'both';
 type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | 'PURCHASE_MAAL';
 
-const REPORT_PAGE_SIZE = 100;
+export const REPORT_PAGE_SIZE = 30;
 
 /** Shared on-screen letterhead used above every report results block. */
 function ReportLetterheadBlock({
@@ -51,40 +51,53 @@ function useReportBusinessInfo() {
   return businessInfo;
 }
 
-function reportPageLabel(offset: number, limit: number, total: number) {
+function reportPageLabel(offset: number, limit: number, total: number, pageCount?: number) {
   if (total <= 0) return 'No rows';
+  if (pageCount != null && pageCount > 0) {
+    const pageIndex = Math.floor(offset / Math.max(limit, 1));
+    return `Page ${pageIndex + 1} of ${pageCount} · ${total} account${total === 1 ? '' : 's'}`;
+  }
   const from = offset + 1;
   const to = Math.min(offset + limit, total);
   return `Showing ${from}–${to} of ${total}`;
 }
 
-function ReportPager(props: {
+export function ReportPager(props: {
   offset: number;
   limit: number;
   total: number;
   loading?: boolean;
   onChange: (nextOffset: number) => void;
+  /** When set (e.g. category-packed Account Balance), Next/Prev follow page boundaries. */
+  pageCount?: number;
 }) {
-  const { offset, limit, total, loading, onChange } = props;
-  if (total <= limit) {
+  const { offset, limit, total, loading, onChange, pageCount } = props;
+  const pageIndex = pageCount != null ? Math.floor(offset / Math.max(limit, 1)) : null;
+  const hasMultiplePages = pageCount != null ? pageCount > 1 : total > limit;
+  if (!hasMultiplePages) {
     return total > 0 ? (
-      <p className="text-sm text-textSecondary">{reportPageLabel(offset, limit, total)}</p>
+      <p className="text-sm text-textSecondary">{reportPageLabel(offset, limit, total, pageCount)}</p>
     ) : null;
   }
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <p className="text-sm text-textSecondary">{reportPageLabel(offset, limit, total)}</p>
+      <p className="text-sm text-textSecondary">{reportPageLabel(offset, limit, total, pageCount)}</p>
       <div className="flex gap-2">
         <SecondaryButton
           type="button"
-          disabled={loading || offset <= 0}
+          disabled={loading || offset <= 0 || (pageIndex != null && pageIndex <= 0)}
           onClick={() => onChange(Math.max(0, offset - limit))}
         >
           Previous
         </SecondaryButton>
         <SecondaryButton
           type="button"
-          disabled={loading || offset + limit >= total}
+          disabled={
+            loading
+            || (pageCount != null && pageIndex != null
+              ? pageIndex >= pageCount - 1
+              : offset + limit >= total)
+          }
           onClick={() => onChange(offset + limit)}
         >
           Next
@@ -100,17 +113,6 @@ function todayInputValue() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-}
-
-function monthStartInputValue() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
-
-function monthEndInputValue() {
-  const d = new Date();
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
 }
 
 function voucherFromAccount(voucher: Voucher) {
@@ -144,6 +146,7 @@ export function AccountReportsPage() {
   const [error, setError] = useState('');
   const [offset, setOffset] = useState(0);
   const businessInfo = useReportBusinessInfo();
+  const dateDefaultsAppliedRef = useRef(false);
 
   const filteredAccounts = useMemo(
     () => accounts.filter((a) => categoryId && String(a.categoryId) === categoryId),
@@ -161,6 +164,13 @@ export function AccountReportsPage() {
         setAccounts([]);
       });
   }, []);
+
+  useEffect(() => {
+    if (!selectedYear?.startDate || dateDefaultsAppliedRef.current) return;
+    setFromDate(selectedYear.startDate.slice(0, 10));
+    setToDate(todayInputValue());
+    dateDefaultsAppliedRef.current = true;
+  }, [selectedYear?.id, selectedYear?.startDate]);
 
   useEffect(() => {
     setLoaded(false);
@@ -221,7 +231,7 @@ export function AccountReportsPage() {
     if (!ledger) return;
     const accountName = ledger.account.name;
     const period = [fromDate, toDate].filter(Boolean).join(' to ') || 'All dates';
-    const title = `Account Ledger — ${accountName} (${period})`;
+    const title = `${accountName} (${period})`;
     const headers = ['Date', 'Voucher#', 'Ref#', 'Type', 'Description', 'Debit', 'Credit', 'Balance'];
 
     let exportRows = ledger.rows;
@@ -336,7 +346,7 @@ export function AccountReportsPage() {
             </div>
             <ReportLetterheadBlock
               businessInfo={businessInfo}
-              title={`Account Ledger — ${ledger.account.name}`}
+              title={ledger.account.name}
               subtitle={[fromDate, toDate].filter(Boolean).join(' to ') || 'All dates'}
             />
             <p className="text-sm text-textSecondary">No entries in this period</p>
@@ -359,7 +369,7 @@ export function AccountReportsPage() {
             </div>
             <ReportLetterheadBlock
               businessInfo={businessInfo}
-              title={`Account Ledger — ${ledger.account.name}`}
+              title={ledger.account.name}
               subtitle={[fromDate, toDate].filter(Boolean).join(' to ') || 'All dates'}
             />
             <div className="overflow-x-auto">
@@ -440,15 +450,17 @@ export function TrialBalancePage() {
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [offset, setOffset] = useState(0);
   const businessInfo = useReportBusinessInfo();
 
   useEffect(() => {
     setLoaded(false);
     setData(null);
     setError('');
+    setOffset(0);
   }, [financialYearId]);
 
-  async function loadTrialBalance() {
+  async function loadTrialBalance(nextOffset = 0) {
     if (financialYearIdNum == null) {
       setError('Select a financial year');
       return;
@@ -456,8 +468,13 @@ export function TrialBalancePage() {
     setLoading(true);
     setError('');
     try {
-      const result = await api.getTrialBalance({ financialYearId: financialYearIdNum });
+      const result = await api.getTrialBalance({
+        financialYearId: financialYearIdNum,
+        limit: REPORT_PAGE_SIZE,
+        offset: nextOffset,
+      });
       setData(result);
+      setOffset(result.offset);
       setLoaded(true);
       setFiltersOpen(false);
     } catch (err) {
@@ -500,7 +517,7 @@ export function TrialBalancePage() {
         onClose={() => setFiltersOpen(false)}
         footer={
           <>
-            <PrimaryButton type="button" onClick={() => void loadTrialBalance()} disabled={loading || !financialYearId}>
+            <PrimaryButton type="button" onClick={() => void loadTrialBalance(0)} disabled={loading || !financialYearId}>
               {loading ? 'Loading…' : 'Generate Report'}
             </PrimaryButton>
           </>
@@ -525,10 +542,19 @@ export function TrialBalancePage() {
           </div>
         ) : !filtersOpen && data ? (
           <>
-            <div className="mb-4 flex flex-wrap gap-2">
-              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => exportTrialBalance('pdf')}>Download PDF</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => exportTrialBalance('excel')}>Download Excel</SecondaryButton>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => exportTrialBalance('pdf')}>Download PDF</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => exportTrialBalance('excel')}>Download Excel</SecondaryButton>
+              </div>
+              <ReportPager
+                offset={offset}
+                limit={data.limit}
+                total={data.total}
+                loading={loading}
+                onChange={(next) => void loadTrialBalance(next)}
+              />
             </div>
             <ReportLetterheadBlock
               businessInfo={businessInfo}
@@ -563,7 +589,17 @@ export function TrialBalancePage() {
               <span className={ledgerCreditColorClass(data.totalCredit)}>{data.totalCredit.toFixed(2)}</span>
               {' · '}
               {data.isBalanced ? 'Balanced' : 'Out of balance'}
+              {' · '}Full period
             </p>
+            <div className="mt-3">
+              <ReportPager
+                offset={offset}
+                limit={data.limit}
+                total={data.total}
+                loading={loading}
+                onChange={(next) => void loadTrialBalance(next)}
+              />
+            </div>
           </>
         ) : null}
       </Panel>
@@ -576,10 +612,11 @@ export function SalePurchaseReportsPage() {
   type TypeFilter = 'ALL' | 'COMMISSION' | 'PAUNCH' | 'MAAL';
   type ReportResult = Awaited<ReturnType<typeof api.getSalePurchaseReport>>;
 
+  const { selectedYear } = useReportFinancialYear();
   const [mode, setMode] = useState<Mode>('SALE');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
-  const [fromDate, setFromDate] = useState(monthStartInputValue);
-  const [toDate, setToDate] = useState(monthEndInputValue);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [partyAccountId, setPartyAccountId] = useState('');
   const [productId, setProductId] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -591,6 +628,14 @@ export function SalePurchaseReportsPage() {
   const [error, setError] = useState('');
   const [offset, setOffset] = useState(0);
   const businessInfo = useReportBusinessInfo();
+  const dateDefaultsAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (!selectedYear?.startDate || dateDefaultsAppliedRef.current) return;
+    setFromDate(selectedYear.startDate.slice(0, 10));
+    setToDate(todayInputValue());
+    dateDefaultsAppliedRef.current = true;
+  }, [selectedYear?.id, selectedYear?.startDate]);
 
   useEffect(() => {
     api.listAccounts()
@@ -1187,15 +1232,19 @@ function sumAccountBalances(
 function BalanceTable({
   rows,
   groups,
+  reportGrandTotal,
 }: {
   rows?: AccountBalanceResult['accounts'];
   groups?: AccountBalanceResult['groups'];
+  /** Full-report signed balance total (period-wide). When set, used for the final total row. */
+  reportGrandTotal?: number;
 }) {
   const flatRows = rows ?? [];
   const groupList = groups ?? [];
-  const grandTotal = groups
+  const pageGrandTotal = groups
     ? groupList.reduce((sum, group) => sum + sumAccountBalances(group.accounts), 0)
     : sumAccountBalances(flatRows);
+  const grandTotal = reportGrandTotal ?? pageGrandTotal;
   const singleCategoryTotalLabel = flatRows[0]?.categoryName
     ? `${flatRows[0].categoryName} Total`
     : 'Total';
@@ -1252,7 +1301,9 @@ function BalanceTable({
 
         {!groups && flatRows.length > 0 ? (
           <tr className="border-t-2 border-border bg-surface1">
-            <td className="py-2 pr-3 font-bold text-textPrimary">{singleCategoryTotalLabel}</td>
+            <td className="py-2 pr-3 font-bold text-textPrimary">
+              {reportGrandTotal != null ? `${singleCategoryTotalLabel} (full period)` : singleCategoryTotalLabel}
+            </td>
             <td className={`py-2 text-right font-bold tabular-nums ${ledgerBalanceColorClass(grandTotal)}`}>
               {formatLedgerBalance(grandTotal)}
             </td>
@@ -1262,7 +1313,7 @@ function BalanceTable({
         {groups && groupList.length > 0 ? (
           <tr className="border-t-2 border-borderStrong bg-surface1">
             <td className="py-2.5 pr-3 font-bold uppercase tracking-wide text-textPrimary">
-              Grand Total
+              {reportGrandTotal != null ? 'Grand Total (full period)' : 'Grand Total'}
             </td>
             <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerBalanceColorClass(grandTotal)}`}>
               {formatLedgerBalance(grandTotal)}
@@ -1289,6 +1340,7 @@ export function AccountBalancePage() {
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [offset, setOffset] = useState(0);
   const businessInfo = useReportBusinessInfo();
 
   useEffect(() => {
@@ -1306,9 +1358,10 @@ export function AccountBalancePage() {
     }
     setLoaded(false);
     setReport(null);
+    setOffset(0);
   }, [selectedYear?.id, selectedYear?.status, selectedYear?.endDate]);
 
-  async function loadReport() {
+  async function loadReport(nextOffset = 0) {
     if (!datedOn) {
       setError('Select a date');
       return;
@@ -1325,8 +1378,11 @@ export function AccountBalancePage() {
         categoryId: categoryId ? Number(categoryId) : undefined,
         side,
         financialYearId: financialYearIdNum,
+        limit: REPORT_PAGE_SIZE,
+        offset: nextOffset,
       });
       setReport(result);
+      setOffset(result.offset);
       setLoaded(true);
       setFiltersOpen(false);
     } catch (err) {
@@ -1344,27 +1400,24 @@ export function AccountBalancePage() {
     const showGroupedExport = !categoryId && report.groups.length > 0;
 
     if (showGroupedExport) {
-      let grandTotal = 0;
       for (const group of report.groups) {
         rows.push([group.categoryName.toUpperCase(), '']);
         for (const row of group.accounts) {
           rows.push([row.accountName, formatLedgerBalance(row.balance)]);
         }
         const groupTotal = sumAccountBalances(group.accounts);
-        grandTotal += groupTotal;
         rows.push([`${group.categoryName} Total`, formatLedgerBalance(groupTotal)]);
       }
-      rows.push(['GRAND TOTAL', formatLedgerBalance(grandTotal)]);
+      rows.push(['GRAND TOTAL', formatLedgerBalance(report.grandBalance)]);
     } else {
       for (const row of report.accounts) {
         rows.push([row.accountName, formatLedgerBalance(row.balance)]);
       }
       if (report.accounts.length > 0) {
-        const total = sumAccountBalances(report.accounts);
         const label = report.accounts[0]?.categoryName
           ? `${report.accounts[0].categoryName} Total`
           : 'Total';
-        rows.push([label, formatLedgerBalance(total)]);
+        rows.push([label, formatLedgerBalance(report.grandBalance)]);
       }
     }
 
@@ -1395,7 +1448,7 @@ export function AccountBalancePage() {
         onClose={() => setFiltersOpen(false)}
         footer={
           <>
-            <FinancialButton type="button" onClick={loadReport} disabled={loading || !financialYearId}>
+            <FinancialButton type="button" onClick={() => void loadReport(0)} disabled={loading || !financialYearId}>
               {loading ? 'Loading…' : 'Generate Report'}
             </FinancialButton>
           </>
@@ -1456,10 +1509,20 @@ export function AccountBalancePage() {
           </>
         ) : !filtersOpen && report ? (
           <>
-            <div className="mb-4 flex flex-wrap gap-2">
-              <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => exportReport('pdf')}>Download PDF</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => exportReport('excel')}>Download Excel</SecondaryButton>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => exportReport('pdf')}>Download PDF</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => exportReport('excel')}>Download Excel</SecondaryButton>
+              </div>
+              <ReportPager
+                offset={offset}
+                limit={report.limit}
+                total={report.total}
+                pageCount={report.pageCount}
+                loading={loading}
+                onChange={(next) => void loadReport(next)}
+              />
             </div>
             <ReportLetterheadBlock
               businessInfo={businessInfo}
@@ -1467,10 +1530,20 @@ export function AccountBalancePage() {
             />
             <div className="overflow-x-auto">
               {showGrouped ? (
-                <BalanceTable groups={report.groups} />
+                <BalanceTable groups={report.groups} reportGrandTotal={report.grandBalance} />
               ) : (
-                <BalanceTable rows={report.accounts} />
+                <BalanceTable rows={report.accounts} reportGrandTotal={report.grandBalance} />
               )}
+            </div>
+            <div className="mt-3">
+              <ReportPager
+                offset={offset}
+                limit={report.limit}
+                total={report.total}
+                pageCount={report.pageCount}
+                loading={loading}
+                onChange={(next) => void loadReport(next)}
+              />
             </div>
           </>
         ) : null}
@@ -1488,11 +1561,24 @@ export function VouchersReportPage() {
     selectedYear,
     loading: yearsLoading,
   } = useReportFinancialYear();
-  const [fromDate, setFromDate] = useState(monthStartInputValue);
-  const [toDate, setToDate] = useState(monthEndInputValue);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [voucherType, setVoucherType] = useState<VoucherTypeFilter>('all');
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [listTotal, setListTotal] = useState(0);
+  const [totals, setTotals] = useState<{
+    totalAmount: number;
+    byType: {
+      PAYMENT: number;
+      RECEIPT: number;
+      JOURNAL: number;
+      KACHI: number;
+      PURCHASE_MAAL: number;
+    };
+  }>({
+    totalAmount: 0,
+    byType: { PAYMENT: 0, RECEIPT: 0, JOURNAL: 0, KACHI: 0, PURCHASE_MAAL: 0 },
+  });
   const [offset, setOffset] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(true);
@@ -1502,29 +1588,24 @@ export function VouchersReportPage() {
   const [cancelling, setCancelling] = useState(false);
   const [updating, setUpdating] = useState(false);
   const businessInfo = useReportBusinessInfo();
+  const dateDefaultsAppliedRef = useRef(false);
 
-  const totals = useMemo(() => {
-    const totalAmount = vouchers.reduce((sum, v) => sum + Number(v.amount), 0);
-    const byType = {
-      PAYMENT: 0,
-      RECEIPT: 0,
-      JOURNAL: 0,
-      KACHI: 0,
-      PURCHASE_MAAL: 0,
-    };
-    for (const v of vouchers) {
-      if (v.type in byType) {
-        byType[v.type as keyof typeof byType] += Number(v.amount);
-      }
-    }
-    return { totalAmount, byType };
-  }, [vouchers]);
+  useEffect(() => {
+    if (!selectedYear?.startDate || dateDefaultsAppliedRef.current) return;
+    setFromDate(selectedYear.startDate.slice(0, 10));
+    setToDate(todayInputValue());
+    dateDefaultsAppliedRef.current = true;
+  }, [selectedYear?.id, selectedYear?.startDate]);
 
   useEffect(() => {
     setLoaded(false);
     setVouchers([]);
     setSelected(null);
     setOffset(0);
+    setTotals({
+      totalAmount: 0,
+      byType: { PAYMENT: 0, RECEIPT: 0, JOURNAL: 0, KACHI: 0, PURCHASE_MAAL: 0 },
+    });
   }, [financialYearId]);
 
   async function loadReport(nextOffset = 0) {
@@ -1550,6 +1631,7 @@ export function VouchersReportPage() {
       });
       setVouchers(page.items);
       setListTotal(page.total);
+      setTotals(page.totals);
       setOffset(page.offset);
       setLoaded(true);
       setFiltersOpen(false);
@@ -1760,14 +1842,14 @@ export function VouchersReportPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border font-semibold">
-                    <td className="py-2" colSpan={5}>This page total</td>
+                    <td className="py-2" colSpan={5}>Full period total</td>
                     <td className="py-2 text-right tabular-nums">{formatLedgerAmount(totals.totalAmount)}</td>
                     <td className="py-2" colSpan={2} />
                   </tr>
                   {voucherType === 'all' ? (
                     <tr className="border-t border-border text-sm text-textSecondary">
                       <td className="py-2" colSpan={8}>
-                        This page — Payments: {formatLedgerAmount(totals.byType.PAYMENT)} · Receipts:{' '}
+                        Full period — Payments: {formatLedgerAmount(totals.byType.PAYMENT)} · Receipts:{' '}
                         {formatLedgerAmount(totals.byType.RECEIPT)} · Journal:{' '}
                         {formatLedgerAmount(totals.byType.JOURNAL)} · Kachi:{' '}
                         {formatLedgerAmount(totals.byType.KACHI)}

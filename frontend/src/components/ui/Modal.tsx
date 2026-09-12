@@ -1,6 +1,5 @@
 import type { ReactNode, MouseEvent } from 'react';
 import { useEffect } from 'react';
-import { Panel, SecondaryButton } from './PageShell';
 
 type ModalProps = {
   open: boolean;
@@ -8,12 +7,12 @@ type ModalProps = {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-  /** Tailwind max-width class. Default: max-w-2xl */
+  /** Tailwind max-width class. Default: max-w-md */
   maxWidthClassName?: string;
 };
 
 /**
- * Shared centered modal — same overlay treatment as the Pending Approvals edit dialog.
+ * Shared centered modal — teal header band + border matching the app nav chrome.
  */
 export function Modal({
   open,
@@ -48,19 +47,42 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`max-h-[90vh] w-full ${maxWidthClassName} overflow-y-auto`}
+        className={`max-h-[90vh] w-full ${maxWidthClassName} overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <Panel className="shadow-lg">
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-textPrimary">{title}</h2>
-            <SecondaryButton type="button" onClick={onClose}>
+        <div
+          className="flex max-h-[90vh] flex-col overflow-hidden bg-surface2 shadow-lg"
+          style={{ border: '1px solid var(--nav-bg)' }}
+        >
+          <div
+            className="flex shrink-0 items-center justify-between gap-3 px-4 py-3"
+            style={{ backgroundColor: 'var(--nav-bg)' }}
+          >
+            <h2
+              className="text-base font-semibold tracking-wide"
+              style={{ color: 'var(--nav-text-hover)' }}
+            >
+              {title}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-sm px-2.5 py-1 text-sm font-medium transition"
+              style={{
+                color: 'var(--nav-text-hover)',
+                border: '1px solid var(--nav-text-hover)',
+                background: 'transparent',
+              }}
+            >
               Close
-            </SecondaryButton>
+            </button>
           </div>
-          {children}
-          {footer ? <div className="mt-4 flex flex-wrap justify-end gap-2">{footer}</div> : null}
-        </Panel>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {children}
+            {footer ? <div className="mt-4 flex flex-wrap justify-end gap-2">{footer}</div> : null}
+          </div>
+        </div>
       </div>
     </div>
   );

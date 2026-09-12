@@ -1,28 +1,28 @@
 :root,
 [data-theme='light'] {
-  /* Brand palette — harvest bronze + logo gold #D09018 */
-  --brand: #5C4010;
-  --brand-light: #7A5614;
-  --brand-dark: #3D2A0A;
+  /* Brand palette — deep teal */
+  --brand: #0E3D3D;
+  --brand-light: #0E6B6B;
+  --brand-dark: #0A2B2B;
 
-  --surface-1: #F2EEE4;
-  --surface-2: #FFFDF8;
-  --surface-3: #EBE6DA;
+  --surface-1: #F2F4F3;
+  --surface-2: #FFFFFF;
+  --surface-3: #E9EDEC;
 
-  --text-primary: #2A1F0C;
-  --text-secondary: #5A4A2E;
-  --text-muted: #7A6A4E;
-  --border: #D4C9B0;
-  --border-strong: #5C4010;
+  --text-primary: #16302E;
+  --text-secondary: #4A5C59;
+  --text-muted: #6B7B78;
+  --border: #DDE3E2;
+  --border-strong: #0E3D3D;
 
-  --fill-accent: #C89018;
+  --fill-accent: #0E6B6B;
   --on-accent: #FFFFFF;
-  --bg-accent: #F7EFDA;
-  --text-accent: #5C4010;
+  --bg-accent: #E1F0EE;
+  --text-accent: #0E3D3D;
 
-  --fill-financial: #5C4010;
+  --fill-financial: #16302E;
   --on-financial: #FFFFFF;
-  --text-financial: #5C4010;
+  --text-financial: #16302E;
 
   --text-success: #1E5C4A;
   --text-danger: #A32D2D;
@@ -41,10 +41,10 @@
   --metric-cash-accent: #0F7A4F;
   --metric-stock-bg: #EEF3FB;
   --metric-stock-accent: #1A5FA8;
-  --metric-vouchers-bg: #F7EFDA;
-  --metric-vouchers-accent: #8A6914;
-  --metric-approvals-bg: #FFF6E8;
-  --metric-approvals-accent: #B86E00;
+  --metric-vouchers-bg: #E1F0EE;
+  --metric-vouchers-accent: #0E6B6B;
+  --metric-approvals-bg: #FDF6E9;
+  --metric-approvals-accent: #B8862E;
   --metric-approvals-pending-bg: #FDECEC;
   --metric-approvals-pending-accent: #B42318;
 
@@ -110,19 +110,19 @@
   --ql-report-stock-bg: #E7F5F5;
   --ql-report-stock-hover: #D2EBEB;
 
-  --dropdown-bg: #FFFDF8;
-  --dropdown-border: #5C4010;
+  --dropdown-bg: #FFFFFF;
+  --dropdown-border: #0E3D3D;
   --dropdown-shadow: none;
 
   --sidebar-width: 240px;
-  --nav-bg: #5C4010;
-  --nav-bg-light: #7A5614;
-  --nav-border: #3D2A0A;
-  --nav-text: #F3E9C8;
+  --nav-bg: #0E3D3D;
+  --nav-bg-light: #0E6B6B;
+  --nav-border: #0A2B2B;
+  --nav-text: #C8E8E4;
   --nav-text-hover: #FFFFFF;
-  --nav-hover-bg: rgba(208, 144, 24, 0.22);
-  --nav-active-bg: rgba(208, 144, 24, 0.34);
-  --nav-active-border: #F0C14A;
+  --nav-hover-bg: rgba(14, 107, 107, 0.28);
+  --nav-active-bg: rgba(14, 107, 107, 0.42);
+  --nav-active-border: #6FE0D0;
 
   --radius-sm: 2px;
   --radius-md: 4px;
@@ -140,28 +140,28 @@
 }
 
 [data-theme='dark'] {
-  --brand: #D09018;
-  --brand-light: #E0A830;
-  --brand-dark: #A87812;
+  --brand: #2DB8A8;
+  --brand-light: #4ECDC4;
+  --brand-dark: #1A8A7E;
 
-  --surface-1: #221C12;
-  --surface-2: #2A2316;
-  --surface-3: #16120A;
+  --surface-1: #1A1F1E;
+  --surface-2: #222928;
+  --surface-3: #121616;
 
-  --text-primary: #F5ECD4;
-  --text-secondary: #C8B890;
-  --text-muted: #9A8A68;
-  --border: #4A3E28;
-  --border-strong: #D09018;
+  --text-primary: #E8F2F0;
+  --text-secondary: #A8BBB7;
+  --text-muted: #7A8C88;
+  --border: #3A4543;
+  --border-strong: #2DB8A8;
 
-  --fill-accent: #D09018;
-  --on-accent: #1A1408;
-  --bg-accent: #3A3018;
-  --text-accent: #F0C14A;
+  --fill-accent: #2DB8A8;
+  --on-accent: #0A1A18;
+  --bg-accent: #1A2E2C;
+  --text-accent: #6FE0D0;
 
-  --fill-financial: #C89018;
-  --on-financial: #1A1408;
-  --text-financial: #F0C14A;
+  --fill-financial: #2DB8A8;
+  --on-financial: #0A1A18;
+  --text-financial: #6FE0D0;
 
   --text-success: #6BC4A8;
   --text-danger: #E88888;
@@ -180,10 +180,10 @@
   --metric-cash-accent: #6BC4A8;
   --metric-stock-bg: #1A2438;
   --metric-stock-accent: #7EB2E8;
-  --metric-vouchers-bg: #2A2418;
-  --metric-vouchers-accent: #E0A830;
+  --metric-vouchers-bg: #1A2E2C;
+  --metric-vouchers-accent: #2DB8A8;
   --metric-approvals-bg: #2A2218;
-  --metric-approvals-accent: #E8A855;
+  --metric-approvals-accent: #E0B05A;
   --metric-approvals-pending-bg: #3A2224;
   --metric-approvals-pending-accent: #E88888;
 
@@ -248,16 +248,16 @@
   --ql-report-stock-bg: #1A2A2A;
   --ql-report-stock-hover: #223636;
 
-  --dropdown-bg: #2A2316;
-  --dropdown-border: #D09018;
+  --dropdown-bg: #222928;
+  --dropdown-border: #2DB8A8;
   --dropdown-shadow: none;
 
-  --nav-bg: #2A2010;
-  --nav-bg-light: #3D3018;
-  --nav-border: #1A1408;
-  --nav-text: #E8D9A8;
+  --nav-bg: #0A2B2B;
+  --nav-bg-light: #0E3D3D;
+  --nav-border: #061818;
+  --nav-text: #C8E8E4;
   --nav-text-hover: #FFFFFF;
-  --nav-hover-bg: rgba(208, 144, 24, 0.18);
-  --nav-active-bg: rgba(208, 144, 24, 0.28);
-  --nav-active-border: #F0C14A;
+  --nav-hover-bg: rgba(45, 184, 168, 0.18);
+  --nav-active-bg: rgba(45, 184, 168, 0.28);
+  --nav-active-border: #6FE0D0;
 }

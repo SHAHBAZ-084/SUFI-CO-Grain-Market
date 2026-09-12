@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DateField } from '../../components/ui/DateField';
 import { Modal } from '../../components/ui/Modal';
@@ -12,6 +12,7 @@ import {
 } from '../../components/ui/PageShell';
 import { api } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
+import { REPORT_PAGE_SIZE, ReportPager } from './ReportPages';
 
 type DailyFilterKey =
   | 'all'
@@ -26,7 +27,8 @@ type DailyFilterKey =
   | 'SALE_GENERAL'
   | 'GENERAL_TRADE';
 
-type DailyRow = Awaited<ReturnType<typeof api.getDailyReport>>['rows'][number];
+type DailyReportResult = Awaited<ReturnType<typeof api.getDailyReport>>;
+type DailyRow = DailyReportResult['rows'][number];
 
 const KIND_FILTERS: Array<{ value: DailyFilterKey; label: string }> = [
   { value: 'all', label: 'All' },
@@ -76,13 +78,17 @@ function viewHref(row: DailyRow): string | null {
 export function DailyReportPage() {
   const [date, setDate] = useState(todayInputValue);
   const [rows, setRows] = useState<DailyRow[]>([]);
+  const [kindCounts, setKindCounts] = useState<Partial<Record<string, number>>>({});
+  const [filteredTotals, setFilteredTotals] = useState({ count: 0, amount: 0 });
+  const [listTotal, setListTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [error, setError] = useState('');
   const [kindFilter, setKindFilter] = useState<DailyFilterKey>('all');
 
-  async function loadReport(day: string) {
+  async function loadReport(day: string, nextFilter: DailyFilterKey = kindFilter, nextOffset = 0) {
     if (!day) {
       setError('Select a date');
       return;
@@ -90,10 +96,19 @@ export function DailyReportPage() {
     setLoading(true);
     setError('');
     try {
-      const result = await api.getDailyReport({ date: day });
+      const result = await api.getDailyReport({
+        date: day,
+        filterKey: nextFilter,
+        limit: REPORT_PAGE_SIZE,
+        offset: nextOffset,
+      });
       setRows(result.rows);
+      setKindCounts(result.kindCounts);
+      setFilteredTotals(result.filteredTotals);
+      setListTotal(result.total);
+      setOffset(result.offset);
+      setKindFilter(nextFilter);
       setLoaded(true);
-      setKindFilter('all');
       setFiltersOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load daily report');
@@ -105,21 +120,16 @@ export function DailyReportPage() {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    void loadReport(date);
+    void loadReport(date, 'all', 0);
   }
 
-  const filteredRows = useMemo(
-    () => (kindFilter === 'all' ? rows : rows.filter((row) => row.filterKey === kindFilter)),
-    [rows, kindFilter],
-  );
+  function onKindChange(next: DailyFilterKey) {
+    void loadReport(date, next, 0);
+  }
 
-  const filteredTotals = useMemo(
-    () => ({
-      count: filteredRows.length,
-      amount: filteredRows.reduce((sum, row) => sum + row.amount, 0),
-    }),
-    [filteredRows],
-  );
+  const allCount = KIND_FILTERS
+    .filter((f) => f.value !== 'all')
+    .reduce((sum, f) => sum + (kindCounts[f.value] ?? 0), 0);
 
   return (
     <PageShell
@@ -161,19 +171,19 @@ export function DailyReportPage() {
               key={filter.value}
               type="button"
               className={kindFilter === filter.value ? 'ring-2 ring-accent' : ''}
-              onClick={() => setKindFilter(filter.value)}
+              onClick={() => onKindChange(filter.value)}
               disabled={loading}
             >
               {filter.label}
               {filter.value === 'all'
-                ? ` (${rows.length})`
-                : ` (${rows.filter((row) => row.filterKey === filter.value).length})`}
+                ? ` (${allCount})`
+                : ` (${kindCounts[filter.value] ?? 0})`}
             </SecondaryButton>
           ))}
           <SecondaryButton
             type="button"
             className="ml-auto"
-            onClick={() => void loadReport(date)}
+            onClick={() => void loadReport(date, kindFilter, offset)}
             disabled={loading}
           >
             Refresh
@@ -182,10 +192,19 @@ export function DailyReportPage() {
       ) : null}
 
       {!filtersOpen && loaded && !error ? (
-        <p className="mb-3 text-sm text-textSecondary">
-          {filteredTotals.count} record{filteredTotals.count === 1 ? '' : 's'} · Total{' '}
-          {formatLedgerAmount(filteredTotals.amount)}
-        </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-textSecondary">
+            {filteredTotals.count} record{filteredTotals.count === 1 ? '' : 's'} · Full period total{' '}
+            {formatLedgerAmount(filteredTotals.amount)}
+          </p>
+          <ReportPager
+            offset={offset}
+            limit={REPORT_PAGE_SIZE}
+            total={listTotal}
+            loading={loading}
+            onChange={(next) => void loadReport(date, kindFilter, next)}
+          />
+        </div>
       ) : null}
 
       <Panel className="p-0">
@@ -194,46 +213,57 @@ export function DailyReportPage() {
             <p className="text-sm text-textSecondary">Select a date to generate the daily report.</p>
             <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
           </div>
-        ) : !filtersOpen && filteredRows.length === 0 ? (
+        ) : !filtersOpen && rows.length === 0 ? (
           <p className="p-4 text-sm text-textMuted">No posted work for this date.</p>
         ) : !filtersOpen ? (
-          <LegacyTable className="border-0">
-            <thead>
-              <tr>
-                <th>Kind</th>
-                <th>Type</th>
-                <th>Reference</th>
-                <th>Debit Account</th>
-                <th>Credit Account</th>
-                <th className="text-right">Amount</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row) => {
-                const href = viewHref(row);
-                return (
-                  <tr key={`${row.kind}-${row.id}`}>
-                    <td>{row.kind === 'voucher' ? 'Voucher' : 'Invoice'}</td>
-                    <td>{row.typeLabel}</td>
-                    <td>{row.reference}</td>
-                    <td>{accountCellLabel(row.debitAccount)}</td>
-                    <td>{accountCellLabel(row.creditAccount)}</td>
-                    <td className="text-right tabular-nums">{formatLedgerAmount(row.amount)}</td>
-                    <td className="text-right">
-                      {href ? (
-                        <Link to={href} className="text-sm font-medium text-financial hover:underline">
-                          View
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </LegacyTable>
+          <>
+            <LegacyTable className="border-0">
+              <thead>
+                <tr>
+                  <th>Kind</th>
+                  <th>Type</th>
+                  <th>Reference</th>
+                  <th>Debit Account</th>
+                  <th>Credit Account</th>
+                  <th className="text-right">Amount</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const href = viewHref(row);
+                  return (
+                    <tr key={`${row.kind}-${row.id}`}>
+                      <td>{row.kind === 'voucher' ? 'Voucher' : 'Invoice'}</td>
+                      <td>{row.typeLabel}</td>
+                      <td>{row.reference}</td>
+                      <td>{accountCellLabel(row.debitAccount)}</td>
+                      <td>{accountCellLabel(row.creditAccount)}</td>
+                      <td className="text-right tabular-nums">{formatLedgerAmount(row.amount)}</td>
+                      <td className="text-right">
+                        {href ? (
+                          <Link to={href} className="text-sm font-medium text-financial hover:underline">
+                            View
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </LegacyTable>
+            <div className="border-t border-border p-3">
+              <ReportPager
+                offset={offset}
+                limit={REPORT_PAGE_SIZE}
+                total={listTotal}
+                loading={loading}
+                onChange={(next) => void loadReport(date, kindFilter, next)}
+              />
+            </div>
+          </>
         ) : null}
       </Panel>
     </PageShell>

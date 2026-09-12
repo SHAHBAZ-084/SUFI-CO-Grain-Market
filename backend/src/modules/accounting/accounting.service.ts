@@ -2561,7 +2561,20 @@ export async function listVouchers(
     financialYearId?: number;
   },
   pagination?: { limit: number; offset: number },
-): Promise<PaginatedResult<Awaited<ReturnType<typeof fetchVoucherListPage>>[number]>> {
+): Promise<
+  PaginatedResult<Awaited<ReturnType<typeof fetchVoucherListPage>>[number]> & {
+    totals: {
+      totalAmount: number;
+      byType: {
+        PAYMENT: number;
+        RECEIPT: number;
+        JOURNAL: number;
+        KACHI: number;
+        PURCHASE_MAAL: number;
+      };
+    };
+  }
+> {
   let financialYearId = filters?.financialYearId;
   if (financialYearId == null) {
     try {
@@ -2596,12 +2609,39 @@ export async function listVouchers(
   const limit = pagination?.limit ?? 200;
   const offset = pagination?.offset ?? 0;
 
-  const [items, total] = await Promise.all([
+  const [items, total, grouped] = await Promise.all([
     fetchVoucherListPage(where, limit, offset),
     prisma.voucher.count({ where }),
+    prisma.voucher.groupBy({
+      by: ['type'],
+      where,
+      _sum: { amount: true },
+    }),
   ]);
 
-  return { items, total, limit, offset };
+  const byType = {
+    PAYMENT: 0,
+    RECEIPT: 0,
+    JOURNAL: 0,
+    KACHI: 0,
+    PURCHASE_MAAL: 0,
+  };
+  let totalAmount = 0;
+  for (const row of grouped) {
+    const amount = Number(row._sum.amount ?? 0);
+    totalAmount += amount;
+    if (row.type in byType) {
+      byType[row.type as keyof typeof byType] = amount;
+    }
+  }
+
+  return {
+    items,
+    total,
+    limit,
+    offset,
+    totals: { totalAmount, byType },
+  };
 }
 
 function fetchVoucherListPage(
@@ -2775,6 +2815,7 @@ export async function getAccountBalancesAsOf(params: {
   categoryId?: number;
   side?: 'debit' | 'credit' | 'both';
   financialYearId?: number;
+  pagination?: { limit: number; offset: number } | null;
 }) {
   const side = params.side ?? 'both';
   const asOf = parseDateEnd(params.date);
@@ -2899,19 +2940,100 @@ export async function getAccountBalancesAsOf(params: {
   const groups = Array.from(groupsMap.values());
   const totalDebit = rows.reduce((sum, row) => sum + row.debit, 0);
   const totalCredit = rows.reduce((sum, row) => sum + row.credit, 0);
+  const grandBalance = rows.reduce((sum, row) => sum + row.balance, 0);
+
+  const pagination = params.pagination ?? null;
+  if (!pagination) {
+    return {
+      date: params.date,
+      side,
+      categoryId: params.categoryId ?? null,
+      accounts: rows,
+      groups,
+      totalDebit,
+      totalCredit,
+      grandBalance,
+      total: rows.length,
+      limit: rows.length,
+      offset: 0,
+      pageCount: 1,
+    };
+  }
+
+  const { limit, offset } = pagination;
+
+  // Single-category (or flat) view: simple account slice.
+  if (params.categoryId != null || groups.length <= 1) {
+    const pageAccounts = rows.slice(offset, offset + limit);
+    const pageGroups = groups
+      .map((group) => ({
+        ...group,
+        accounts: group.accounts.filter((a) =>
+          pageAccounts.some((p) => p.accountId === a.accountId),
+        ),
+      }))
+      .filter((g) => g.accounts.length > 0);
+    const pageCount = rows.length === 0 ? 0 : Math.ceil(rows.length / limit);
+    return {
+      date: params.date,
+      side,
+      categoryId: params.categoryId ?? null,
+      accounts: pageAccounts,
+      groups: pageGroups,
+      totalDebit,
+      totalCredit,
+      grandBalance,
+      total: rows.length,
+      limit,
+      offset,
+      pageCount,
+    };
+  }
+
+  // All Groups: pack whole categories into pages (~limit accounts), never split a category.
+  const pages: typeof groups[] = [];
+  let current: typeof groups = [];
+  let currentCount = 0;
+  for (const group of groups) {
+    const n = group.accounts.length;
+    if (currentCount > 0 && currentCount + n > limit) {
+      pages.push(current);
+      current = [];
+      currentCount = 0;
+    }
+    current.push(group);
+    currentCount += n;
+  }
+  if (current.length) pages.push(current);
+
+  const pageCount = pages.length;
+  const pageIndex = Math.min(
+    Math.floor(offset / limit),
+    Math.max(pageCount - 1, 0),
+  );
+  const pageGroups = pageCount === 0 ? [] : (pages[pageIndex] ?? []);
+  const pageAccounts = pageGroups.flatMap((g) => g.accounts);
 
   return {
     date: params.date,
     side,
     categoryId: params.categoryId ?? null,
-    accounts: rows,
-    groups,
+    accounts: pageAccounts,
+    groups: pageGroups,
     totalDebit,
     totalCredit,
+    grandBalance,
+    total: rows.length,
+    limit,
+    offset: pageIndex * limit,
+    pageCount,
   };
 }
 
-export async function getTrialBalance(financialYearId?: number) {
+export async function getTrialBalance(
+  financialYearId?: number,
+  pagination?: { limit: number; offset: number } | null,
+) {
   let yearId = financialYearId;
   let activeId: number | null = null;
   try {
@@ -2953,9 +3075,15 @@ export async function getTrialBalance(financialYearId?: number) {
 
     const totalDebit = mapped.reduce((sum, a) => sum + a.debit, 0);
     const totalCredit = mapped.reduce((sum, a) => sum + a.credit, 0);
-    const accounts = mapped
+    const accountsAll = mapped
       .filter((a) => !a.isHidden)
       .map(({ isHidden: _hidden, ...row }) => row);
+
+    const limit = pagination?.limit ?? accountsAll.length;
+    const offset = pagination?.offset ?? 0;
+    const accounts = pagination
+      ? accountsAll.slice(offset, offset + limit)
+      : accountsAll;
 
     return {
       accounts,
@@ -2964,6 +3092,9 @@ export async function getTrialBalance(financialYearId?: number) {
       isBalanced: isTrialBalanceBalanced(totalDebit, totalCredit),
       financialYearId: yearId,
       financialYearLabel: year.label,
+      total: accountsAll.length,
+      limit: pagination ? limit : accountsAll.length,
+      offset: pagination ? offset : 0,
     };
   }
 
@@ -2992,9 +3123,15 @@ export async function getTrialBalance(financialYearId?: number) {
   const totalDebit = mapped.reduce((s, a) => s + a.debit, 0);
   const totalCredit = mapped.reduce((s, a) => s + a.credit, 0);
 
-  const accounts = mapped
+  const accountsAll = mapped
     .filter((a) => !a.isHidden)
     .map(({ isHidden: _hidden, ...row }) => row);
+
+  const limit = pagination?.limit ?? accountsAll.length;
+  const offset = pagination?.offset ?? 0;
+  const accounts = pagination
+    ? accountsAll.slice(offset, offset + limit)
+    : accountsAll;
 
   return {
     accounts,
@@ -3003,6 +3140,9 @@ export async function getTrialBalance(financialYearId?: number) {
     isBalanced: isTrialBalanceBalanced(totalDebit, totalCredit),
     financialYearId: yearId,
     financialYearLabel: year.label,
+    total: accountsAll.length,
+    limit: pagination ? limit : accountsAll.length,
+    offset: pagination ? offset : 0,
   };
 }
 

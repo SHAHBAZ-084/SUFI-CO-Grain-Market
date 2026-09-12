@@ -69,6 +69,15 @@ export type DailyReportResult = {
     count: number;
     amount: number;
   };
+  /** Totals after optional kind filter, across the full day (not just the page). */
+  filteredTotals: {
+    count: number;
+    amount: number;
+  };
+  kindCounts: Partial<Record<DailyReportFilterKey, number>>;
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 function parseDay(dateStr: string, end: boolean): Date {
@@ -123,7 +132,13 @@ function shortInvoiceTypeLabel(type: InvoiceType): string {
   }
 }
 
-export async function getDailyReport(date: string): Promise<DailyReportResult> {
+export async function getDailyReport(
+  date: string,
+  options?: {
+    filterKey?: DailyReportFilterKey;
+    pagination?: { limit: number; offset: number } | null;
+  },
+): Promise<DailyReportResult> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new AppError(400, 'date must be YYYY-MM-DD');
   }
@@ -226,16 +241,47 @@ export async function getDailyReport(date: string): Promise<DailyReportResult> {
     };
   });
 
-  const rows = [...voucherRows, ...invoiceRows].sort((a, b) => {
+  const allRows = [...voucherRows, ...invoiceRows].sort((a, b) => {
     const typeCmp = a.typeLabel.localeCompare(b.typeLabel);
     if (typeCmp !== 0) return typeCmp;
     return a.reference.localeCompare(b.reference, undefined, { numeric: true });
   });
 
+  const kindCounts: Partial<Record<DailyReportFilterKey, number>> = {};
+  for (const row of allRows) {
+    kindCounts[row.filterKey] = (kindCounts[row.filterKey] ?? 0) + 1;
+  }
+
   const totals = {
-    count: rows.length,
-    amount: rows.reduce((sum, row) => sum + row.amount, 0),
+    count: allRows.length,
+    amount: allRows.reduce((sum, row) => sum + row.amount, 0),
   };
 
-  return { date, rows, totals };
+  const filterKey = options?.filterKey;
+  const filteredRows = filterKey
+    ? allRows.filter((row) => row.filterKey === filterKey)
+    : allRows;
+
+  const filteredTotals = {
+    count: filteredRows.length,
+    amount: filteredRows.reduce((sum, row) => sum + row.amount, 0),
+  };
+
+  const pagination = options?.pagination ?? null;
+  const limit = pagination?.limit ?? filteredRows.length;
+  const offset = pagination?.offset ?? 0;
+  const rows = pagination
+    ? filteredRows.slice(offset, offset + limit)
+    : filteredRows;
+
+  return {
+    date,
+    rows,
+    totals,
+    filteredTotals,
+    kindCounts,
+    total: filteredRows.length,
+    limit: pagination ? limit : filteredRows.length,
+    offset: pagination ? offset : 0,
+  };
 }

@@ -689,7 +689,20 @@ export const api = {
     if (params?.limit != null) query.set('limit', String(params.limit));
     if (params?.offset != null) query.set('offset', String(params.offset));
     const suffix = query.toString() ? `?${query}` : '';
-    return request<Paginated<Voucher>>(`/api/accounting/vouchers${suffix}`);
+    return request<
+      Paginated<Voucher> & {
+        totals: {
+          totalAmount: number;
+          byType: {
+            PAYMENT: number;
+            RECEIPT: number;
+            JOURNAL: number;
+            KACHI: number;
+            PURCHASE_MAAL: number;
+          };
+        };
+      }
+    >(`/api/accounting/vouchers${suffix}`);
   },
 
   verifyDatabaseIntegrity() {
@@ -886,9 +899,15 @@ export const api = {
     });
   },
 
-  getTrialBalance(params?: { financialYearId?: number }) {
+  getTrialBalance(params?: {
+    financialYearId?: number;
+    limit?: number;
+    offset?: number;
+  }) {
     const query = new URLSearchParams();
     if (params?.financialYearId != null) query.set('financialYearId', String(params.financialYearId));
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
     const suffix = query.toString() ? `?${query}` : '';
     return request<{
       accounts: { accountName: string; debit: number; credit: number }[];
@@ -897,6 +916,9 @@ export const api = {
       isBalanced: boolean;
       financialYearId?: number;
       financialYearLabel?: string;
+      total: number;
+      limit: number;
+      offset: number;
     }>(`/api/accounting/trial-balance${suffix}`);
   },
 
@@ -905,10 +927,14 @@ export const api = {
     categoryId?: number;
     side?: 'debit' | 'credit' | 'both';
     financialYearId?: number;
+    limit?: number;
+    offset?: number;
   }) {
     const query = new URLSearchParams({ date: params.date, side: params.side ?? 'both' });
     if (params.categoryId != null) query.set('categoryId', String(params.categoryId));
     if (params.financialYearId != null) query.set('financialYearId', String(params.financialYearId));
+    if (params.limit != null) query.set('limit', String(params.limit));
+    if (params.offset != null) query.set('offset', String(params.offset));
     return request<{
       date: string;
       side: 'debit' | 'credit' | 'both';
@@ -939,6 +965,11 @@ export const api = {
       }[];
       totalDebit: number;
       totalCredit: number;
+      grandBalance: number;
+      total: number;
+      limit: number;
+      offset: number;
+      pageCount: number;
     }>(`/api/accounting/reports/account-balance?${query.toString()}`);
   },
 
@@ -1016,8 +1047,16 @@ export const api = {
     }>(`/api/stock/report?${query.toString()}`);
   },
 
-  getDailyReport(params: { date: string }) {
+  getDailyReport(params: {
+    date: string;
+    filterKey?: string;
+    limit?: number;
+    offset?: number;
+  }) {
     const query = new URLSearchParams({ date: params.date });
+    if (params.filterKey && params.filterKey !== 'all') query.set('filterKey', params.filterKey);
+    if (params.limit != null) query.set('limit', String(params.limit));
+    if (params.offset != null) query.set('offset', String(params.offset));
     return request<{
       date: string;
       rows: Array<{
@@ -1047,6 +1086,11 @@ export const api = {
         invoiceReference?: string;
       }>;
       totals: { count: number; amount: number };
+      filteredTotals: { count: number; amount: number };
+      kindCounts: Partial<Record<string, number>>;
+      total: number;
+      limit: number;
+      offset: number;
     }>(`/api/reports/daily?${query.toString()}`);
   },
 

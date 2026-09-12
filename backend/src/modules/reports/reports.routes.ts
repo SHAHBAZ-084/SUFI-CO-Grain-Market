@@ -17,7 +17,27 @@ reportsRouter.get(
       res.status(400).json({ error: 'date is required (YYYY-MM-DD)' });
       return;
     }
-    res.json(await dailyReport.getDailyReport(date));
+    const filterKeyRaw = String(req.query.filterKey ?? '').trim();
+    const filterKey =
+      filterKeyRaw && filterKeyRaw !== 'all'
+        ? (filterKeyRaw as dailyReport.DailyReportFilterKey)
+        : undefined;
+    const hasPagination = req.query.limit != null || req.query.offset != null;
+    const pagination = hasPagination
+      ? parsePagination(
+          {
+            limit: req.query.limit as string | undefined,
+            offset: req.query.offset as string | undefined,
+          },
+          { limit: 30, max: 500 },
+        )
+      : null;
+    res.json(
+      await dailyReport.getDailyReport(date, {
+        filterKey,
+        pagination,
+      }),
+    );
   }),
 );
 

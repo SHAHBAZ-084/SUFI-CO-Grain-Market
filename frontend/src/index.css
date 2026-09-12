@@ -16,7 +16,7 @@
 
     background-color: var(--surface-3, #E3E3E8);
 
-    color: var(--text-primary, #2A1F0C);
+    color: var(--text-primary, #16302E);
 
   }
 
@@ -30,7 +30,7 @@
 
     background-color: var(--surface-3, #E3E3E8);
 
-    color: var(--text-primary, #2A1F0C);
+    color: var(--text-primary, #16302E);
 
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 
@@ -1068,9 +1068,9 @@
 
   .btn-primary:hover:not(:disabled) {
 
-    background-color: var(--nav-bg-light, #7A5614);
+    background-color: var(--nav-bg-light, #0E6B6B);
 
-    border-color: var(--nav-bg-light, #7A5614);
+    border-color: var(--nav-bg-light, #0E6B6B);
 
   }
 
@@ -1108,7 +1108,7 @@
 
   .btn-financial:hover:not(:disabled) {
 
-    background-color: var(--nav-bg-light, #7A5614);
+    background-color: var(--nav-bg-light, #0E6B6B);
 
   }
 
