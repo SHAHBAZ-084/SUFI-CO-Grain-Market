@@ -196,6 +196,7 @@ export function SystemPreferencesPage() {
       payload.phone = form.phone.trim();
       payload.mobile = form.mobile?.trim() || null;
       payload.email = form.email?.trim() || null;
+      payload.address = form.address?.trim() || null;
       payload.ntnNumber = form.ntnNumber?.trim() || null;
       const updated = await api.updateSystemPreferences(payload);
       const { updatedAt: _, ...rest } = updated;
