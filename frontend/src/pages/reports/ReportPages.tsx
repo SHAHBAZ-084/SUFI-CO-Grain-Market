@@ -1178,6 +1178,12 @@ export function StockReportPage() {
 
 
 
+function sumAccountBalances(
+  accounts: { balance: number }[],
+): number {
+  return accounts.reduce((sum, row) => sum + Number(row.balance), 0);
+}
+
 function BalanceTable({
   rows,
   groups,
@@ -1185,6 +1191,15 @@ function BalanceTable({
   rows?: AccountBalanceResult['accounts'];
   groups?: AccountBalanceResult['groups'];
 }) {
+  const flatRows = rows ?? [];
+  const groupList = groups ?? [];
+  const grandTotal = groups
+    ? groupList.reduce((sum, group) => sum + sumAccountBalances(group.accounts), 0)
+    : sumAccountBalances(flatRows);
+  const singleCategoryTotalLabel = flatRows[0]?.categoryName
+    ? `${flatRows[0].categoryName} Total`
+    : 'Total';
+
   return (
     <table className="w-full text-left text-sm">
       <thead>
@@ -1195,27 +1210,38 @@ function BalanceTable({
       </thead>
       <tbody>
         {groups
-          ? groups.map((group) => (
-              <Fragment key={group.categoryId}>
-                <tr className="border-b border-border bg-surface1">
-                  <td
-                    colSpan={2}
-                    className="py-2 pr-3 text-xs font-semibold uppercase tracking-wide text-textMuted"
-                  >
-                    {group.categoryName}
-                  </td>
-                </tr>
-                {group.accounts.map((row) => (
-                  <tr key={row.accountId} className="border-b border-border">
-                    <td className="py-2 pr-3">{row.accountName}</td>
-                    <td className={`py-2 text-right font-medium tabular-nums ${ledgerBalanceColorClass(row.balance)}`}>
-                      {formatLedgerBalance(row.balance)}
+          ? groupList.map((group) => {
+              const groupTotal = sumAccountBalances(group.accounts);
+              return (
+                <Fragment key={group.categoryId}>
+                  <tr className="border-b border-border bg-surface1">
+                    <td
+                      colSpan={2}
+                      className="py-2 pr-3 text-xs font-semibold uppercase tracking-wide text-textMuted"
+                    >
+                      {group.categoryName}
                     </td>
                   </tr>
-                ))}
-              </Fragment>
-            ))
-          : (rows ?? []).map((row) => (
+                  {group.accounts.map((row) => (
+                    <tr key={row.accountId} className="border-b border-border">
+                      <td className="py-2 pr-3">{row.accountName}</td>
+                      <td className={`py-2 text-right font-medium tabular-nums ${ledgerBalanceColorClass(row.balance)}`}>
+                        {formatLedgerBalance(row.balance)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-border bg-surface1">
+                    <td className="py-2 pr-3 font-bold text-textPrimary">
+                      {group.categoryName} Total
+                    </td>
+                    <td className={`py-2 text-right font-bold tabular-nums ${ledgerBalanceColorClass(groupTotal)}`}>
+                      {formatLedgerBalance(groupTotal)}
+                    </td>
+                  </tr>
+                </Fragment>
+              );
+            })
+          : flatRows.map((row) => (
               <tr key={row.accountId} className="border-b border-border">
                 <td className="py-2 pr-3">{row.accountName}</td>
                 <td className={`py-2 text-right font-medium tabular-nums ${ledgerBalanceColorClass(row.balance)}`}>
@@ -1223,6 +1249,26 @@ function BalanceTable({
                 </td>
               </tr>
             ))}
+
+        {!groups && flatRows.length > 0 ? (
+          <tr className="border-t-2 border-border bg-surface1">
+            <td className="py-2 pr-3 font-bold text-textPrimary">{singleCategoryTotalLabel}</td>
+            <td className={`py-2 text-right font-bold tabular-nums ${ledgerBalanceColorClass(grandTotal)}`}>
+              {formatLedgerBalance(grandTotal)}
+            </td>
+          </tr>
+        ) : null}
+
+        {groups && groupList.length > 0 ? (
+          <tr className="border-t-2 border-borderStrong bg-surface1">
+            <td className="py-2.5 pr-3 font-bold uppercase tracking-wide text-textPrimary">
+              Grand Total
+            </td>
+            <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerBalanceColorClass(grandTotal)}`}>
+              {formatLedgerBalance(grandTotal)}
+            </td>
+          </tr>
+        ) : null}
       </tbody>
     </table>
   );
@@ -1294,10 +1340,34 @@ export function AccountBalancePage() {
   function exportReport(format: 'pdf' | 'excel') {
     if (!report) return;
     const headers = ['Account Name', 'Balance'];
-    const rows = report.accounts.map((row) => [
-      row.accountName,
-      formatLedgerBalance(row.balance),
-    ]);
+    const rows: (string | number)[][] = [];
+    const showGroupedExport = !categoryId && report.groups.length > 0;
+
+    if (showGroupedExport) {
+      let grandTotal = 0;
+      for (const group of report.groups) {
+        rows.push([group.categoryName.toUpperCase(), '']);
+        for (const row of group.accounts) {
+          rows.push([row.accountName, formatLedgerBalance(row.balance)]);
+        }
+        const groupTotal = sumAccountBalances(group.accounts);
+        grandTotal += groupTotal;
+        rows.push([`${group.categoryName} Total`, formatLedgerBalance(groupTotal)]);
+      }
+      rows.push(['GRAND TOTAL', formatLedgerBalance(grandTotal)]);
+    } else {
+      for (const row of report.accounts) {
+        rows.push([row.accountName, formatLedgerBalance(row.balance)]);
+      }
+      if (report.accounts.length > 0) {
+        const total = sumAccountBalances(report.accounts);
+        const label = report.accounts[0]?.categoryName
+          ? `${report.accounts[0].categoryName} Total`
+          : 'Total';
+        rows.push([label, formatLedgerBalance(total)]);
+      }
+    }
+
     const title = `Account Balance as of ${formatDate(datedOn)}`;
     const safeDate = datedOn.replace(/[^\d-]/g, '');
     const base = `account-balance-${safeDate}`;
