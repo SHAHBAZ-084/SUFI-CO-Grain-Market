@@ -50,7 +50,8 @@ async function ensureMigrationsTable(db: PrismaClient): Promise<void> {
 
 async function appliedMigrationNames(db: PrismaClient): Promise<Set<string>> {
   const rows = await db.$queryRawUnsafe<Array<{ migration_name: string }>>(
-    `SELECT "migration_name" FROM "_prisma_migrations" WHERE "rolled_back_at" IS NULL`,
+    `SELECT "migration_name" FROM "_prisma_migrations"
+     WHERE "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL`,
   );
   return new Set(rows.map((r) => r.migration_name));
 }
@@ -62,6 +63,21 @@ function listMigrationFolders(dir: string): string[] {
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort();
+}
+
+/** Run one SQL statement; SQLite forbids result-returning SQL via executeRaw. */
+async function runSqlStatement(db: PrismaClient, statement: string): Promise<void> {
+  try {
+    await db.$executeRawUnsafe(statement);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // e.g. bare `SELECT 1` / some PRAGMAs — must use queryRaw on SQLite.
+    if (/returned results|not allowed in SQLite/i.test(message)) {
+      await db.$queryRawUnsafe(statement);
+      return;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -115,7 +131,7 @@ export async function applyPendingSqlMigrations(db: PrismaClient): Promise<void>
 
     try {
       for (const statement of statements) {
-        await db.$executeRawUnsafe(statement);
+        await runSqlStatement(db, statement);
       }
       await db.$executeRawUnsafe(
         `UPDATE "_prisma_migrations" SET "finished_at" = ?, "applied_steps_count" = ? WHERE "id" = ?`,
