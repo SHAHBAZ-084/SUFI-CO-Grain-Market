@@ -33,18 +33,13 @@ import {
   voucherReferenceFromBillNo,
 } from './invoice-voucher-descriptions';
 import { postPurchaseMaalStockIn } from '../stock/stock.service';
-
-const TYPE_PREFIX = 'PM';
-
-async function nextReference(tx: Prisma.TransactionClient) {
-  const count = await tx.invoice.count({ where: { type: InvoiceType.PURCHASE_MAAL } });
-  return `${TYPE_PREFIX}-${String(count + 1).padStart(5, '0')}`;
-}
+import { allocateNextInvoiceReference } from './invoice-reference';
 
 export async function getNextPurchaseMaalReference() {
   return prisma.$transaction(async (tx) => {
     await ensureKachiMaalAccounts(tx);
-    return { reference: await nextReference(tx) };
+    const { reference } = await allocateNextInvoiceReference(tx, InvoiceType.PURCHASE_MAAL);
+    return { reference };
   });
 }
 
@@ -79,6 +74,8 @@ export type CreatePurchaseMaalInput = {
   lines: PurchaseMaalLineInput[];
   createdById: number;
 };
+
+export type UpdatePurchaseMaalInput = Omit<CreatePurchaseMaalInput, 'createdById'>;
 
 function bardanaAccountId(
   mode: BoriThelaMode,
@@ -317,7 +314,7 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
       gariNo: data.gariNo,
     };
 
-    const reference = await nextReference(tx);
+    const { number, reference } = await allocateNextInvoiceReference(tx, InvoiceType.PURCHASE_MAAL);
     const { legs, totalDebits, totalCredits } = buildLedgerLegs(
       maalKhataAccountId,
       computedLines,
@@ -340,6 +337,7 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
       data: {
         type: InvoiceType.PURCHASE_MAAL,
         status: InvoiceStatus.PENDING_APPROVAL,
+        number,
         reference,
         invoiceDate,
         billNo: data.billNo?.trim() || null,
@@ -387,6 +385,127 @@ export async function createPurchaseMaalInvoice(data: CreatePurchaseMaalInput) {
 
     return tx.invoice.findUniqueOrThrow({
       where: { id: invoice.id },
+      include: {
+        purchaseMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
+        product: { include: { account: true } },
+        debitAccount: true,
+        createdBy: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+  });
+}
+
+export async function updatePendingPurchaseMaalInvoice(
+  invoiceId: number,
+  data: UpdatePurchaseMaalInput,
+  userId: number,
+) {
+  void userId;
+  if (data.lines.length === 0) {
+    throw new AppError(400, 'At least one line is required');
+  }
+
+  const prefs = await getSystemPreferences();
+  const computedLines = buildComputedLines(data.lines, prefs);
+  const marketFeeEnabled = data.marketFeeEnabled ?? false;
+  const mazduriEnabled = data.mazduriEnabled ?? false;
+  const totals = computePurchaseMaalInvoiceTotals(computedLines, prefs, {
+    marketFeeEnabled,
+    mazduriEnabled,
+    lowerBardanaQty: data.lowerBardanaQty,
+    lowerBardanaRate: data.lowerBardanaRate,
+  });
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        type: InvoiceType.PURCHASE_MAAL,
+        status: InvoiceStatus.PENDING_APPROVAL,
+      },
+      select: { id: true, reference: true },
+    });
+    if (!existing) throw new AppError(404, 'Pending Purchase Maal invoice not found');
+
+    await getActiveFinancialYearId(tx);
+    const systemAccounts = await ensureKachiMaalAccounts(tx);
+    const { product, maalKhataAccountId } = await resolveMaalKhataAccountForProduct(tx, data.productId);
+    const { assertProductApprovedForPosting } = await import('../approvals/approval-guards');
+    await assertProductApprovedForPosting(tx, product.id);
+    for (const line of computedLines) {
+      await assertPurchasePartyAccount(tx, line.partyAccountId);
+    }
+
+    const voucherHeader: InvoiceVoucherHeader = {
+      tafseel: data.tafseel,
+      gariNo: data.gariNo,
+    };
+
+    const { legs, totalDebits, totalCredits } = buildLedgerLegs(
+      maalKhataAccountId,
+      computedLines,
+      totals,
+      systemAccounts,
+      data.lowerBardanaMode,
+      mazduriEnabled,
+      voucherHeader,
+      existing.reference,
+    );
+
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+      throw new AppError(500, 'Invoice debits and credits do not balance — save aborted');
+    }
+
+    await tx.purchaseMaalLine.deleteMany({ where: { invoiceId: existing.id } });
+    await tx.invoice.update({
+      where: { id: existing.id },
+      data: {
+        invoiceDate: new Date(data.invoiceDate),
+        billNo: data.billNo?.trim() || null,
+        gariNo: data.gariNo?.trim() || null,
+        jins: data.jins?.trim() || product.name,
+        qism: data.qism?.trim() || null,
+        tafseel: data.tafseel?.trim() || null,
+        notes: data.tafseel?.trim() || null,
+        productId: product.id,
+        legacyInventoryPosting: false,
+        debitAccountId: maalKhataAccountId,
+        marketFeeEnabled,
+        mazduriEnabled,
+        lowerBardanaMode: data.lowerBardanaMode ?? null,
+        lowerBardanaQty: data.lowerBardanaQty ?? null,
+        lowerBardanaRate: data.lowerBardanaRate ?? null,
+        lowerBardanaAmount: totals.lowerBardanaAmount,
+        total: totals.totalDebitAmount,
+        purchaseMaalLines: {
+          create: computedLines.map((line, index) => ({
+            partyAccountId: line.partyAccountId,
+            jins: line.jins?.trim() || null,
+            qism: line.qism?.trim() || null,
+            boriOrThelaMode: line.boriOrThelaMode,
+            bagCount: line.bagCount,
+            bhartii: line.bhartii,
+            dharanCount: line.dharanCount,
+            looseKg: line.looseKg,
+            totalWeightKg: line.totalWeightKg,
+            ratePerMaund: line.ratePerMaund,
+            amount: line.amount,
+            bardanaQty: line.bardanaQty ?? null,
+            bardanaRate: line.bardanaRate ?? null,
+            bardanaAmount: line.bardanaAmount,
+            dammiChecked: line.dammiChecked ?? false,
+            dammiAmount: line.dammiAmount,
+            netCreditToParty: line.netCreditToParty,
+            sortOrder: index,
+          })),
+        },
+      },
+    });
+
+    void legs;
+
+    return tx.invoice.findUniqueOrThrow({
+      where: { id: existing.id },
       include: {
         purchaseMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
         product: { include: { account: true } },

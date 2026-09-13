@@ -34,18 +34,13 @@ import {
 } from './sale-paunch.calculations';
 import { postSalePaunchEmptyBardanaOut } from '../inventory/bardana.service';
 import { postSalePaunchStockOut } from '../stock/stock.service';
-
-const TYPE_PREFIX = 'SP';
-
-async function nextReference(tx: Prisma.TransactionClient) {
-  const count = await tx.invoice.count({ where: { type: InvoiceType.SALE_PAUNCH } });
-  return `${TYPE_PREFIX}-${String(count + 1).padStart(5, '0')}`;
-}
+import { allocateNextInvoiceReference } from './invoice-reference';
 
 export async function getNextSalePaunchReference() {
   return prisma.$transaction(async (tx) => {
     await ensureSalePaunchAccounts(tx);
-    return { reference: await nextReference(tx) };
+    const { reference } = await allocateNextInvoiceReference(tx, InvoiceType.SALE_PAUNCH);
+    return { reference };
   });
 }
 
@@ -85,6 +80,8 @@ export type CreateSalePaunchInput = {
   lines: SalePaunchLineInput[];
   createdById: number;
 };
+
+export type UpdateSalePaunchInput = Omit<CreateSalePaunchInput, 'createdById'>;
 
 function bardanaAccountId(
   mode: BoriThelaMode,
@@ -395,7 +392,7 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
       gariNo: data.gariNo,
     };
 
-    const reference = await nextReference(tx);
+    const { number, reference } = await allocateNextInvoiceReference(tx, InvoiceType.SALE_PAUNCH);
     const product = data.jins?.trim() || computedLines[0]?.jins?.trim() || null;
     const { legs, totalDebits, totalCredits } = buildLedgerLegs(
       data.salePartyAccountId,
@@ -422,6 +419,7 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
       data: {
         type: InvoiceType.SALE_PAUNCH,
         status: InvoiceStatus.PENDING_APPROVAL,
+        number,
         reference,
         invoiceDate,
         billNo: data.billNo?.trim() || null,
@@ -480,6 +478,140 @@ export async function createSalePaunchInvoice(data: CreateSalePaunchInput) {
       include: {
         salePaunchLines: { include: { maalKhataAccount: true }, orderBy: { sortOrder: 'asc' } },
         debitAccount: true,
+        createdBy: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+  });
+}
+
+export async function updatePendingSalePaunchInvoice(
+  invoiceId: number,
+  data: UpdateSalePaunchInput,
+  userId: number,
+) {
+  void userId;
+  if (data.lines.length === 0) {
+    throw new AppError(400, 'At least one line is required');
+  }
+
+  const prefs = await getSystemPreferences();
+  const computedLines = buildComputedLines(data.lines, prefs);
+  const taxAmount = roundMoney(Math.max(0, data.taxAmount ?? 0));
+  const biltyKirayaAmount = roundMoney(Math.max(0, data.biltyKirayaAmount ?? 0));
+  const miscAmount = roundMoney(Math.max(0, data.miscAmount ?? 0));
+  const totals = computeSalePaunchInvoiceTotals(computedLines, {
+    taxAmount,
+    biltyKirayaAmount,
+    miscAmount,
+    lowerBardanaQty: data.lowerBardanaQty,
+    lowerBardanaRate: data.lowerBardanaRate,
+  });
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        type: InvoiceType.SALE_PAUNCH,
+        status: InvoiceStatus.PENDING_APPROVAL,
+      },
+      select: { id: true, reference: true },
+    });
+    if (!existing) throw new AppError(404, 'Pending Sale Paunch invoice not found');
+
+    await getActiveFinancialYearId(tx);
+    const systemAccounts = await ensureSalePaunchAccounts(tx);
+    await assertSalePartyAccount(tx, data.salePartyAccountId);
+    for (const line of computedLines) {
+      await assertSalePaunchLineAccount(tx, line.maalKhataAccountId);
+    }
+
+    const voucherHeader: InvoiceVoucherHeader = {
+      tafseel: data.tafseel,
+      gariNo: data.gariNo,
+    };
+
+    const product = data.jins?.trim() || computedLines[0]?.jins?.trim() || null;
+    const { legs, totalDebits, totalCredits } = buildLedgerLegs(
+      data.salePartyAccountId,
+      computedLines,
+      totals,
+      systemAccounts,
+      data.lowerBardanaMode,
+      voucherHeader,
+      taxAmount,
+      biltyKirayaAmount,
+      miscAmount,
+      existing.reference,
+      product,
+    );
+
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+      throw new AppError(500, 'Invoice debits and credits do not balance — save aborted');
+    }
+
+    await tx.salePaunchLine.deleteMany({ where: { invoiceId: existing.id } });
+    await tx.invoice.update({
+      where: { id: existing.id },
+      data: {
+        invoiceDate: new Date(data.invoiceDate),
+        billNo: data.billNo?.trim() || null,
+        gariNo: data.gariNo?.trim() || null,
+        jins: data.jins?.trim() || null,
+        qism: data.qism?.trim() || null,
+        tafseel: data.tafseel?.trim() || null,
+        notes: data.tafseel?.trim() || null,
+        debitAccountId: data.salePartyAccountId,
+        salePartyAccountId: data.salePartyAccountId,
+        miscAmount,
+        taxAmount,
+        biltyKirayaAmount,
+        lowerBardanaMode: data.lowerBardanaMode ?? null,
+        lowerBardanaQty: data.lowerBardanaQty ?? null,
+        lowerBardanaRate: data.lowerBardanaRate ?? null,
+        lowerBardanaAmount: totals.lowerBardanaAmount,
+        total: totals.lowerNetTotal,
+        salePaunchLines: {
+          create: computedLines.map((line, index) => ({
+            maalKhataAccountId: line.maalKhataAccountId,
+            jins: line.jins?.trim() || data.jins?.trim() || null,
+            qism: line.qism?.trim() || data.qism?.trim() || null,
+            boriOrThelaMode: line.boriOrThelaMode,
+            bagCount: line.bagCount,
+            thelaCount: line.thelaCount ?? 0,
+            bhartii: 0,
+            dharanCount: 0,
+            looseKg: 0,
+            totalWeightKg: line.totalWeightKg,
+            kaatKg: line.kaatKg,
+            netWeightKg: line.netWeightKg,
+            lowerKaatKg: line.lowerKaatKg,
+            lowerNetWeightKg: line.lowerNetWeightKg,
+            upperRatePerMaund: line.upperRatePerMaund,
+            upperAmount: line.upperAmount,
+            kanta: line.kanta,
+            netUpperAmount: line.netUpperAmount,
+            lowerRatePerMaund: line.lowerRatePerMaund,
+            lowerAmount: line.lowerAmount,
+            rowRevenue: line.rowRevenue,
+            bardanaQty: line.bardanaQty ?? null,
+            bardanaRate: line.bardanaRate ?? null,
+            bardanaAmount: line.bardanaAmount,
+            dammiChecked: line.dammiChecked ?? false,
+            dammiAmount: line.dammiAmount,
+            sortOrder: index,
+          })),
+        },
+      },
+    });
+
+    void legs;
+
+    return tx.invoice.findUniqueOrThrow({
+      where: { id: existing.id },
+      include: {
+        salePaunchLines: { include: { maalKhataAccount: true }, orderBy: { sortOrder: 'asc' } },
+        debitAccount: true,
+        salePartyAccount: true,
         createdBy: { select: { id: true, displayName: true, username: true } },
       },
     });

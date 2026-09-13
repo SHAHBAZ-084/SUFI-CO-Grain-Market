@@ -28,18 +28,13 @@ import {
   type InvoiceVoucherHeader,
   voucherReferenceFromBillNo,
 } from './invoice-voucher-descriptions';
-
-const TYPE_PREFIX = 'KM';
-
-async function nextReference(tx: Prisma.TransactionClient) {
-  const count = await tx.invoice.count({ where: { type: InvoiceType.KACHI_MAAL } });
-  return `${TYPE_PREFIX}-${String(count + 1).padStart(5, '0')}`;
-}
+import { allocateNextInvoiceReference } from './invoice-reference';
 
 export async function getNextKachiMaalReference() {
   return prisma.$transaction(async (tx) => {
     await ensureKachiMaalAccounts(tx);
-    return { reference: await nextReference(tx) };
+    const { reference } = await allocateNextInvoiceReference(tx, InvoiceType.KACHI_MAAL);
+    return { reference };
   });
 }
 
@@ -72,6 +67,8 @@ export type CreateKachiMaalInput = {
   lines: KachiMaalLineInput[];
   createdById: number;
 };
+
+export type UpdateKachiMaalInput = Omit<CreateKachiMaalInput, 'createdById'>;
 
 function bardanaAccountId(
   mode: BoriThelaMode,
@@ -322,7 +319,7 @@ export async function createKachiMaalInvoice(data: CreateKachiMaalInput) {
       gariNo: data.gariNo,
     };
 
-    const reference = await nextReference(tx);
+    const { number, reference } = await allocateNextInvoiceReference(tx, InvoiceType.KACHI_MAAL);
     const { legs, totalDebits, totalCredits, miscAmount } = buildLedgerLegs(
       data.debitAccountId,
       computedLines,
@@ -344,6 +341,7 @@ export async function createKachiMaalInvoice(data: CreateKachiMaalInput) {
       data: {
         type: InvoiceType.KACHI_MAAL,
         status: InvoiceStatus.PENDING_APPROVAL,
+        number,
         reference,
         invoiceDate,
         billNo: data.billNo?.trim() || null,
@@ -386,6 +384,117 @@ export async function createKachiMaalInvoice(data: CreateKachiMaalInput) {
 
     return tx.invoice.findUniqueOrThrow({
       where: { id: invoice.id },
+      include: {
+        kachiMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
+        debitAccount: true,
+        createdBy: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+  });
+}
+
+export async function updatePendingKachiMaalInvoice(
+  invoiceId: number,
+  data: UpdateKachiMaalInput,
+  userId: number,
+) {
+  void userId;
+  if (data.lines.length === 0) {
+    throw new AppError(400, 'At least one line is required');
+  }
+
+  const prefs = await getSystemPreferences();
+  const computedLines = buildComputedLines(data.lines, prefs);
+  const totals = computeKachiMaalInvoiceTotals(
+    computedLines,
+    prefs,
+    data.miscAmount ?? 0,
+    data.lowerBardanaQty,
+    data.lowerBardanaRate,
+  );
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        type: InvoiceType.KACHI_MAAL,
+        status: InvoiceStatus.PENDING_APPROVAL,
+      },
+      select: { id: true, reference: true },
+    });
+    if (!existing) throw new AppError(404, 'Pending Kachi Maal invoice not found');
+
+    await getActiveFinancialYearId(tx);
+    const systemAccounts = await ensureKachiMaalAccounts(tx);
+    await assertDebitAccount(tx, data.debitAccountId);
+    for (const line of computedLines) {
+      await assertPurchasePartyAccount(tx, line.partyAccountId);
+    }
+
+    const voucherHeader: InvoiceVoucherHeader = {
+      tafseel: data.tafseel,
+      gariNo: data.gariNo,
+    };
+
+    const { legs, totalDebits, totalCredits, miscAmount } = buildLedgerLegs(
+      data.debitAccountId,
+      computedLines,
+      totals,
+      systemAccounts,
+      data.lowerBardanaMode,
+      voucherHeader,
+      existing.reference,
+    );
+
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+      throw new AppError(500, 'Invoice debits and credits do not balance — save aborted');
+    }
+
+    await tx.kachiMaalLine.deleteMany({ where: { invoiceId: existing.id } });
+    await tx.invoice.update({
+      where: { id: existing.id },
+      data: {
+        invoiceDate: new Date(data.invoiceDate),
+        billNo: data.billNo?.trim() || null,
+        gariNo: data.gariNo?.trim() || null,
+        jins: data.jins?.trim() || null,
+        qism: data.qism?.trim() || null,
+        tafseel: data.tafseel?.trim() || null,
+        notes: data.tafseel?.trim() || null,
+        debitAccountId: data.debitAccountId,
+        miscAmount,
+        lowerBardanaMode: data.lowerBardanaMode ?? null,
+        lowerBardanaQty: data.lowerBardanaQty ?? null,
+        lowerBardanaRate: data.lowerBardanaRate ?? null,
+        lowerBardanaAmount: totals.lowerBardanaAmount,
+        total: totals.totalDebitAmount,
+        kachiMaalLines: {
+          create: computedLines.map((line, index) => ({
+            partyAccountId: line.partyAccountId,
+            jins: line.jins?.trim() || null,
+            qism: line.qism?.trim() || null,
+            boriOrThelaMode: line.boriOrThelaMode,
+            bagCount: line.bagCount,
+            bhartii: line.bhartii,
+            dharanCount: line.dharanCount,
+            looseKg: line.looseKg,
+            totalWeightKg: line.totalWeightKg,
+            ratePerMaund: line.ratePerMaund,
+            amount: line.amount,
+            bardanaQty: line.bardanaQty ?? null,
+            bardanaRate: line.bardanaRate ?? null,
+            bardanaAmount: line.bardanaAmount,
+            netCreditToParty: line.netCreditToParty,
+            sortOrder: index,
+          })),
+        },
+      },
+    });
+
+    void legs;
+
+    return tx.invoice.findUniqueOrThrow({
+      where: { id: existing.id },
       include: {
         kachiMaalLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
         debitAccount: true,

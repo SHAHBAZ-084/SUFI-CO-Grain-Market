@@ -143,9 +143,12 @@ function categoriesForSide(
 
 export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editVoucherId = Number(searchParams.get('editVoucherId') ?? 0);
+  const isEditMode = editVoucherId > 0;
   const formKind = kind as MinimizedFormKind;
   const { restoredState, minimize } = useMinimizableForm<VoucherDraft>(formKind);
-  const keepRestoredPredictedNumber = useRef(restoredState?.predictedNumber != null);
+  const keepRestoredPredictedNumber = useRef(restoredState?.predictedNumber != null || isEditMode);
   const formRef = useRef<HTMLFormElement>(null);
   const trapRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -196,6 +199,7 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
   }, []);
 
   const refreshPredictedNumber = useCallback(async () => {
+    if (isEditMode) return;
     try {
       const { number } = await api.getNextVoucherNumber(VOUCHER_TYPES[kind] as 'PAYMENT' | 'RECEIPT' | 'JOURNAL');
       if (keepRestoredPredictedNumber.current) {
@@ -208,13 +212,44 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
       if (!keepRestoredPredictedNumber.current) setPredictedNumber(null);
       keepRestoredPredictedNumber.current = false;
     }
-  }, [kind]);
+  }, [isEditMode, kind]);
 
   useEffect(() => { reload(); }, [reload]);
 
   useEffect(() => {
     refreshPredictedNumber();
   }, [refreshPredictedNumber]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    api
+      .getPendingApprovalDetail('voucher', editVoucherId)
+      .then((detail) => {
+        if (cancelled) return;
+        const voucher = detail.record as unknown as Voucher;
+        if (voucher.type !== VOUCHER_TYPES[kind]) {
+          setError(`This pending voucher is ${formatVoucherTypeLabel(voucher.type)}.`);
+          return;
+        }
+        const debitId = String(voucher.debitAccount?.id ?? '');
+        const creditId = String(voucher.creditAccount?.id ?? '');
+        setDebitAccountId(debitId);
+        setCreditAccountId(creditId);
+        setDebitCategoryId(String(accounts.find((a) => String(a.id) === debitId)?.categoryId ?? ''));
+        setCreditCategoryId(String(accounts.find((a) => String(a.id) === creditId)?.categoryId ?? ''));
+        setAmount(String(voucher.amount ?? ''));
+        setVoucherDate(voucher.date?.slice(0, 10) ?? todayInputValue());
+        setPredictedNumber(voucher.number ?? null);
+        setNumberMismatch(false);
+        setReference(voucher.reference ?? '');
+        setDescription(voucher.description ?? '');
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load pending voucher'));
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, editVoucherId, isEditMode, kind]);
 
   const debitCategories = categoriesForSide(categories, kind, 'debit');
   const creditCategories = categoriesForSide(categories, kind, 'credit');
@@ -288,7 +323,7 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
     }
     setSaving(true);
     try {
-      const voucher = await api.createVoucher({
+      const payload = {
         type: VOUCHER_TYPES[kind],
         debitAccountId: Number(debitAccountId),
         creditAccountId: Number(creditAccountId),
@@ -296,7 +331,14 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
         date: voucherDate,
         description: description || undefined,
         reference: reference.trim(),
-      });
+      };
+      const voucher = isEditMode
+        ? await api.updatePendingVoucher(editVoucherId, payload)
+        : await api.createVoucher(payload);
+      if (isEditMode) {
+        navigate('/approvals');
+        return;
+      }
       const expected = predictedNumber;
       if (expected != null && voucher.number !== expected) {
         setNumberMismatch(true);
@@ -441,7 +483,7 @@ export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) 
           <FormActionFooter
             error={error || undefined}
             message={message || undefined}
-            primaryLabel="Save & Post"
+            primaryLabel={isEditMode ? 'Update' : 'Save & Post'}
             saving={saving}
             primaryRef={saveRef}
             primaryTabIndex={9}
@@ -490,13 +532,18 @@ function userLabel(user?: VoucherUser | null) {
 export function VoucherDetailCard({
   voucher,
   onCancel,
-  onUpdateAmount,
+  onUpdateDetails,
   cancelling,
   updating,
 }: {
   voucher: Voucher;
   onCancel: () => void;
-  onUpdateAmount: (amount: number) => void | Promise<void>;
+  onUpdateDetails: (patch: {
+    amount: number;
+    date: string;
+    debitAccountId: number;
+    creditAccountId: number;
+  }) => void | Promise<void>;
   cancelling: boolean;
   updating: boolean;
 }) {
@@ -505,14 +552,62 @@ export function VoucherDetailCard({
   const isCancelled = voucher.status === 'CANCELLED';
   const isKachi = voucher.type === 'KACHI';
   const isPurchaseMaal = voucher.type === 'PURCHASE_MAAL';
-  const isMultiLeg = isKachi || isPurchaseMaal;
-  const [editingAmount, setEditingAmount] = useState(false);
+  const isMultiLeg = isKachi || isPurchaseMaal
+    || voucher.type === 'SALE_PAUNCH'
+    || voucher.type === 'SALE_COMMISSION'
+    || voucher.type === 'PURCHASE_GENERAL'
+    || voucher.type === 'SALE_GENERAL'
+    || voucher.type === 'GENERAL_TRADE';
+  const canUpdateDetails = !isMultiLeg && !isCancelled
+    && (voucher.type === 'PAYMENT' || voucher.type === 'RECEIPT' || voucher.type === 'JOURNAL');
+
+  const [editing, setEditing] = useState(false);
   const [amountDraft, setAmountDraft] = useState(String(voucher.amount ?? ''));
+  const [dateDraft, setDateDraft] = useState(voucher.date?.slice(0, 10) ?? todayInputValue());
+  const [debitCategoryId, setDebitCategoryId] = useState('');
+  const [creditCategoryId, setCreditCategoryId] = useState('');
+  const [debitAccountId, setDebitAccountId] = useState(String(voucher.debitAccount?.id ?? ''));
+  const [creditAccountId, setCreditAccountId] = useState(String(voucher.creditAccount?.id ?? ''));
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<AccountCategory[]>([]);
+  const debitCategoryRef = useRef<HTMLInputElement>(null);
+  const debitAccountRef = useRef<HTMLInputElement>(null);
+  const creditCategoryRef = useRef<HTMLInputElement>(null);
+  const creditAccountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setEditingAmount(false);
+    setEditing(false);
     setAmountDraft(String(voucher.amount ?? ''));
-  }, [voucher.id, voucher.amount]);
+    setDateDraft(voucher.date?.slice(0, 10) ?? todayInputValue());
+    setDebitAccountId(String(voucher.debitAccount?.id ?? ''));
+    setCreditAccountId(String(voucher.creditAccount?.id ?? ''));
+    setDebitCategoryId('');
+    setCreditCategoryId('');
+  }, [voucher.id, voucher.amount, voucher.date, voucher.debitAccount, voucher.creditAccount]);
+
+  useEffect(() => {
+    if (!editing) return;
+    void Promise.all([api.listAccounts(), api.listCategories()])
+      .then(([accountRows, categoryRows]) => {
+        setAccounts(accountRows);
+        setCategories(categoryRows);
+        const debit = accountRows.find((a) => a.id === voucher.debitAccount?.id);
+        const credit = accountRows.find((a) => a.id === voucher.creditAccount?.id);
+        if (debit) setDebitCategoryId(String(debit.categoryId));
+        if (credit) setCreditCategoryId(String(credit.categoryId));
+      })
+      .catch(() => {
+        setAccounts([]);
+        setCategories([]);
+      });
+  }, [editing, voucher.debitAccount?.id, voucher.creditAccount?.id]);
+
+  const formKind =
+    voucher.type === 'PAYMENT' ? 'payment'
+      : voucher.type === 'RECEIPT' ? 'receipt'
+        : 'journal';
+  const debitCats = categoriesForSide(categories, formKind, 'debit');
+  const creditCats = categoriesForSide(categories, formKind, 'credit');
 
   const rows = isMultiLeg
     ? []
@@ -546,12 +641,18 @@ export function VoucherDetailCard({
     if (canceller) auditParts.push(`Cancelled by ${canceller} on ${new Date(voucher.deletedAt).toLocaleDateString()}`);
   }
 
-  async function submitAmount(e: FormEvent) {
+  async function submitDetails(e: FormEvent) {
     e.preventDefault();
     const amount = parseFloat(amountDraft);
     if (!Number.isFinite(amount) || amount <= 0) return;
-    await onUpdateAmount(amount);
-    setEditingAmount(false);
+    if (!debitAccountId || !creditAccountId) return;
+    await onUpdateDetails({
+      amount,
+      date: dateDraft,
+      debitAccountId: Number(debitAccountId),
+      creditAccountId: Number(creditAccountId),
+    });
+    setEditing(false);
   }
 
   return (
@@ -577,12 +678,12 @@ export function VoucherDetailCard({
         </div>
         {!isCancelled && (
           <div className="flex gap-2">
-            {!isMultiLeg && !editingAmount && (
-              <SecondaryButton onClick={() => setEditingAmount(true)}>Update Amount</SecondaryButton>
+            {canUpdateDetails && !editing && (
+              <SecondaryButton onClick={() => setEditing(true)}>Update</SecondaryButton>
             )}
             {isAdmin ? (
               <DangerButton
-                disabled={cancelling || editingAmount}
+                disabled={cancelling || editing}
                 onClick={onCancel}
               >
                 {cancelling ? 'Cancelling…' : 'Cancel'}
@@ -592,108 +693,181 @@ export function VoucherDetailCard({
         )}
       </div>
 
-      <dl className="divide-y divide-border">
-        {rows.map((row) => (
-          <div key={row.label} className="grid grid-cols-[120px_1fr] gap-4 py-3">
-            <dt className="text-sm text-textSecondary">{row.label}</dt>
-            <dd className="text-sm font-medium text-textPrimary">{row.value}</dd>
+      {editing && canUpdateDetails ? (
+        <form onSubmit={(e) => void submitDetails(e)} className="space-y-4">
+          <div>
+            <FieldLabel>Date</FieldLabel>
+            <DateField value={dateDraft} onChange={setDateDraft} />
           </div>
-        ))}
-        {isMultiLeg && kachiLegs.length > 0 ? (
-          <div className="py-3">
-            <dt className="mb-3 text-sm text-textSecondary">Ledger legs</dt>
-            <dd>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-textSecondary">
-                      <th className="py-2 pr-3">Account</th>
-                      <th className="py-2 pr-3">Type</th>
-                      <th className="py-2 pr-3 text-right">Amount</th>
-                      <th className="py-2">Description</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {kachiLegs.map((leg) => (
-                      <tr key={leg.id} className="border-b border-border">
-                        <td className="py-2 pr-3 font-medium text-textPrimary">
-                          {leg.ledger?.account?.name ?? '—'}
-                        </td>
-                        <td className={`py-2 pr-3 font-medium ${leg.type === 'DEBIT' ? 'text-ledgerDebit' : 'text-ledgerCredit'}`}>
-                          {leg.type === 'DEBIT' ? 'Debit' : 'Credit'}
-                        </td>
-                        <td className={`py-2 pr-3 text-right tabular-nums ${leg.type === 'DEBIT' ? 'text-ledgerDebit' : 'text-ledgerCredit'}`}>
-                          {formatLedgerAmount(leg.amount)}
-                        </td>
-                        <td className="py-2 text-textSecondary">{leg.notes ?? ''}</td>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {voucher.type === 'JOURNAL' ? (
+              <>
+                <AccountSideFields
+                  label="Debit"
+                  categoryId={debitCategoryId}
+                  accountId={debitAccountId}
+                  categories={debitCats}
+                  accounts={accounts}
+                  onCategoryChange={(id) => { setDebitCategoryId(id); setDebitAccountId(''); }}
+                  onAccountChange={setDebitAccountId}
+                  categoryTabIndex={1}
+                  accountTabIndex={2}
+                  categoryInputRef={debitCategoryRef}
+                  accountInputRef={debitAccountRef}
+                />
+                <AccountSideFields
+                  label="Credit"
+                  categoryId={creditCategoryId}
+                  accountId={creditAccountId}
+                  categories={creditCats}
+                  accounts={accounts}
+                  onCategoryChange={(id) => { setCreditCategoryId(id); setCreditAccountId(''); }}
+                  onAccountChange={setCreditAccountId}
+                  categoryTabIndex={3}
+                  accountTabIndex={4}
+                  categoryInputRef={creditCategoryRef}
+                  accountInputRef={creditAccountRef}
+                />
+              </>
+            ) : (
+              <>
+                <AccountSideFields
+                  label="From"
+                  categoryId={creditCategoryId}
+                  accountId={creditAccountId}
+                  categories={creditCats}
+                  accounts={accounts}
+                  onCategoryChange={(id) => { setCreditCategoryId(id); setCreditAccountId(''); }}
+                  onAccountChange={setCreditAccountId}
+                  categoryTabIndex={1}
+                  accountTabIndex={2}
+                  categoryInputRef={creditCategoryRef}
+                  accountInputRef={creditAccountRef}
+                />
+                <AccountSideFields
+                  label="To"
+                  categoryId={debitCategoryId}
+                  accountId={debitAccountId}
+                  categories={debitCats}
+                  accounts={accounts}
+                  onCategoryChange={(id) => { setDebitCategoryId(id); setDebitAccountId(''); }}
+                  onAccountChange={setDebitAccountId}
+                  categoryTabIndex={3}
+                  accountTabIndex={4}
+                  categoryInputRef={debitCategoryRef}
+                  accountInputRef={debitAccountRef}
+                />
+              </>
+            )}
+          </div>
+          <div>
+            <FieldLabel>Amount</FieldLabel>
+            <TextInput
+              type="number"
+              step="0.01"
+              min="0.01"
+              required
+              value={amountDraft}
+              onChange={(e) => setAmountDraft(e.target.value)}
+              className="max-w-[220px]"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <PrimaryButton type="submit" disabled={updating}>
+              {updating ? 'Saving…' : 'Save'}
+            </PrimaryButton>
+            <SecondaryButton
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                setAmountDraft(String(voucher.amount ?? ''));
+                setDateDraft(voucher.date?.slice(0, 10) ?? todayInputValue());
+                setDebitAccountId(String(voucher.debitAccount?.id ?? ''));
+                setCreditAccountId(String(voucher.creditAccount?.id ?? ''));
+              }}
+            >
+              Discard
+            </SecondaryButton>
+          </div>
+        </form>
+      ) : (
+        <dl className="divide-y divide-border">
+          {rows.map((row) => (
+            <div key={row.label} className="grid grid-cols-[120px_1fr] gap-4 py-3">
+              <dt className="text-sm text-textSecondary">{row.label}</dt>
+              <dd className="text-sm font-medium text-textPrimary">{row.value}</dd>
+            </div>
+          ))}
+          {isMultiLeg && kachiLegs.length > 0 ? (
+            <div className="py-3">
+              <dt className="mb-3 text-sm text-textSecondary">Ledger legs</dt>
+              <dd>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-textSecondary">
+                        <th className="py-2 pr-3">Account</th>
+                        <th className="py-2 pr-3">Type</th>
+                        <th className="py-2 pr-3 text-right">Amount</th>
+                        <th className="py-2">Description</th>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-border font-semibold">
-                      <td className="py-2" colSpan={2}>Totals</td>
-                      <td className="py-2 text-right tabular-nums">
-                        Dr <span className={ledgerDebitColorClass(kachiDebitTotal)}>{formatLedgerAmount(kachiDebitTotal)}</span>
-                        {' / '}Cr{' '}
-                        <span className={ledgerCreditColorClass(kachiCreditTotal)}>{formatLedgerAmount(kachiCreditTotal)}</span>
-                      </td>
-                      <td className="py-2" />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {kachiLegs.map((leg) => (
+                        <tr key={leg.id} className="border-b border-border">
+                          <td className="py-2 pr-3 font-medium text-textPrimary">
+                            {leg.ledger?.account?.name ?? '—'}
+                          </td>
+                          <td className={`py-2 pr-3 font-medium ${leg.type === 'DEBIT' ? 'text-ledgerDebit' : 'text-ledgerCredit'}`}>
+                            {leg.type === 'DEBIT' ? 'Debit' : 'Credit'}
+                          </td>
+                          <td className={`py-2 pr-3 text-right tabular-nums ${leg.type === 'DEBIT' ? 'text-ledgerDebit' : 'text-ledgerCredit'}`}>
+                            {formatLedgerAmount(leg.amount)}
+                          </td>
+                          <td className="py-2 text-textSecondary">{leg.notes ?? ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-border font-semibold">
+                        <td className="py-2" colSpan={2}>Totals</td>
+                        <td className="py-2 text-right tabular-nums">
+                          Dr <span className={ledgerDebitColorClass(kachiDebitTotal)}>{formatLedgerAmount(kachiDebitTotal)}</span>
+                          {' / '}Cr{' '}
+                          <span className={ledgerCreditColorClass(kachiCreditTotal)}>{formatLedgerAmount(kachiCreditTotal)}</span>
+                        </td>
+                        <td className="py-2" />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </dd>
+            </div>
+          ) : null}
+          <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
+            <dt className="text-sm text-textSecondary">Date</dt>
+            <dd className="text-sm text-textPrimary">{formatDate(voucher.date)}</dd>
+          </div>
+          <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
+            <dt className="text-sm text-textSecondary">{isMultiLeg ? 'Grand total' : 'Amount'}</dt>
+            <dd className="text-sm font-semibold text-textPrimary">
+              {Number(voucher.amount).toFixed(2)}
             </dd>
           </div>
-        ) : null}
-        <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
-          <dt className="text-sm text-textSecondary">Date</dt>
-          <dd className="text-sm text-textPrimary">{formatDate(voucher.date)}</dd>
-        </div>
-        <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
-          <dt className="text-sm text-textSecondary">{isMultiLeg ? 'Grand total' : 'Amount'}</dt>
-          <dd className="text-sm font-semibold text-textPrimary">
-            {!isMultiLeg && editingAmount ? (
-              <form onSubmit={submitAmount} className="flex flex-wrap items-center gap-2">
-                <TextInput
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  value={amountDraft}
-                  onChange={(e) => setAmountDraft(e.target.value)}
-                  className="max-w-[180px]"
-                />
-                <PrimaryButton type="submit" disabled={updating}>
-                  {updating ? 'Saving…' : 'Save'}
-                </PrimaryButton>
-                <SecondaryButton
-                  type="button"
-                  onClick={() => {
-                    setEditingAmount(false);
-                    setAmountDraft(String(voucher.amount ?? ''));
-                  }}
-                >
-                  Discard
-                </SecondaryButton>
-              </form>
-            ) : (
-              Number(voucher.amount).toFixed(2)
-            )}
-          </dd>
-        </div>
-        {voucher.reference ? (
-          <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
-            <dt className="text-sm text-textSecondary">Reference</dt>
-            <dd className="text-sm text-textPrimary">{voucher.reference}</dd>
-          </div>
-        ) : null}
-        {voucher.description ? (
-          <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
-            <dt className="text-sm text-textSecondary">Description</dt>
-            <dd className="text-sm text-textPrimary">{voucher.description}</dd>
-          </div>
-        ) : null}
-      </dl>
+          {voucher.reference ? (
+            <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
+              <dt className="text-sm text-textSecondary">Reference</dt>
+              <dd className="text-sm text-textPrimary">{voucher.reference}</dd>
+            </div>
+          ) : null}
+          {voucher.description ? (
+            <div className="grid grid-cols-[120px_1fr] gap-4 py-3">
+              <dt className="text-sm text-textSecondary">Description</dt>
+              <dd className="text-sm text-textPrimary">{voucher.description}</dd>
+            </div>
+          ) : null}
+        </dl>
+      )}
 
       {auditParts.length > 0 && (
         <p className="mt-4 border-t border-border pt-3 text-xs text-textSecondary">
@@ -787,11 +961,16 @@ export function VoucherListPage() {
     }
   }
 
-  async function handleUpdateAmount(amount: number) {
+  async function handleUpdateDetails(patch: {
+    amount: number;
+    date: string;
+    debitAccountId: number;
+    creditAccountId: number;
+  }) {
     if (!result || result === 'notfound') return;
     setUpdating(true);
     try {
-      const updated = await api.updateVoucherAmount(result.id, amount);
+      const updated = await api.updateVoucherDetails(result.id, patch);
       setResult(updated);
       loadVouchers();
     } catch (err) {
@@ -851,7 +1030,7 @@ export function VoucherListPage() {
         <VoucherDetailCard
           voucher={voucher}
           onCancel={handleCancel}
-          onUpdateAmount={handleUpdateAmount}
+          onUpdateDetails={handleUpdateDetails}
           cancelling={cancelling}
           updating={updating}
         />

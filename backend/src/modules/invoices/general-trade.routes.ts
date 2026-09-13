@@ -39,4 +39,18 @@ export function registerGeneralTradeRoutes(router: Router) {
       res.status(201).json(invoice);
     }),
   );
+
+  router.patch(
+    '/general-trade/:id',
+    validateBody(createSchema),
+    asyncHandler(async (req, res) => {
+      const id = Number(req.params.id);
+      const invoice = await generalTradeService.updatePendingGeneralTradeInvoice(
+        id,
+        req.body,
+        req.session.userId!,
+      );
+      res.json(invoice);
+    }),
+  );
 }

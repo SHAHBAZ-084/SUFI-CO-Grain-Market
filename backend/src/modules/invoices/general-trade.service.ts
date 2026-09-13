@@ -36,18 +36,13 @@ import {
   type ComputedSaleGeneralLine,
   type SaleGeneralLineInput,
 } from './sale-general.service';
-
-const TYPE_PREFIX = 'GT';
-
-async function nextReference(tx: Prisma.TransactionClient) {
-  const count = await tx.invoice.count({ where: { type: InvoiceType.GENERAL_TRADE } });
-  return `${TYPE_PREFIX}-${String(count + 1).padStart(5, '0')}`;
-}
+import { allocateNextInvoiceReference } from './invoice-reference';
 
 export async function getNextGeneralTradeReference() {
   return prisma.$transaction(async (tx) => {
     await ensureGeneralGoodsAccounts(tx);
-    return { reference: await nextReference(tx) };
+    const { reference } = await allocateNextInvoiceReference(tx, InvoiceType.GENERAL_TRADE);
+    return { reference };
   });
 }
 
@@ -69,6 +64,8 @@ export type CreateGeneralTradeInput = {
   lines: GeneralTradeLineInput[];
   createdById: number;
 };
+
+export type UpdateGeneralTradeInput = Omit<CreateGeneralTradeInput, 'createdById'>;
 
 function assertMatchingQuantities(
   purchaseLines: ComputedPurchaseGeneralLine[],
@@ -255,7 +252,7 @@ export async function createGeneralTradeInvoice(data: CreateGeneralTradeInput) {
     await assertSalePartyAccount(tx, data.salePartyAccountId);
 
     const { purchaseComputed, saleComputed } = await buildTradeComputed(tx, { lines: data.lines });
-    const reference = await nextReference(tx);
+    const { number, reference } = await allocateNextInvoiceReference(tx, InvoiceType.GENERAL_TRADE);
     const { legs, totalDebits, totalCredits, invoiceTotal, goodsTotal } = combineTradeLegs({
       purchaseComputed,
       saleComputed,
@@ -277,6 +274,7 @@ export async function createGeneralTradeInvoice(data: CreateGeneralTradeInput) {
       data: {
         type: InvoiceType.GENERAL_TRADE,
         status: InvoiceStatus.PENDING_APPROVAL,
+        number,
         reference,
         invoiceDate,
         billNo: data.billNo?.trim() || null,
@@ -316,6 +314,96 @@ export async function createGeneralTradeInvoice(data: CreateGeneralTradeInput) {
 
     return tx.invoice.findUniqueOrThrow({
       where: { id: invoice.id },
+      include: {
+        generalPurchaseLines: { include: { product: true }, orderBy: { sortOrder: 'asc' } },
+        generalSaleLines: { include: { product: true }, orderBy: { sortOrder: 'asc' } },
+        partyAccount: true,
+        salePartyAccount: true,
+        createdBy: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+  });
+}
+
+export async function updatePendingGeneralTradeInvoice(
+  invoiceId: number,
+  data: UpdateGeneralTradeInput,
+  userId: number,
+) {
+  void userId;
+  if (!data.lines.length) throw new AppError(400, 'At least one line is required');
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        type: InvoiceType.GENERAL_TRADE,
+        status: InvoiceStatus.PENDING_APPROVAL,
+      },
+      select: { id: true, reference: true },
+    });
+    if (!existing) throw new AppError(404, 'Pending General Trade invoice not found');
+
+    await getActiveFinancialYearId(tx);
+    const systemAccounts = await ensureGeneralGoodsAccounts(tx);
+    await assertPurchasePartyAccount(tx, data.partyAccountId);
+    await assertSalePartyAccount(tx, data.salePartyAccountId);
+
+    const { purchaseComputed, saleComputed } = await buildTradeComputed(tx, { lines: data.lines });
+    const { legs, totalDebits, totalCredits, invoiceTotal, goodsTotal } = combineTradeLegs({
+      purchaseComputed,
+      saleComputed,
+      partyAccountId: data.partyAccountId,
+      salePartyAccountId: data.salePartyAccountId,
+      mazduriAccountId: systemAccounts.mazduri.id,
+      generalTradeRevenueAccountId: systemAccounts.generalTradeRevenue.id,
+      reference: existing.reference,
+    });
+
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+      throw new AppError(500, 'Invoice debits and credits do not balance — save aborted');
+    }
+
+    await tx.generalPurchaseLine.deleteMany({ where: { invoiceId: existing.id } });
+    await tx.generalSaleLine.deleteMany({ where: { invoiceId: existing.id } });
+    await tx.invoice.update({
+      where: { id: existing.id },
+      data: {
+        invoiceDate: new Date(data.invoiceDate),
+        billNo: data.billNo?.trim() || null,
+        tafseel: data.tafseel?.trim() || null,
+        notes: data.tafseel?.trim() || null,
+        partyAccountId: data.partyAccountId,
+        salePartyAccountId: data.salePartyAccountId,
+        total: invoiceTotal,
+        generalPurchaseLines: {
+          create: purchaseComputed.map((line, index) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            rate: line.rate,
+            lineTotal: line.lineTotal,
+            mazduriAmount: line.mazduriAmount,
+            sortOrder: index,
+          })),
+        },
+        generalSaleLines: {
+          create: saleComputed.map((line, index) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            rate: line.rate,
+            lineTotal: line.lineTotal,
+            unitCost: line.unitCost,
+            sortOrder: index,
+          })),
+        },
+      },
+    });
+
+    void legs;
+    void goodsTotal;
+
+    return tx.invoice.findUniqueOrThrow({
+      where: { id: existing.id },
       include: {
         generalPurchaseLines: { include: { product: true }, orderBy: { sortOrder: 'asc' } },
         generalSaleLines: { include: { product: true }, orderBy: { sortOrder: 'asc' } },

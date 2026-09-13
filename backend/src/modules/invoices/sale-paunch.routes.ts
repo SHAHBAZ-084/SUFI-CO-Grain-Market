@@ -76,4 +76,18 @@ export function registerSalePaunchRoutes(router: Router) {
       res.status(201).json(invoice);
     }),
   );
+
+  router.patch(
+    '/sale-paunch/:id',
+    validateBody(createSchema),
+    asyncHandler(async (req, res) => {
+      const id = Number(req.params.id);
+      const invoice = await salePaunchService.updatePendingSalePaunchInvoice(
+        id,
+        req.body,
+        req.session.userId!,
+      );
+      res.json(invoice);
+    }),
+  );
 }

@@ -258,7 +258,8 @@ model Voucher {
   ledgerEntries LedgerEntry[]
   invoiceLink   InvoiceVoucher?
 
-  @@unique([financialYearId, type, number])
+  // Uniqueness for live numbers is enforced by partial unique index
+  // Voucher_financialYearId_type_number_active_key (status != CANCELLED) in migrations.
   @@index([financialYearId, type])
   @@index([debitAccountId])
   @@index([creditAccountId])
@@ -353,7 +354,9 @@ model Invoice {
   id              Int           @id @default(autoincrement())
   type            InvoiceType
   status          InvoiceStatus @default(DRAFT)
-  reference       String        @unique
+  /** Per-type sequence number (mirrors Voucher.number). Embedded in `reference`. */
+  number          Int
+  reference       String
   customerId      Int?
   supplierId      Int?
   total           Decimal       @default(0)
@@ -404,9 +407,12 @@ model Invoice {
   emptyBardanaMovements EmptyBardanaMovement[]
   quantityMovements ProductQuantityMovement[]
 
+  // Live uniqueness: partial indexes Invoice_type_number_active_key /
+  // Invoice_reference_active_key (status != CANCELLED) — see migrations.
   @@index([financialYearId])
   @@index([financialYearId, type, status])
   @@index([createdAt])
+  @@index([type, status])
 }
 
 model KachiMaalLine {

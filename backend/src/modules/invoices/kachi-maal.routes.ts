@@ -68,4 +68,18 @@ export function registerKachiMaalRoutes(router: Router) {
       res.status(201).json(invoice);
     }),
   );
+
+  router.patch(
+    '/kachi-maal/:id',
+    validateBody(createSchema),
+    asyncHandler(async (req, res) => {
+      const id = Number(req.params.id);
+      const invoice = await kachiMaalService.updatePendingKachiMaalInvoice(
+        id,
+        req.body,
+        req.session.userId!,
+      );
+      res.json(invoice);
+    }),
+  );
 }

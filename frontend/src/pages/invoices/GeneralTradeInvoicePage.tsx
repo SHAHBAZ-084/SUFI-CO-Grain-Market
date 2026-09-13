@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DateField } from '../../components/ui/DateField';
 import {
   FieldLabel,
@@ -10,7 +10,7 @@ import {
   TextInput,
 } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
-import { api, Account, AccountCategory, Product, ProductCategory } from '../../lib/api';
+import { api, Account, AccountCategory, Product, ProductCategory, type InvoiceDetail } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -61,6 +61,11 @@ function todayInputValue() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function toDateInputValue(value: string | null | undefined) {
+  if (!value) return todayInputValue();
+  return String(value).slice(0, 10);
+}
+
 function parseNum(v: string) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -88,8 +93,11 @@ function flatAccountOptions(
 
 export function GeneralTradeInvoicePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editInvoiceId = Number(searchParams.get('editInvoiceId') ?? 0);
+  const isEditMode = editInvoiceId > 0;
   const { restoredState, minimize } = useMinimizableForm<Draft>('general-trade');
-  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef) || isEditMode);
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -176,6 +184,7 @@ export function GeneralTradeInvoicePage() {
     ]);
     setProductCategories(cats);
     setProducts(qtyProducts);
+    if (isEditMode) return;
     try {
       const refRow = await api.getNextGeneralTradeReference();
       if (keepRestoredPredictedRef.current) {
@@ -187,11 +196,51 @@ export function GeneralTradeInvoicePage() {
       if (!keepRestoredPredictedRef.current) setPredictedRef('');
       keepRestoredPredictedRef.current = false;
     }
-  }, []);
+  }, [isEditMode]);
 
   useEffect(() => {
     reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    api
+      .getPendingApprovalDetail('invoice', editInvoiceId)
+      .then((detail) => {
+        if (cancelled) return;
+        const record = detail.record as unknown as InvoiceDetail;
+        setPredictedRef(String(record.reference ?? ''));
+        setInvoiceDate(toDateInputValue(record.invoiceDate as string | null | undefined));
+        setBillNo(String(record.billNo ?? ''));
+        setTafseel(String(record.tafseel ?? record.notes ?? ''));
+        setPartyAccountId(String(record.partyAccountId ?? ''));
+        setSalePartyAccountId(String(record.salePartyAccountId ?? ''));
+        const purchaseLines = record.generalPurchaseLines ?? [];
+        const saleLines = record.generalSaleLines ?? [];
+        const rows = purchaseLines.map((purchase, index) => {
+          const sale = saleLines[index];
+          return {
+            key: `edit-${purchase.id ?? index}`,
+            productId: Number(purchase.productId),
+            productName: purchase.product?.name ?? sale?.product?.name ?? '',
+            unit: purchase.product?.unit ?? sale?.product?.unit ?? null,
+            quantity: Number(purchase.quantity),
+            purchaseRate: Number(purchase.rate),
+            purchaseTotal: Number(purchase.lineTotal),
+            mazduriAmount: Number(purchase.mazduriAmount ?? 0),
+            saleRate: Number(sale?.rate ?? 0),
+            saleTotal: Number(sale?.lineTotal ?? 0),
+          };
+        });
+        setGridRows(rows);
+        setMazduriEnabled(rows.some((row) => row.mazduriAmount > 0));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load pending invoice'));
+    return () => {
+      cancelled = true;
+    };
+  }, [editInvoiceId, isEditMode]);
 
   function addToGrid() {
     setError('');
@@ -269,7 +318,7 @@ export function GeneralTradeInvoicePage() {
     }
     setSaving(true);
     try {
-      const result = await api.createGeneralTradeInvoice({
+      const payload = {
         invoiceDate,
         partyAccountId: Number(partyAccountId),
         salePartyAccountId: Number(salePartyAccountId),
@@ -282,7 +331,14 @@ export function GeneralTradeInvoicePage() {
           saleRate: row.saleRate,
           mazduriAmount: row.mazduriAmount > 0 ? row.mazduriAmount : undefined,
         })),
-      });
+      };
+      const result = isEditMode
+        ? await api.updatePendingGeneralTradeInvoice(editInvoiceId, payload)
+        : await api.createGeneralTradeInvoice(payload);
+      if (isEditMode) {
+        navigate('/approvals');
+        return;
+      }
       setMessage(`Invoice ${result.reference} submitted for approval.`);
       setGridRows([]);
       setMazduriEnabled(false);
@@ -575,7 +631,7 @@ export function GeneralTradeInvoicePage() {
                   Minimize
                 </SecondaryButton>
                 <FinancialButton type="submit" disabled={saving}>
-                  {saving ? 'Saving…' : 'Save invoice'}
+                  {saving ? 'Saving…' : isEditMode ? 'Update' : 'Save invoice'}
                 </FinancialButton>
               </div>
             </div>

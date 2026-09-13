@@ -1332,7 +1332,11 @@ async function nextVoucherNumber(
   type: VoucherType,
 ): Promise<number> {
   const { _max } = await tx.voucher.aggregate({
-    where: { financialYearId, type },
+    where: {
+      financialYearId,
+      type,
+      status: { not: VoucherStatus.CANCELLED },
+    },
     _max: { number: true },
   });
   return (_max.number ?? 0) + 1;
@@ -2737,67 +2741,233 @@ export async function updateVoucherAmount(
   newAmount: number,
   userId: number,
 ) {
-  if (newAmount <= 0) {
-    throw new AppError(400, 'Amount must be greater than zero');
-  }
+  return updateVoucherDetails(voucherId, { amount: newAmount }, userId);
+}
 
+/**
+ * Update amount / date / accounts on a posted standard 2-leg voucher (Payment/Receipt/Journal).
+ * Repoints existing ledger entries (does not delete/recreate) and recomputes all affected ledgers.
+ */
+export async function updateVoucherDetails(
+  voucherId: number,
+  patch: {
+    amount?: number;
+    date?: string;
+    debitAccountId?: number;
+    creditAccountId?: number;
+  },
+  userId: number,
+) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const voucher = await tx.voucher.findFirst({
-      where: { id: voucherId },
-    });
+    const voucher = await tx.voucher.findFirst({ where: { id: voucherId } });
     if (!voucher) throw new AppError(404, 'Voucher not found');
     if (voucher.status === VoucherStatus.CANCELLED) {
-      throw new AppError(400, 'Cannot update amount on a cancelled voucher');
+      throw new AppError(400, 'Cannot update a cancelled voucher');
     }
-    if (voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL' || voucher.type === 'SALE_PAUNCH' || voucher.type === 'SALE_COMMISSION') {
-      throw new AppError(400, 'Invoice voucher amounts cannot be edited');
+    if (
+      voucher.type === 'KACHI'
+      || voucher.type === 'PURCHASE_MAAL'
+      || voucher.type === 'SALE_PAUNCH'
+      || voucher.type === 'SALE_COMMISSION'
+      || voucher.type === 'PURCHASE_GENERAL'
+      || voucher.type === 'SALE_GENERAL'
+      || voucher.type === 'GENERAL_TRADE'
+    ) {
+      throw new AppError(400, 'Invoice vouchers cannot be edited here');
+    }
+    if (!isStandardVoucherType(voucher.type)) {
+      throw new AppError(400, 'Only Payment, Receipt, and Journal vouchers can be updated');
     }
     await assertActiveFinancialYear(tx, voucher.financialYearId);
 
-    const oldAmount = Number(voucher.amount);
-    const delta = newAmount - oldAmount;
-    if (Math.abs(delta) < 0.005) {
-      return tx.voucher.findUniqueOrThrow({ where: { id: voucher.id }, include: voucherInclude });
+    const nextAmount = patch.amount != null ? Number(patch.amount) : Number(voucher.amount);
+    if (!(nextAmount > 0)) {
+      throw new AppError(400, 'Amount must be greater than zero');
+    }
+
+    let nextDate = voucher.date;
+    if (patch.date != null) {
+      try {
+        nextDate = parseVoucherDateInput(patch.date);
+      } catch {
+        throw new AppError(400, 'Invalid voucher date');
+      }
+    }
+
+    const nextDebitAccountId = patch.debitAccountId ?? voucher.debitAccountId!;
+    const nextCreditAccountId = patch.creditAccountId ?? voucher.creditAccountId!;
+
+    const { debitAccount, creditAccount, financialYearId } = await validateVoucherCreate(tx, {
+      type: voucher.type,
+      debitAccountId: nextDebitAccountId,
+      creditAccountId: nextCreditAccountId,
+      amount: nextAmount,
+      date: nextDate,
+      reference: voucher.reference || 'update',
+    });
+    void debitAccount;
+    void creditAccount;
+
+    // Pending vouchers have no ledger rows yet — header-only update.
+    if (voucher.status === VoucherStatus.PENDING_APPROVAL) {
+      return tx.voucher.update({
+        where: { id: voucher.id },
+        data: {
+          amount: nextAmount,
+          date: nextDate,
+          debitAccountId: nextDebitAccountId,
+          creditAccountId: nextCreditAccountId,
+          financialYearId,
+          modifiedById: userId,
+        },
+        include: voucherInclude,
+      });
     }
 
     const entries = await tx.ledgerEntry.findMany({
       where: { voucherId: voucher.id, isReversal: false },
       orderBy: { id: 'asc' },
     });
-
     if (entries.length !== 2) {
-      throw new AppError(400, 'Voucher ledger entries are invalid for amount update');
+      throw new AppError(400, 'Voucher ledger entries are invalid for update');
     }
 
     const debitEntry = entries.find((e) => e.type === LedgerEntryType.DEBIT);
     const creditEntry = entries.find((e) => e.type === LedgerEntryType.CREDIT);
     if (!debitEntry || !creditEntry) {
-      throw new AppError(400, 'Voucher ledger entries are invalid for amount update');
+      throw new AppError(400, 'Voucher ledger entries are invalid for update');
     }
+
+    async function ledgerIdForAccount(accountId: number) {
+      let ledger = await tx.ledger.findUnique({ where: { accountId } });
+      if (!ledger) {
+        ledger = await tx.ledger.create({ data: { accountId, balance: 0 } });
+      }
+      return ledger.id;
+    }
+
+    const oldDebitLedgerId = debitEntry.ledgerId;
+    const oldCreditLedgerId = creditEntry.ledgerId;
+    const newDebitLedgerId = await ledgerIdForAccount(nextDebitAccountId);
+    const newCreditLedgerId = await ledgerIdForAccount(nextCreditAccountId);
+    const oldDate = voucher.date;
 
     await tx.ledgerEntry.update({
       where: { id: debitEntry.id },
-      data: { amount: newAmount },
+      data: { amount: nextAmount, ledgerId: newDebitLedgerId },
     });
     await tx.ledgerEntry.update({
       where: { id: creditEntry.id },
-      data: { amount: newAmount },
+      data: { amount: nextAmount, ledgerId: newCreditLedgerId },
     });
 
+    await tx.voucher.update({
+      where: { id: voucher.id },
+      data: {
+        amount: nextAmount,
+        date: nextDate,
+        debitAccountId: nextDebitAccountId,
+        creditAccountId: nextCreditAccountId,
+        financialYearId,
+        modifiedById: userId,
+      },
+    });
+
+    const fromDate = oldDate.getTime() <= nextDate.getTime() ? oldDate : nextDate;
     const from: LedgerRecomputeFrom = {
-      effectiveDate: voucher.date,
+      effectiveDate: fromDate,
       voucherNumber: voucher.number,
       voucherType: voucher.type,
       entryId: -1,
     };
-    await recomputeLedgerRunningBalancesInTx(tx, debitEntry.ledgerId, voucher.financialYearId!, from);
-    await recomputeLedgerRunningBalancesInTx(tx, creditEntry.ledgerId, voucher.financialYearId!, from);
+    const ledgerIds = new Set([
+      oldDebitLedgerId,
+      oldCreditLedgerId,
+      newDebitLedgerId,
+      newCreditLedgerId,
+    ]);
+    for (const ledgerId of ledgerIds) {
+      await recomputeLedgerRunningBalancesInTx(tx, ledgerId, financialYearId, from);
+    }
 
     await assertTrialBalanceInDev(tx);
 
+    return tx.voucher.findUniqueOrThrow({
+      where: { id: voucher.id },
+      include: voucherInclude,
+    });
+  });
+}
+
+/** Update a still-pending Payment/Receipt/Journal voucher (no ledger effect yet). */
+export async function updatePendingVoucher(
+  voucherId: number,
+  patch: {
+    amount?: number;
+    date?: string;
+    debitAccountId?: number;
+    creditAccountId?: number;
+    reference?: string;
+    description?: string;
+  },
+  userId: number,
+) {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const voucher = await tx.voucher.findFirst({ where: { id: voucherId } });
+    if (!voucher) throw new AppError(404, 'Voucher not found');
+    if (voucher.status !== VoucherStatus.PENDING_APPROVAL) {
+      throw new AppError(400, 'Only pending vouchers can be updated here');
+    }
+    if (!isStandardVoucherType(voucher.type)) {
+      throw new AppError(400, 'Only Payment, Receipt, and Journal vouchers can be updated');
+    }
+
+    const nextAmount = patch.amount != null ? Number(patch.amount) : Number(voucher.amount);
+    let nextDate = voucher.date;
+    if (patch.date != null) {
+      try {
+        nextDate = parseVoucherDateInput(patch.date);
+      } catch {
+        throw new AppError(400, 'Invalid voucher date');
+      }
+    }
+    const nextDebitAccountId = patch.debitAccountId ?? voucher.debitAccountId!;
+    const nextCreditAccountId = patch.creditAccountId ?? voucher.creditAccountId!;
+    const nextReference = patch.reference != null
+      ? patch.reference.trim()
+      : (voucher.reference ?? '');
+    const nextDescription = patch.description !== undefined
+      ? (patch.description?.trim() || null)
+      : voucher.description;
+
+    const { financialYearId } = await validateVoucherCreate(tx, {
+      type: voucher.type,
+      debitAccountId: nextDebitAccountId,
+      creditAccountId: nextCreditAccountId,
+      amount: nextAmount,
+      date: nextDate,
+      reference: nextReference || 'pending',
+    });
+
+    // Pending vouchers never have live ledger rows — header only.
+    const entryCount = await tx.ledgerEntry.count({ where: { voucherId: voucher.id } });
+    if (entryCount > 0) {
+      throw new AppError(400, 'Pending voucher unexpectedly has ledger entries');
+    }
+
     return tx.voucher.update({
       where: { id: voucher.id },
-      data: { amount: newAmount, modifiedById: userId },
+      data: {
+        amount: nextAmount,
+        date: nextDate,
+        debitAccountId: nextDebitAccountId,
+        creditAccountId: nextCreditAccountId,
+        reference: nextReference || voucher.reference,
+        description: nextDescription,
+        financialYearId,
+        modifiedById: userId,
+        status: VoucherStatus.PENDING_APPROVAL,
+      },
       include: voucherInclude,
     });
   });

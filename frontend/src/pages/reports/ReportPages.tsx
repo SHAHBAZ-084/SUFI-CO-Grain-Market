@@ -1783,11 +1783,16 @@ export function VouchersReportPage() {
     }
   }
 
-  async function handleUpdateAmount(amount: number) {
+  async function handleUpdateDetails(patch: {
+    amount: number;
+    date: string;
+    debitAccountId: number;
+    creditAccountId: number;
+  }) {
     if (!selected) return;
     setUpdating(true);
     try {
-      const updated = await api.updateVoucherAmount(selected.id, amount);
+      const updated = await api.updateVoucherDetails(selected.id, patch);
       setSelected(updated);
       await loadReport(offset);
     } catch (err) {
@@ -2022,7 +2027,7 @@ export function VouchersReportPage() {
         <VoucherDetailCard
           voucher={selected}
           onCancel={handleCancel}
-          onUpdateAmount={handleUpdateAmount}
+          onUpdateDetails={handleUpdateDetails}
           cancelling={cancelling}
           updating={updating}
         />

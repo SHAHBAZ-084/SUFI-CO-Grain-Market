@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   InvoiceAddRowAction,
   InvoiceField,
@@ -23,7 +23,7 @@ import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useMinimizableForm } from '../../hooks/useMinimizableForm';
-import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
+import { api, Account, AccountCategory, Product, SystemPreferences, type InvoiceDetail } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
@@ -90,6 +90,11 @@ function todayInputValue() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function toDateInputValue(value: string | null | undefined) {
+  if (!value) return todayInputValue();
+  return String(value).slice(0, 10);
+}
+
 function filterCategories(all: AccountCategory[], allowed: readonly string[]) {
   const set = new Set(allowed);
   return all.filter((c) => set.has(c.name));
@@ -134,8 +139,11 @@ function FlatAccountSelect({
 
 export function PurchaseMaalInvoicePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editInvoiceId = Number(searchParams.get('editInvoiceId') ?? 0);
+  const isEditMode = editInvoiceId > 0;
   const { restoredState, minimize } = useMinimizableForm<PurchaseMaalDraft>('purchase-maal');
-  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef) || isEditMode);
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -194,6 +202,7 @@ export function PurchaseMaalInvoicePage() {
     setCategories(base.categories);
     setPrefs(base.prefs);
     setProducts(base.products ?? []);
+    if (isEditMode) return;
     try {
       const refRow = await api.getNextPurchaseMaalReference();
       if (keepRestoredPredictedRef.current) {
@@ -205,11 +214,63 @@ export function PurchaseMaalInvoicePage() {
       if (!keepRestoredPredictedRef.current) setPredictedRef('');
       keepRestoredPredictedRef.current = false;
     }
-  }, []);
+  }, [isEditMode]);
 
   useEffect(() => {
     reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    api
+      .getPendingApprovalDetail('invoice', editInvoiceId)
+      .then((detail) => {
+        if (cancelled) return;
+        const record = detail.record as unknown as InvoiceDetail;
+        setPredictedRef(String(record.reference ?? ''));
+        setInvoiceDate(toDateInputValue(record.invoiceDate as string | null | undefined));
+        setProductId(record.productId ? String(record.productId) : '');
+        setJins(String(record.jins ?? record.product?.name ?? ''));
+        setBillNo(String(record.billNo ?? ''));
+        setGariNo(String(record.gariNo ?? ''));
+        setTafseel(String(record.tafseel ?? record.notes ?? ''));
+        setMarketFeeEnabled(Boolean(record.marketFeeEnabled));
+        setMazduriEnabled(Boolean(record.mazduriEnabled));
+        setLowerBoriThela((record.lowerBardanaMode as BoriThelaMode | null) ?? 'BORI');
+        setLowerBardanaQty(record.lowerBardanaQty != null ? String(record.lowerBardanaQty) : '');
+        setLowerBardanaRate(record.lowerBardanaRate != null ? String(record.lowerBardanaRate) : '');
+        setGridRows((record.purchaseMaalLines ?? []).map((line, index) => {
+          const raw = line as typeof line & { partyAccountId?: number };
+          const partyId = Number(line.partyAccount?.id ?? raw.partyAccountId);
+          return {
+            clientId: `edit-${line.id ?? index}`,
+            partyAccountId: partyId,
+            partyName: line.partyAccount?.name ?? accounts.find((a) => a.id === partyId)?.name ?? '',
+            jins: line.jins ?? '',
+            qism: line.qism ?? '',
+            boriOrThelaMode: line.boriOrThelaMode,
+            bagCount: Number(line.bagCount),
+            bhartii: Number(line.bhartii),
+            dharanCount: Number(line.dharanCount),
+            looseKg: Number(line.looseKg),
+            totalWeightKg: Number(line.totalWeightKg),
+            ratePerMaund: Number(line.ratePerMaund),
+            amount: Number(line.amount),
+            bardanaQty: line.bardanaQty != null ? Number(line.bardanaQty) : null,
+            bardanaRate: line.bardanaRate != null ? Number(line.bardanaRate) : null,
+            bardanaAmount: line.bardanaAmount != null ? Number(line.bardanaAmount) : null,
+            dammiChecked: Boolean(line.dammiChecked),
+            dammiAmount: Number(line.dammiAmount ?? 0),
+            netCreditToParty: Number(line.netCreditToParty),
+          };
+        }));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load pending invoice'));
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, editInvoiceId, isEditMode]);
 
   const prefRates = useMemo(
     () => ({
@@ -335,7 +396,7 @@ export function PurchaseMaalInvoicePage() {
 
     setSaving(true);
     try {
-      const result = await api.createPurchaseMaalInvoice({
+      const payload = {
         invoiceDate,
         productId: Number(productId),
         billNo: billNo.trim() || undefined,
@@ -365,7 +426,14 @@ export function PurchaseMaalInvoicePage() {
           bardanaRate: row.bardanaRate,
           dammiChecked: row.dammiChecked,
         })),
-      });
+      };
+      const result = isEditMode
+        ? await api.updatePendingPurchaseMaalInvoice(editInvoiceId, payload)
+        : await api.createPurchaseMaalInvoice(payload);
+      if (isEditMode) {
+        navigate('/approvals');
+        return;
+      }
       setMessage(`Invoice ${result.reference} posted.`);
       setGridRows([]);
       setLowerBardanaQty('');
@@ -598,6 +666,7 @@ export function PurchaseMaalInvoicePage() {
                 error={error}
                 message={message}
                 saving={saving}
+                primaryLabel={isEditMode ? 'Update' : 'Save invoice'}
                 onClose={() => navigate('/')}
                 onMinimize={() =>
                   minimize(

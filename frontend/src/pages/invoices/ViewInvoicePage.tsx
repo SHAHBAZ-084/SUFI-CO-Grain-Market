@@ -46,6 +46,7 @@ export function ViewInvoicePage() {
 
   const paramType = searchParams.get('type') ?? '';
   const paramNumber = searchParams.get('number') ?? '';
+  const paramId = searchParams.get('id') ?? '';
   const initialType = isInvoiceTypeKey(paramType) ? paramType : 'KACHI_MAAL';
   const initialNumber = /^\d+$/.test(paramNumber) ? paramNumber : '';
 
@@ -57,6 +58,33 @@ export function ViewInvoicePage() {
   const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
   const [notFoundRef, setNotFoundRef] = useState<string | null>(null);
   const [error, setError] = useState('');
+
+  const fetchInvoiceById = useCallback(async (id: number) => {
+    setError('');
+    setNotFoundRef(null);
+    setInvoice(null);
+    setPrefs(null);
+    setLoading(true);
+    try {
+      const [row, systemPrefs] = await Promise.all([
+        api.getInvoice(id),
+        api.getSystemPreferences(),
+      ]);
+      setInvoice(row);
+      setPrefs(systemPrefs);
+      if (isInvoiceTypeKey(row.type)) setInvoiceType(row.type);
+      const numMatch = /-(\d+)$/.exec(row.reference ?? '');
+      if (numMatch) setInvoiceNumber(String(parseInt(numMatch[1]!, 10)));
+    } catch (err) {
+      if (isInvoiceNotFoundError(err)) {
+        setNotFoundRef(`id:${id}`);
+      } else {
+        setError(err instanceof Error ? err.message : 'Lookup failed');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const fetchInvoice = useCallback(async (type: InvoiceTypeKey, numberText: string) => {
     setError('');
@@ -91,6 +119,13 @@ export function ViewInvoicePage() {
   }, []);
 
   useEffect(() => {
+    if (/^\d+$/.test(paramId)) {
+      const key = `id:${paramId}`;
+      if (autoFetchedKey.current === key) return;
+      autoFetchedKey.current = key;
+      void fetchInvoiceById(parseInt(paramId, 10));
+      return;
+    }
     if (!isInvoiceTypeKey(paramType) || !/^\d+$/.test(paramNumber)) return;
     const key = `${paramType}:${paramNumber}`;
     if (autoFetchedKey.current === key) return;
@@ -98,7 +133,7 @@ export function ViewInvoicePage() {
     setInvoiceType(paramType);
     setInvoiceNumber(paramNumber);
     void fetchInvoice(paramType, paramNumber);
-  }, [paramType, paramNumber, fetchInvoice]);
+  }, [paramType, paramNumber, paramId, fetchInvoice, fetchInvoiceById]);
 
   async function onFetch(event: FormEvent) {
     event.preventDefault();
@@ -128,7 +163,7 @@ export function ViewInvoicePage() {
   }
 
   return (
-    <PageShell title="View Invoice" subtitle="Look up a posted bill by type and number">
+    <PageShell title="View Invoice" subtitle="Look up a bill by type and number (posted or pending)">
       <Panel className="mb-6">
         <form onSubmit={onFetch} className="flex flex-wrap items-end gap-4">
           <div className="min-w-[220px] flex-1">

@@ -114,6 +114,7 @@ describe('approvals service (Phase 2)', () => {
       data: {
         type: InvoiceType.KACHI_MAAL,
         status: InvoiceStatus.PENDING_APPROVAL,
+        number: 91_000 + (stamp % 1000),
         reference: `KM-PEND-${stamp}`,
         total: 0,
         createdById: adminId,

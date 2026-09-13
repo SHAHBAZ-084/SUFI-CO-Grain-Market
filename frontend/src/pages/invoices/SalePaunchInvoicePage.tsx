@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   InvoiceAddRowAction,
   InvoiceField,
@@ -23,7 +23,7 @@ import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useMinimizableForm } from '../../hooks/useMinimizableForm';
-import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
+import { api, Account, AccountCategory, Product, SystemPreferences, type InvoiceDetail } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
@@ -95,6 +95,11 @@ function todayInputValue() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function toDateInputValue(value: string | null | undefined) {
+  if (!value) return todayInputValue();
+  return String(value).slice(0, 10);
+}
+
 function filterCategories(all: AccountCategory[], allowed: readonly string[]) {
   const set = new Set(allowed);
   return all.filter((c) => set.has(c.name));
@@ -139,8 +144,11 @@ function FlatAccountSelect({
 
 export function SalePaunchInvoicePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editInvoiceId = Number(searchParams.get('editInvoiceId') ?? 0);
+  const isEditMode = editInvoiceId > 0;
   const { restoredState, minimize } = useMinimizableForm<SalePaunchDraft>('sale-paunch');
-  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef) || isEditMode);
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -189,6 +197,7 @@ export function SalePaunchInvoicePage() {
     setCategories(base.categories);
     setPrefs(base.prefs);
     setProducts(base.products ?? []);
+    if (isEditMode) return;
     try {
       const refRow = await api.getNextSalePaunchReference();
       if (keepRestoredPredictedRef.current) {
@@ -200,11 +209,70 @@ export function SalePaunchInvoicePage() {
       if (!keepRestoredPredictedRef.current) setPredictedRef('');
       keepRestoredPredictedRef.current = false;
     }
-  }, []);
+  }, [isEditMode]);
 
   useEffect(() => {
     reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    api
+      .getPendingApprovalDetail('invoice', editInvoiceId)
+      .then((detail) => {
+        if (cancelled) return;
+        const record = detail.record as unknown as InvoiceDetail;
+        const productName = String(record.jins ?? '');
+        setPredictedRef(String(record.reference ?? ''));
+        setInvoiceDate(toDateInputValue(record.invoiceDate as string | null | undefined));
+        setJins(productName);
+        setProductId(record.productId ? String(record.productId) : String(products.find((p) => p.name === productName)?.id ?? ''));
+        setBillNo(String(record.billNo ?? ''));
+        setGariNo(String(record.gariNo ?? ''));
+        setTafseel(String(record.tafseel ?? record.notes ?? ''));
+        setSalePartyAccountId(String(record.salePartyAccountId ?? record.debitAccountId ?? ''));
+        setTaxAmount(record.taxAmount != null ? String(record.taxAmount) : '');
+        setMiscAmount(record.miscAmount != null ? String(record.miscAmount) : '');
+        setBiltyKirayaAmount(record.biltyKirayaAmount != null ? String(record.biltyKirayaAmount) : '');
+        setLowerBoriThela((record.lowerBardanaMode as BoriThelaMode | null) ?? 'BORI');
+        setLowerBardanaQty(record.lowerBardanaQty != null ? String(record.lowerBardanaQty) : '');
+        setLowerBardanaRate(record.lowerBardanaRate != null ? String(record.lowerBardanaRate) : '');
+        const firstLine = record.salePaunchLines?.[0];
+        setLowerRatePerMaund(firstLine?.lowerRatePerMaund != null ? String(firstLine.lowerRatePerMaund) : '');
+        setLowerKaatKg(firstLine?.lowerKaatKg != null ? String(firstLine.lowerKaatKg) : '');
+        setGridRows((record.salePaunchLines ?? []).map((line, index) => {
+          const raw = line as typeof line & { maalKhataAccountId?: number };
+          const accountId = Number(line.maalKhataAccount?.id ?? raw.maalKhataAccountId);
+          return {
+            clientId: `edit-${line.id ?? index}`,
+            maalKhataAccountId: accountId,
+            maalKhataName: line.maalKhataAccount?.name ?? accounts.find((a) => a.id === accountId)?.name ?? '',
+            boriOrThelaMode: line.boriOrThelaMode,
+            bagCount: Number(line.bagCount),
+            thelaCount: Number(line.thelaCount ?? 0),
+            compWeightKg: Number(line.totalWeightKg),
+            kaatKg: Number(line.kaatKg),
+            totalWeightKg: Number(line.totalWeightKg),
+            netWeightKg: Number(line.netWeightKg),
+            upperRatePerMaund: Number(line.upperRatePerMaund),
+            dammiChecked: Boolean(line.dammiChecked),
+            bardanaQty: line.bardanaQty != null ? Number(line.bardanaQty) : null,
+            bardanaRate: line.bardanaRate != null ? Number(line.bardanaRate) : null,
+            maunds: Number(line.netWeightKg) / 40,
+            upperAmount: Number(line.upperAmount),
+            kanta: Number(line.kanta),
+            netUpperAmount: Number(line.netUpperAmount),
+            dammiAmount: Number(line.dammiAmount ?? 0),
+            bardanaAmount: line.bardanaAmount != null ? Number(line.bardanaAmount) : null,
+          };
+        }));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load pending invoice'));
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, editInvoiceId, isEditMode, products]);
 
   const productOptions = useMemo(
     () => products.map((p) => ({ value: String(p.id), label: p.name })),
@@ -401,7 +469,7 @@ export function SalePaunchInvoicePage() {
 
     setSaving(true);
     try {
-      const result = await api.createSalePaunchInvoice({
+      const payload = {
         invoiceDate,
         salePartyAccountId: Number(salePartyAccountId),
         billNo: billNo.trim() || undefined,
@@ -433,7 +501,14 @@ export function SalePaunchInvoicePage() {
           bardanaRate: row.bardanaRate,
           dammiChecked: row.dammiChecked,
         })),
-      });
+      };
+      const result = isEditMode
+        ? await api.updatePendingSalePaunchInvoice(editInvoiceId, payload)
+        : await api.createSalePaunchInvoice(payload);
+      if (isEditMode) {
+        navigate('/approvals');
+        return;
+      }
       setMessage(`Invoice ${result.reference} posted.`);
       setGridRows([]);
       setSalePartyAccountId('');
@@ -688,6 +763,7 @@ export function SalePaunchInvoicePage() {
                 error={error}
                 message={message}
                 saving={saving}
+                primaryLabel={isEditMode ? 'Update' : 'Save invoice'}
                 onClose={() => navigate('/')}
                 onMinimize={() =>
                   minimize(

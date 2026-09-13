@@ -70,4 +70,18 @@ export function registerPurchaseMaalRoutes(router: Router) {
       res.status(201).json(invoice);
     }),
   );
+
+  router.patch(
+    '/purchase-maal/:id',
+    validateBody(createSchema),
+    asyncHandler(async (req, res) => {
+      const id = Number(req.params.id);
+      const invoice = await purchaseMaalService.updatePendingPurchaseMaalInvoice(
+        id,
+        req.body,
+        req.session.userId!,
+      );
+      res.json(invoice);
+    }),
+  );
 }

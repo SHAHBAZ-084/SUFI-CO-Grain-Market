@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DateField } from '../../components/ui/DateField';
 import {
   FieldLabel,
@@ -11,7 +11,7 @@ import {
   TextInput,
 } from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
-import { api, Account, AccountCategory, Product, ProductCategory } from '../../lib/api';
+import { api, Account, AccountCategory, Product, ProductCategory, type InvoiceDetail } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -49,6 +49,11 @@ function todayInputValue() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function toDateInputValue(value: string | null | undefined) {
+  if (!value) return todayInputValue();
+  return String(value).slice(0, 10);
+}
+
 function parseNum(v: string) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -76,8 +81,11 @@ function flatAccountOptions(
 
 export function SaleGeneralInvoicePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editInvoiceId = Number(searchParams.get('editInvoiceId') ?? 0);
+  const isEditMode = editInvoiceId > 0;
   const { restoredState, minimize } = useMinimizableForm<Draft>('sale-general');
-  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef) || isEditMode);
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -167,6 +175,7 @@ export function SaleGeneralInvoicePage() {
     ]);
     setProductCategories(cats);
     setProducts(qtyProducts);
+    if (isEditMode) return;
     try {
       const refRow = await api.getNextSaleGeneralReference();
       if (keepRestoredPredictedRef.current) {
@@ -178,11 +187,40 @@ export function SaleGeneralInvoicePage() {
       if (!keepRestoredPredictedRef.current) setPredictedRef('');
       keepRestoredPredictedRef.current = false;
     }
-  }, []);
+  }, [isEditMode]);
 
   useEffect(() => {
     reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    api
+      .getPendingApprovalDetail('invoice', editInvoiceId)
+      .then((detail) => {
+        if (cancelled) return;
+        const record = detail.record as unknown as InvoiceDetail;
+        setPredictedRef(String(record.reference ?? ''));
+        setInvoiceDate(toDateInputValue(record.invoiceDate as string | null | undefined));
+        setBillNo(String(record.billNo ?? ''));
+        setTafseel(String(record.tafseel ?? record.notes ?? ''));
+        setSalePartyAccountId(String(record.salePartyAccountId ?? ''));
+        setGridRows((record.generalSaleLines ?? []).map((line, index) => ({
+          key: `edit-${line.id ?? index}`,
+          productId: Number(line.productId),
+          productName: line.product?.name ?? '',
+          unit: line.product?.unit ?? null,
+          quantity: Number(line.quantity),
+          rate: Number(line.rate),
+          lineTotal: Number(line.lineTotal),
+        })));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load pending invoice'));
+    return () => {
+      cancelled = true;
+    };
+  }, [editInvoiceId, isEditMode]);
 
   function addToGrid() {
     setError('');
@@ -233,7 +271,7 @@ export function SaleGeneralInvoicePage() {
     }
     setSaving(true);
     try {
-      const result = await api.createSaleGeneralInvoice({
+      const payload = {
         invoiceDate,
         salePartyAccountId: Number(salePartyAccountId),
         billNo: billNo.trim() || undefined,
@@ -243,7 +281,14 @@ export function SaleGeneralInvoicePage() {
           quantity: row.quantity,
           rate: row.rate,
         })),
-      });
+      };
+      const result = isEditMode
+        ? await api.updatePendingSaleGeneralInvoice(editInvoiceId, payload)
+        : await api.createSaleGeneralInvoice(payload);
+      if (isEditMode) {
+        navigate('/approvals');
+        return;
+      }
       setMessage(`Invoice ${result.reference} submitted for approval.`);
       setGridRows([]);
       const refRow = await api.getNextSaleGeneralReference();
@@ -454,7 +499,7 @@ export function SaleGeneralInvoicePage() {
                   Minimize
                 </SecondaryButton>
                 <FinancialButton type="submit" disabled={saving}>
-                  {saving ? 'Saving…' : 'Save invoice'}
+                  {saving ? 'Saving…' : isEditMode ? 'Update' : 'Save invoice'}
                 </FinancialButton>
               </div>
             </div>

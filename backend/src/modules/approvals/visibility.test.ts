@@ -124,6 +124,7 @@ describe('visibility filters (Phase 4)', () => {
       data: {
         type: InvoiceType.KACHI_MAAL,
         status: InvoiceStatus.PENDING_APPROVAL,
+        number: 92_000 + (stamp % 1000),
         reference,
         total: 100,
         createdById: adminId,

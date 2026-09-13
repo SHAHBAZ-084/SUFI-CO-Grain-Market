@@ -22,18 +22,13 @@ import {
   combinedGeneralGoodsLineDescription,
   formatLineSnippet,
 } from './general-goods-descriptions';
-
-const TYPE_PREFIX = 'SG';
-
-async function nextReference(tx: Prisma.TransactionClient) {
-  const count = await tx.invoice.count({ where: { type: InvoiceType.SALE_GENERAL } });
-  return `${TYPE_PREFIX}-${String(count + 1).padStart(5, '0')}`;
-}
+import { allocateNextInvoiceReference } from './invoice-reference';
 
 export async function getNextSaleGeneralReference() {
   return prisma.$transaction(async (tx) => {
     await ensureGeneralGoodsAccounts(tx);
-    return { reference: await nextReference(tx) };
+    const { reference } = await allocateNextInvoiceReference(tx, InvoiceType.SALE_GENERAL);
+    return { reference };
   });
 }
 
@@ -51,6 +46,8 @@ export type CreateSaleGeneralInput = {
   lines: SaleGeneralLineInput[];
   createdById: number;
 };
+
+export type UpdateSaleGeneralInput = Omit<CreateSaleGeneralInput, 'createdById'>;
 
 export type ComputedSaleGeneralLine = {
   productId: number;
@@ -212,7 +209,7 @@ export async function createSaleGeneralInvoice(data: CreateSaleGeneralInput) {
     }
 
     const computedLines = buildSaleGeneralComputedLines(resolved);
-    const reference = await nextReference(tx);
+    const { number, reference } = await allocateNextInvoiceReference(tx, InvoiceType.SALE_GENERAL);
     const systemAccounts = await ensureGeneralGoodsAccounts(tx);
     const { legs, totalDebits, totalCredits, invoiceTotal } = buildSaleGeneralLedgerLegs(
       computedLines,
@@ -232,6 +229,7 @@ export async function createSaleGeneralInvoice(data: CreateSaleGeneralInput) {
       data: {
         type: InvoiceType.SALE_GENERAL,
         status: InvoiceStatus.PENDING_APPROVAL,
+        number,
         reference,
         invoiceDate,
         billNo: data.billNo?.trim() || null,
@@ -258,6 +256,92 @@ export async function createSaleGeneralInvoice(data: CreateSaleGeneralInput) {
 
     return tx.invoice.findUniqueOrThrow({
       where: { id: invoice.id },
+      include: {
+        generalSaleLines: { include: { product: true }, orderBy: { sortOrder: 'asc' } },
+        salePartyAccount: true,
+        createdBy: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+  });
+}
+
+export async function updatePendingSaleGeneralInvoice(
+  invoiceId: number,
+  data: UpdateSaleGeneralInput,
+  userId: number,
+) {
+  void userId;
+  if (!data.lines.length) throw new AppError(400, 'At least one line is required');
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        type: InvoiceType.SALE_GENERAL,
+        status: InvoiceStatus.PENDING_APPROVAL,
+      },
+      select: { id: true, reference: true },
+    });
+    if (!existing) throw new AppError(404, 'Pending Sale General invoice not found');
+
+    await getActiveFinancialYearId(tx);
+    const systemAccounts = await ensureGeneralGoodsAccounts(tx);
+    await assertSalePartyAccount(tx, data.salePartyAccountId);
+
+    const { assertProductApprovedForPosting } = await import('../approvals/approval-guards');
+    const resolved: Array<
+      SaleGeneralLineInput & { productName: string; accountId: number; unitCost: number }
+    > = [];
+    for (const line of data.lines) {
+      await assertProductApprovedForPosting(tx, line.productId);
+      const product = await resolveQuantityProduct(tx, line.productId);
+      resolved.push({
+        ...line,
+        productName: product.name,
+        accountId: product.accountId,
+        unitCost: product.averageCost != null ? Number(product.averageCost) : 0,
+      });
+    }
+
+    const computedLines = buildSaleGeneralComputedLines(resolved);
+    const { legs, totalDebits, totalCredits, invoiceTotal } = buildSaleGeneralLedgerLegs(
+      computedLines,
+      data.salePartyAccountId,
+      systemAccounts.saleRevenue.id,
+      existing.reference,
+    );
+
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+      throw new AppError(500, 'Invoice debits and credits do not balance — save aborted');
+    }
+
+    await tx.generalSaleLine.deleteMany({ where: { invoiceId: existing.id } });
+    await tx.invoice.update({
+      where: { id: existing.id },
+      data: {
+        invoiceDate: new Date(data.invoiceDate),
+        billNo: data.billNo?.trim() || null,
+        tafseel: data.tafseel?.trim() || null,
+        notes: data.tafseel?.trim() || null,
+        salePartyAccountId: data.salePartyAccountId,
+        total: invoiceTotal,
+        generalSaleLines: {
+          create: computedLines.map((line, index) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            rate: line.rate,
+            lineTotal: line.lineTotal,
+            unitCost: line.unitCost,
+            sortOrder: index,
+          })),
+        },
+      },
+    });
+
+    void legs;
+
+    return tx.invoice.findUniqueOrThrow({
+      where: { id: existing.id },
       include: {
         generalSaleLines: { include: { product: true }, orderBy: { sortOrder: 'asc' } },
         salePartyAccount: true,

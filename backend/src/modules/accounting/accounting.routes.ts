@@ -193,11 +193,52 @@ accountingRouter.post(
 
 accountingRouter.patch(
   '/vouchers/:voucherId',
-  validateBody(z.object({ amount: z.number().positive() })),
+  validateBody(
+    z.object({
+      amount: z.number().positive().optional(),
+      date: z.string().min(1).optional(),
+      debitAccountId: z.number().int().optional(),
+      creditAccountId: z.number().int().optional(),
+      reference: z.string().optional(),
+      description: z.string().optional().nullable(),
+    }).refine(
+      (body) =>
+        body.amount != null
+        || body.date != null
+        || body.debitAccountId != null
+        || body.creditAccountId != null
+        || body.reference != null
+        || body.description !== undefined,
+      { message: 'At least one field is required' },
+    ),
+  ),
   asyncHandler(async (req, res) => {
-    const voucher = await accountingService.updateVoucherAmount(
+    const voucherId = parseInt(param(req.params.voucherId), 10);
+    const voucher = await accountingService.updateVoucherDetails(
+      voucherId,
+      req.body,
+      req.session.userId!,
+    );
+    res.json(voucher);
+  }),
+);
+
+accountingRouter.patch(
+  '/vouchers/:voucherId/pending',
+  validateBody(
+    z.object({
+      amount: z.number().positive().optional(),
+      date: z.string().min(1).optional(),
+      debitAccountId: z.number().int().optional(),
+      creditAccountId: z.number().int().optional(),
+      reference: z.string().optional(),
+      description: z.string().optional().nullable(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const voucher = await accountingService.updatePendingVoucher(
       parseInt(param(req.params.voucherId), 10),
-      req.body.amount,
+      req.body,
       req.session.userId!,
     );
     res.json(voucher);

@@ -202,6 +202,10 @@ export type GeneralSaleLineDetail = {
 
 export type InvoiceDetail = Invoice & {
   invoiceDate?: string | null;
+  debitAccountId?: number | null;
+  partyAccountId?: number | null;
+  salePartyAccountId?: number | null;
+  productId?: number | null;
   billNo?: string | null;
   gariNo?: string | null;
   jins?: string | null;
@@ -228,6 +232,7 @@ export type InvoiceDetail = Invoice & {
   saleCommissionLines?: MaalLineDetail[];
   generalPurchaseLines?: GeneralPurchaseLineDetail[];
   generalSaleLines?: GeneralSaleLineDetail[];
+  product?: Product | null;
   vouchers?: { voucher: Voucher }[];
   createdBy?: VoucherUser | null;
 };
@@ -439,6 +444,9 @@ export const api = {
     return request<Paginated<Invoice>>(`/api/invoices${suffix}`);
   },
 
+  getInvoice(id: number) {
+    return request<InvoiceDetail>(`/api/invoices/${id}`);
+  },
   getInvoiceByReference(reference: string) {
     const query = new URLSearchParams({ reference });
     return request<InvoiceDetail>(`/api/invoices/by-reference?${query.toString()}`);
@@ -476,6 +484,13 @@ export const api = {
   }) {
     return request<KachiMaalInvoiceResult>('/api/invoices/kachi-maal', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updatePendingKachiMaalInvoice(invoiceId: number, data: Record<string, unknown>) {
+    return request<KachiMaalInvoiceResult>(`/api/invoices/kachi-maal/${invoiceId}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   },
@@ -518,6 +533,13 @@ export const api = {
     });
   },
 
+  updatePendingPurchaseMaalInvoice(invoiceId: number, data: Record<string, unknown>) {
+    return request<KachiMaalInvoiceResult>(`/api/invoices/purchase-maal/${invoiceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
   getNextPurchaseGeneralReference() {
     return request<{ reference: string }>('/api/invoices/purchase-general/next-reference');
   },
@@ -536,6 +558,13 @@ export const api = {
   }) {
     return request<KachiMaalInvoiceResult>('/api/invoices/purchase-general', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updatePendingPurchaseGeneralInvoice(invoiceId: number, data: Record<string, unknown>) {
+    return request<KachiMaalInvoiceResult>(`/api/invoices/purchase-general/${invoiceId}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   },
@@ -561,6 +590,13 @@ export const api = {
     });
   },
 
+  updatePendingSaleGeneralInvoice(invoiceId: number, data: Record<string, unknown>) {
+    return request<KachiMaalInvoiceResult>(`/api/invoices/sale-general/${invoiceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
   getNextGeneralTradeReference() {
     return request<{ reference: string }>('/api/invoices/general-trade/next-reference');
   },
@@ -581,6 +617,13 @@ export const api = {
   }) {
     return request<KachiMaalInvoiceResult>('/api/invoices/general-trade', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updatePendingGeneralTradeInvoice(invoiceId: number, data: Record<string, unknown>) {
+    return request<KachiMaalInvoiceResult>(`/api/invoices/general-trade/${invoiceId}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   },
@@ -627,6 +670,13 @@ export const api = {
     });
   },
 
+  updatePendingSalePaunchInvoice(invoiceId: number, data: Record<string, unknown>) {
+    return request<KachiMaalInvoiceResult>(`/api/invoices/sale-paunch/${invoiceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
   getNextSaleCommissionReference() {
     return request<{ reference: string }>('/api/invoices/sale-commission/next-reference');
   },
@@ -661,6 +711,13 @@ export const api = {
   }) {
     return request<KachiMaalInvoiceResult>('/api/invoices/sale-commission', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updatePendingSaleCommissionInvoice(invoiceId: number, data: Record<string, unknown>) {
+    return request<KachiMaalInvoiceResult>(`/api/invoices/sale-commission/${invoiceId}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   },
@@ -812,9 +869,38 @@ export const api = {
     return request<Voucher>('/api/accounting/vouchers', { method: 'POST', body: JSON.stringify(data) });
   },
   updateVoucherAmount(voucherId: number, amount: number) {
+    return this.updateVoucherDetails(voucherId, { amount });
+  },
+  updateVoucherDetails(
+    voucherId: number,
+    data: {
+      amount?: number;
+      date?: string;
+      debitAccountId?: number;
+      creditAccountId?: number;
+      reference?: string;
+      description?: string | null;
+    },
+  ) {
     return request<Voucher>(`/api/accounting/vouchers/${voucherId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify(data),
+    });
+  },
+  updatePendingVoucher(
+    voucherId: number,
+    data: {
+      amount?: number;
+      date?: string;
+      debitAccountId?: number;
+      creditAccountId?: number;
+      reference?: string;
+      description?: string | null;
+    },
+  ) {
+    return request<Voucher>(`/api/accounting/vouchers/${voucherId}/pending`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   },
   cancelVoucher(voucherId: number) {

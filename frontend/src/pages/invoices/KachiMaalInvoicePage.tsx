@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   InvoiceAddRowAction,
   InvoiceField,
@@ -22,7 +22,7 @@ import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useMinimizableForm } from '../../hooks/useMinimizableForm';
-import { api, Account, AccountCategory, Product, SystemPreferences } from '../../lib/api';
+import { api, Account, AccountCategory, Product, SystemPreferences, type InvoiceDetail } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { invoiceLoadErrorMessage, loadInvoiceFormBase } from '../../lib/invoiceFormLoad';
 import { InvoicePreviewGridShell } from './InvoicePreviewGrid';
@@ -88,6 +88,11 @@ function todayInputValue() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function toDateInputValue(value: string | null | undefined) {
+  if (!value) return todayInputValue();
+  return String(value).slice(0, 10);
+}
+
 function filterCategories(all: AccountCategory[], allowed: readonly string[]) {
   const set = new Set(allowed);
   return all.filter((c) => set.has(c.name));
@@ -137,8 +142,11 @@ function FlatAccountSelect({
 
 export function KachiMaalInvoicePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editInvoiceId = Number(searchParams.get('editInvoiceId') ?? 0);
+  const isEditMode = editInvoiceId > 0;
   const { restoredState, minimize } = useMinimizableForm<KachiMaalDraft>('kachi-maal');
-  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef));
+  const keepRestoredPredictedRef = useRef(Boolean(restoredState?.predictedRef) || isEditMode);
   const trapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   useFocusTrap(trapRef, { initialFocusRef: dateRef });
@@ -188,6 +196,7 @@ export function KachiMaalInvoicePage() {
     setCategories(base.categories);
     setPrefs(base.prefs);
     setProducts(base.products ?? []);
+    if (isEditMode) return;
     try {
       const refRow = await api.getNextKachiMaalReference();
       if (keepRestoredPredictedRef.current) {
@@ -199,11 +208,58 @@ export function KachiMaalInvoicePage() {
       if (!keepRestoredPredictedRef.current) setPredictedRef('');
       keepRestoredPredictedRef.current = false;
     }
-  }, []);
+  }, [isEditMode]);
 
   useEffect(() => {
     reload().catch((err) => setError(invoiceLoadErrorMessage(err)));
   }, [reload]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    api
+      .getPendingApprovalDetail('invoice', editInvoiceId)
+      .then((detail) => {
+        if (cancelled) return;
+        const record = detail.record as unknown as InvoiceDetail;
+        setPredictedRef(String(record.reference ?? ''));
+        setInvoiceDate(toDateInputValue(record.invoiceDate as string | null | undefined));
+        setProductId(record.productId ? String(record.productId) : '');
+        setJins(String(record.jins ?? ''));
+        setBillNo(String(record.billNo ?? ''));
+        setGariNo(String(record.gariNo ?? ''));
+        setTafseel(String(record.tafseel ?? record.notes ?? ''));
+        setDebitAccountId(String(record.debitAccountId ?? ''));
+        setMiscAmount(record.miscAmount != null ? String(record.miscAmount) : '');
+        setLowerBoriThela((record.lowerBardanaMode as BoriThelaMode | null) ?? 'BORI');
+        setLowerBardanaQty(record.lowerBardanaQty != null ? String(record.lowerBardanaQty) : '');
+        setLowerBardanaRate(record.lowerBardanaRate != null ? String(record.lowerBardanaRate) : '');
+        setGridRows((record.kachiMaalLines ?? []).map((line, index) => ({
+          clientId: `edit-${line.id ?? index}`,
+          partyAccountId: Number(line.partyAccount?.id ?? 0) || Number((line as { partyAccountId?: number }).partyAccountId),
+          partyName: line.partyAccount?.name ?? accounts.find((a) => a.id === Number((line as { partyAccountId?: number }).partyAccountId))?.name ?? '',
+          jins: line.jins ?? '',
+          qism: line.qism ?? '',
+          boriOrThelaMode: line.boriOrThelaMode,
+          bagCount: Number(line.bagCount),
+          bhartii: Number(line.bhartii),
+          dharanCount: Number(line.dharanCount),
+          looseKg: Number(line.looseKg),
+          totalWeightKg: Number(line.totalWeightKg),
+          ratePerMaund: Number(line.ratePerMaund),
+          amount: Number(line.amount),
+          bardanaQty: line.bardanaQty != null ? Number(line.bardanaQty) : null,
+          bardanaRate: line.bardanaRate != null ? Number(line.bardanaRate) : null,
+          bardanaAmount: line.bardanaAmount != null ? Number(line.bardanaAmount) : null,
+          netCreditToParty: Number(line.netCreditToParty),
+          totalMazduriPreview: 0,
+        })));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load pending invoice'));
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, editInvoiceId, isEditMode]);
 
   const prefRates = useMemo(
     () => ({
@@ -320,7 +376,7 @@ export function KachiMaalInvoicePage() {
 
     setSaving(true);
     try {
-      const result = await api.createKachiMaalInvoice({
+      const payload = {
         invoiceDate,
         billNo: billNo.trim() || undefined,
         gariNo: gariNo.trim() || undefined,
@@ -348,7 +404,14 @@ export function KachiMaalInvoicePage() {
           bardanaQty: row.bardanaQty,
           bardanaRate: row.bardanaRate,
         })),
-      });
+      };
+      const result = isEditMode
+        ? await api.updatePendingKachiMaalInvoice(editInvoiceId, payload)
+        : await api.createKachiMaalInvoice(payload);
+      if (isEditMode) {
+        navigate('/approvals');
+        return;
+      }
       setMessage(`Invoice ${result.reference} posted with ${result.vouchers?.length ?? 0} vouchers.`);
       setGridRows([]);
       setMiscAmount('');
@@ -586,6 +649,7 @@ export function KachiMaalInvoicePage() {
                 error={error}
                 message={message}
                 saving={saving}
+                primaryLabel={isEditMode ? 'Update' : 'Save invoice'}
                 onClose={() => navigate('/')}
                 onMinimize={() =>
                   minimize(

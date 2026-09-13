@@ -29,18 +29,13 @@ import {
   voucherReferenceFromBillNo,
   type InvoiceVoucherHeader,
 } from './invoice-voucher-descriptions';
-
-const TYPE_PREFIX = 'SC';
-
-async function nextReference(tx: Prisma.TransactionClient) {
-  const count = await tx.invoice.count({ where: { type: InvoiceType.SALE_COMMISSION } });
-  return `${TYPE_PREFIX}-${String(count + 1).padStart(5, '0')}`;
-}
+import { allocateNextInvoiceReference } from './invoice-reference';
 
 export async function getNextSaleCommissionReference() {
   return prisma.$transaction(async (tx) => {
     await ensureSaleCommissionAccounts(tx);
-    return { reference: await nextReference(tx) };
+    const { reference } = await allocateNextInvoiceReference(tx, InvoiceType.SALE_COMMISSION);
+    return { reference };
   });
 }
 
@@ -75,6 +70,8 @@ export type CreateSaleCommissionInput = {
   lines: SaleCommissionLineInput[];
   createdById: number;
 };
+
+export type UpdateSaleCommissionInput = Omit<CreateSaleCommissionInput, 'createdById'>;
 
 async function assertPurchasePartyAccount(tx: Prisma.TransactionClient, accountId: number) {
   const account = await tx.account.findFirst({
@@ -309,7 +306,7 @@ export async function createSaleCommissionInvoice(data: CreateSaleCommissionInpu
     };
     const product = data.jins?.trim() || computedLines[0]?.jins?.trim() || null;
 
-    const reference = await nextReference(tx);
+    const { number, reference } = await allocateNextInvoiceReference(tx, InvoiceType.SALE_COMMISSION);
     const { legs, totalDebits } = buildLedgerLegs(
       data.salePartyAccountId,
       computedLines,
@@ -328,6 +325,7 @@ export async function createSaleCommissionInvoice(data: CreateSaleCommissionInpu
       data: {
         type: InvoiceType.SALE_COMMISSION,
         status: InvoiceStatus.PENDING_APPROVAL,
+        number,
         reference,
         invoiceDate,
         billNo: data.billNo?.trim() || null,
@@ -376,6 +374,124 @@ export async function createSaleCommissionInvoice(data: CreateSaleCommissionInpu
       include: {
         saleCommissionLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
         debitAccount: true,
+        createdBy: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+  });
+}
+
+export async function updatePendingSaleCommissionInvoice(
+  invoiceId: number,
+  data: UpdateSaleCommissionInput,
+  userId: number,
+) {
+  void userId;
+  if (data.lines.length === 0) {
+    throw new AppError(400, 'At least one line is required');
+  }
+
+  const prefs = await getSystemPreferences();
+  const computedLines = buildComputedLines(data.lines, prefs);
+  const totals = computeSaleCommissionInvoiceTotals(computedLines, prefs, {
+    munshianaAmount: data.munshianaAmount,
+    miscAmount: data.miscAmount,
+    lowerBardanaQty: data.lowerBardanaQty,
+    lowerBardanaRate: data.lowerBardanaRate,
+  });
+
+  if (!(totals.netSalePartyDebit > 0)) {
+    throw new AppError(400, 'Invoice net amount must be greater than zero');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        type: InvoiceType.SALE_COMMISSION,
+        status: InvoiceStatus.PENDING_APPROVAL,
+      },
+      select: { id: true, reference: true },
+    });
+    if (!existing) throw new AppError(404, 'Pending Sale Commission invoice not found');
+
+    await getActiveFinancialYearId(tx);
+    const systemAccounts = await ensureSaleCommissionAccounts(tx);
+    await assertSalePartyAccount(tx, data.salePartyAccountId);
+    for (const line of computedLines) {
+      await assertPurchasePartyAccount(tx, line.partyAccountId);
+    }
+
+    const header: InvoiceVoucherHeader = {
+      tafseel: data.tafseel,
+      gariNo: data.gariNo,
+    };
+    const product = data.jins?.trim() || computedLines[0]?.jins?.trim() || null;
+
+    const { legs, totalDebits } = buildLedgerLegs(
+      data.salePartyAccountId,
+      computedLines,
+      totals,
+      systemAccounts,
+      data.lowerBardanaMode,
+      header,
+      existing.reference,
+      product,
+    );
+
+    await tx.saleCommissionLine.deleteMany({ where: { invoiceId: existing.id } });
+    await tx.invoice.update({
+      where: { id: existing.id },
+      data: {
+        invoiceDate: new Date(data.invoiceDate),
+        billNo: data.billNo?.trim() || null,
+        gariNo: data.gariNo?.trim() || null,
+        jins: data.jins?.trim() || null,
+        qism: data.qism?.trim() || null,
+        tafseel: data.tafseel?.trim() || null,
+        notes: data.tafseel?.trim() || null,
+        debitAccountId: data.salePartyAccountId,
+        salePartyAccountId: data.salePartyAccountId,
+        miscAmount: totals.miscAmount,
+        munshianaAmount: totals.munshianaAmount,
+        lowerBardanaMode: data.lowerBardanaMode ?? null,
+        lowerBardanaQty: data.lowerBardanaQty ?? null,
+        lowerBardanaRate: data.lowerBardanaRate ?? null,
+        lowerBardanaAmount: totals.settlementBardanaAmount,
+        total: totals.netSalePartyDebit,
+        saleCommissionLines: {
+          create: computedLines.map((line, index) => ({
+            partyAccountId: line.partyAccountId,
+            jins: line.jins?.trim() || null,
+            qism: line.qism?.trim() || null,
+            boriOrThelaMode: line.boriOrThelaMode,
+            bagCount: line.bagCount,
+            bhartii: line.bhartii,
+            dharanCount: line.dharanCount,
+            looseKg: line.looseKg,
+            totalWeightKg: line.totalWeightKg,
+            ratePerMaund: line.ratePerMaund,
+            amount: line.amount,
+            bardanaQty: line.bardanaQty ?? null,
+            bardanaRate: line.bardanaRate ?? null,
+            bardanaAmount: line.bardanaAmount,
+            dammiChecked: line.dammiChecked ?? false,
+            dammiAmount: line.dammiAmount,
+            netCreditToParty: line.netCreditToParty,
+            sortOrder: index,
+          })),
+        },
+      },
+    });
+
+    void legs;
+    void totalDebits;
+
+    return tx.invoice.findUniqueOrThrow({
+      where: { id: existing.id },
+      include: {
+        saleCommissionLines: { include: { partyAccount: true }, orderBy: { sortOrder: 'asc' } },
+        debitAccount: true,
+        salePartyAccount: true,
         createdBy: { select: { id: true, displayName: true, username: true } },
       },
     });

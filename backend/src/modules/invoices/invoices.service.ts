@@ -4,17 +4,13 @@ import { AppError } from '../../utils/helpers';
 import { PaginatedResult } from '../../utils/pagination';
 import { USER_VISIBLE_INVOICE_STATUS } from '../approvals/record-status';
 import { getActiveFinancialYearId } from '../accounting/accounting.service';
-import { buildInvoiceReference, INVOICE_TYPE_PREFIX } from './invoice-reference';
+import {
+  allocateNextInvoiceReference,
+  buildInvoiceReference,
+  INVOICE_TYPE_PREFIX,
+} from './invoice-reference';
 
 export { INVOICE_TYPE_PREFIX, buildInvoiceReference };
-
-const TYPE_PREFIX = INVOICE_TYPE_PREFIX;
-
-async function nextReference(tx: Prisma.TransactionClient, type: InvoiceType) {
-  const prefix = TYPE_PREFIX[type];
-  const count = await tx.invoice.count({ where: { type } });
-  return `${prefix}-${String(count + 1).padStart(5, '0')}`;
-}
 
 export async function listInvoices(
   filters?: { type?: InvoiceType; status?: InvoiceStatus },
@@ -96,8 +92,11 @@ const invoiceDetailInclude = {
   createdBy: { select: { id: true, displayName: true, username: true } },
 } as const;
 
-function assertInvoiceVisible(invoice: { status: InvoiceStatus }) {
-  if (invoice.status !== USER_VISIBLE_INVOICE_STATUS) {
+function assertInvoiceVisibleForBill(invoice: { status: InvoiceStatus }) {
+  if (
+    invoice.status !== InvoiceStatus.POSTED
+    && invoice.status !== InvoiceStatus.PENDING_APPROVAL
+  ) {
     throw new AppError(404, 'Invoice not found');
   }
 }
@@ -108,7 +107,7 @@ export async function getInvoice(id: number) {
     include: invoiceDetailInclude,
   });
   if (!invoice) throw new AppError(404, 'Invoice not found');
-  assertInvoiceVisible(invoice);
+  assertInvoiceVisibleForBill(invoice);
   return invoice;
 }
 
@@ -116,14 +115,14 @@ export async function getInvoiceByReference(reference: string) {
   const trimmed = reference.trim();
   if (!trimmed) throw new AppError(400, 'Reference is required');
 
-  const invoice = await prisma.invoice.findUnique({
+  const invoice = await prisma.invoice.findFirst({
     where: { reference: trimmed },
     include: invoiceDetailInclude,
   });
   if (!invoice) {
     throw new AppError(404, `No invoice found for ${trimmed}.`);
   }
-  assertInvoiceVisible(invoice);
+  assertInvoiceVisibleForBill(invoice);
   return invoice;
 }
 
@@ -143,12 +142,13 @@ export async function createInvoiceDraft(data: {
 
   return prisma.$transaction(async (tx) => {
     const financialYearId = await getActiveFinancialYearId(tx);
-    const reference = await nextReference(tx, data.type);
+    const { number, reference } = await allocateNextInvoiceReference(tx, data.type);
 
     return tx.invoice.create({
       data: {
         type: data.type,
         status: InvoiceStatus.DRAFT,
+        number,
         reference,
         customerId: data.customerId ?? null,
         supplierId: data.supplierId ?? null,

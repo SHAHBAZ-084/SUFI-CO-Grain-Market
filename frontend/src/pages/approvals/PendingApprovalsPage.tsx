@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DateField } from '../../components/ui/DateField';
 import {
   FieldLabel,
@@ -79,6 +80,22 @@ function toDateInputValue(value: unknown): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+const INVOICE_EDIT_ROUTES: Record<string, string> = {
+  PURCHASE_GENERAL: '/invoices/purchase-general',
+  SALE_GENERAL: '/invoices/sale-general',
+  GENERAL_TRADE: '/invoices/general-trade',
+  KACHI_MAAL: '/invoices/kachi-maal',
+  PURCHASE_MAAL: '/invoices/purchase-maal',
+  SALE_PAUNCH: '/invoices/sale-paunch',
+  SALE_COMMISSION: '/invoices/sale-commission',
+};
+
+const VOUCHER_EDIT_ROUTES: Record<string, string> = {
+  PAYMENT: '/vouchers/payment',
+  RECEIPT: '/vouchers/receipt',
+  JOURNAL: '/vouchers/journal',
+};
 
 function ApprovalEditModal({
   detail,
@@ -450,6 +467,7 @@ function ApprovalEditModal({
 }
 
 export function PendingApprovalsPage() {
+  const navigate = useNavigate();
   const { user, loading: authLoading, logout } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
 
@@ -525,6 +543,30 @@ export function PendingApprovalsPage() {
 
   function canEditRow(row: PendingApprovalItem) {
     return isAdmin || (row.createdBy?.id != null && row.createdBy.id === user?.id);
+  }
+
+  function onEdit(row: PendingApprovalItem) {
+    const recordType = row.recordType ?? '';
+    if (row.kind === 'invoice') {
+      const route = INVOICE_EDIT_ROUTES[recordType];
+      if (route) {
+        navigate(`${route}?editInvoiceId=${row.id}`);
+        return;
+      }
+    }
+    if (row.kind === 'voucher') {
+      const route = VOUCHER_EDIT_ROUTES[recordType];
+      if (route) {
+        navigate(`${route}?editVoucherId=${row.id}`);
+        return;
+      }
+    }
+    setEditTarget({ kind: row.kind, id: row.id });
+  }
+
+  function onViewInvoice(row: PendingApprovalItem) {
+    if (row.kind !== 'invoice') return;
+    navigate(`/invoices/view-invoice?id=${row.id}`);
   }
 
   async function onApprove(row: PendingApprovalItem) {
@@ -667,7 +709,7 @@ export function PendingApprovalsPage() {
                       {row.description?.trim() ? row.description : '—'}
                     </td>
                     <td className="whitespace-nowrap">
-                      {hasActions ? (
+                      {row.kind === 'invoice' || hasActions ? (
                         <div className="flex items-center gap-2">
                           {isAdmin ? (
                             <PrimaryButton
@@ -679,12 +721,22 @@ export function PendingApprovalsPage() {
                               {busy ? '…' : 'Approve'}
                             </PrimaryButton>
                           ) : null}
+                          {row.kind === 'invoice' ? (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-textPrimary hover:underline disabled:opacity-60"
+                              disabled={busy}
+                              onClick={() => onViewInvoice(row)}
+                            >
+                              View
+                            </button>
+                          ) : null}
                           {editable ? (
                             <button
                               type="button"
                               className="text-xs font-medium text-textPrimary hover:underline disabled:opacity-60"
                               disabled={busy || editLoading}
-                              onClick={() => setEditTarget({ kind: row.kind, id: row.id })}
+                              onClick={() => onEdit(row)}
                             >
                               Edit
                             </button>
