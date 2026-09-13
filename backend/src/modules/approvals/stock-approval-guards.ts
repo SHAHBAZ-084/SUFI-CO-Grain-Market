@@ -5,7 +5,10 @@ import {
   computeStockOutBags,
   type StockBagKind,
 } from '../stock/stock.calculations';
-import type { SalePaunchStockLine } from '../stock/stock.service';
+import {
+  resolveSalePaunchStockProduct,
+  type SalePaunchStockLine,
+} from '../stock/stock.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -61,25 +64,25 @@ export async function assertStockAvailableForSalePaunchOut(
   >();
 
   for (const line of lines) {
-    const product = await tx.product.findFirst({
-      where: { accountId: line.maalKhataAccountId, isActive: true },
-      select: { id: true, name: true },
-    });
-    if (!product) continue;
-
     const kind = bagTypeFromMode(line.boriOrThelaMode);
     const bagType = toStockBagType(kind);
     const bagsOut = computeStockOutBags(line.bagCount, line.thelaCount, kind);
     if (!(bagsOut > 0)) continue;
 
-    const key = `${product.id}:${bagType}`;
+    const resolved = await resolveSalePaunchStockProduct(tx, line.maalKhataAccountId);
+    if (!resolved) {
+      // Int/Ext party lines skip product stock checks (no product to reduce).
+      continue;
+    }
+
+    const key = `${resolved.productId}:${bagType}`;
     const existing = requiredByProduct.get(key);
     if (existing) {
       existing.bags += bagsOut;
     } else {
       requiredByProduct.set(key, {
-        productId: product.id,
-        productName: product.name,
+        productId: resolved.productId,
+        productName: resolved.productName,
         bagType,
         bags: bagsOut,
       });

@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import { APPROVALS_CHANGED_EVENT } from '../../lib/approvals';
 import { voucherTypeColorClass } from '../../lib/format';
+import { RemindersNavButton } from './RemindersNavButton';
 
 function voucherNavLabelClass(label: string) {
   if (label.startsWith('Payment')) return voucherTypeColorClass('PAYMENT');
@@ -214,6 +215,7 @@ export function TopBar() {
           </Link>
 
           <ApprovalNavLink active={approvalsActive} />
+          <RemindersNavButton />
         </nav>
 
         <Link

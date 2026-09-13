@@ -8,6 +8,7 @@ import {
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
 import { USER_VISIBLE_PRODUCT_STATUS } from '../approvals/record-status';
+import { isMaalKhataCategoryName } from '../products/maal-khata';
 import {
   STOCK_TRACKING_STARTED_AT,
   bagTypeFromMode,
@@ -46,6 +47,44 @@ async function setCarriedRemainderKg(
   });
 }
 
+/**
+ * Resolve the product whose bag stock a Sale Paunch line should reduce.
+ * - Maal Khata lines must map to an active Product (throws if not).
+ * - Int/Ext Purchase Party lines have no product stock — returns null (skip intentionally).
+ */
+export async function resolveSalePaunchStockProduct(
+  tx: Tx,
+  maalKhataAccountId: number,
+): Promise<{ productId: number; productName: string } | null> {
+  const account = await tx.account.findFirst({
+    where: { id: maalKhataAccountId, isActive: true },
+    include: { category: true },
+  });
+  if (!account) {
+    throw new AppError(
+      400,
+      `Sale Paunch line account #${maalKhataAccountId} was not found or is inactive`,
+    );
+  }
+
+  const product = await tx.product.findFirst({
+    where: { accountId: maalKhataAccountId, isActive: true },
+    select: { id: true, name: true },
+  });
+  if (product) {
+    return { productId: product.id, productName: product.name };
+  }
+
+  if (isMaalKhataCategoryName(account.category.name)) {
+    throw new AppError(
+      400,
+      `Maal Khata account "${account.name}" is not linked to an active product — cannot deduct bag stock. Fix the product link or pick a different line account.`,
+    );
+  }
+
+  return null;
+}
+
 export type PurchaseMaalStockLine = {
   boriOrThelaMode: BoriThelaMode;
   bagCount: number;
@@ -66,6 +105,8 @@ export async function postPurchaseMaalStockIn(
   },
 ) {
   const remainders = new Map<StockBagType, number>();
+  /** Aggregate bagsIn per bag type so one invoice produces one StockMovement per bag type. */
+  const bagsInByType = new Map<StockBagType, number>();
 
   for (const line of data.lines) {
     const bagType = toStockBagType(bagTypeFromMode(line.boriOrThelaMode));
@@ -85,13 +126,18 @@ export async function postPurchaseMaalStockIn(
     remainders.set(bagType, result.newRemainderKg);
 
     if (!(result.bagsIn > 0)) continue;
+    bagsInByType.set(bagType, (bagsInByType.get(bagType) ?? 0) + result.bagsIn);
+  }
+
+  for (const [bagType, bagsIn] of bagsInByType) {
+    if (!(bagsIn > 0)) continue;
 
     await tx.stockMovement.create({
       data: {
         productId: data.productId,
         bagType,
         direction: StockDirection.IN,
-        bags: result.bagsIn,
+        bags: bagsIn,
         date: data.invoiceDate,
         invoiceId: data.invoiceId,
         invoiceType: InvoiceType.PURCHASE_MAAL,
@@ -124,19 +170,23 @@ export async function postSalePaunchStockOut(
   },
 ) {
   for (const line of data.lines) {
-    const product = await tx.product.findFirst({
-      where: { accountId: line.maalKhataAccountId, isActive: true },
-    });
-    // Party accounts (Int/Ext) on Sale Paunch lines have no product stock to reduce.
-    if (!product) continue;
-
     const kind = bagTypeFromMode(line.boriOrThelaMode);
     const bagsOut = computeStockOutBags(line.bagCount, line.thelaCount, kind);
     if (!(bagsOut > 0)) continue;
 
+    const resolved = await resolveSalePaunchStockProduct(tx, line.maalKhataAccountId);
+    if (!resolved) {
+      // Int/Ext Purchase Party lines: no product bag stock by design.
+      console.warn(
+        `[stock] Sale Paunch ${data.invoiceReference}: skipping bag stock OUT for account #${line.maalKhataAccountId} `
+        + `(not linked to a product; Int/Ext party line). bagsOut=${bagsOut}`,
+      );
+      continue;
+    }
+
     await tx.stockMovement.create({
       data: {
-        productId: product.id,
+        productId: resolved.productId,
         bagType: toStockBagType(kind),
         direction: StockDirection.OUT,
         bags: bagsOut,

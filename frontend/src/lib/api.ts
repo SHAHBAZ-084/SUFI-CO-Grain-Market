@@ -51,6 +51,25 @@ export type ProductCategory = {
   isActive: boolean;
 };
 
+export type Reminder = {
+  id: number;
+  accountId: number;
+  amount: number;
+  reminderAt: string;
+  note: string | null;
+  status: 'PENDING' | 'SETTLED';
+  createdById: number;
+  createdByRole: 'ADMIN' | 'USER';
+  settledAt: string | null;
+  settledById: number | null;
+  lastNotifiedAt: string | null;
+  notifyCount: number;
+  createdAt: string;
+  account?: { id: number; name: string; code: string } | null;
+  createdBy?: { id: number; displayName: string | null; username: string; role: 'ADMIN' | 'USER' } | null;
+  settledBy?: { id: number; displayName: string | null; username: string } | null;
+};
+
 export type Product = {
   id: number;
   name: string;
@@ -1345,6 +1364,31 @@ export const api = {
     return request<Record<string, unknown>>('/api/adjustments/stock', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  listReminders(status: 'PENDING' | 'SETTLED' | 'ALL' = 'PENDING') {
+    const query = new URLSearchParams({ status });
+    return request<Reminder[]>(`/api/reminders?${query.toString()}`);
+  },
+  createReminder(data: {
+    accountId: number;
+    amount: number;
+    reminderAt: string;
+    note?: string | null;
+  }) {
+    return request<Reminder>('/api/reminders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  settleReminder(id: number) {
+    return request<Reminder>(`/api/reminders/${id}/settle`, { method: 'POST' });
+  },
+  recordReminderNotification(id: number, data?: { notifyCount?: number }) {
+    return request<Reminder>(`/api/reminders/${id}/notify`, {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
     });
   },
 };

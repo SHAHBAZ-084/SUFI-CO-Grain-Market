@@ -96,6 +96,11 @@ enum AdjustmentStatus {
   REJECTED
 }
 
+enum ReminderStatus {
+  PENDING
+  SETTLED
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   username     String   @unique
@@ -115,6 +120,8 @@ model User {
   productsCreated       Product[]              @relation("ProductCreatedBy")
   accountAdjustmentsCreated AccountAdjustment[] @relation("AccountAdjustmentCreatedBy")
   stockAdjustmentsCreated   StockAdjustment[]   @relation("StockAdjustmentCreatedBy")
+  remindersCreated          Reminder[]            @relation("ReminderCreatedBy")
+  remindersSettled          Reminder[]            @relation("ReminderSettledBy")
 }
 
 model Supplier {
@@ -190,6 +197,7 @@ model Account {
   generalSalePartyInvoices     Invoice[] @relation("GeneralSalePartyAccount")
   kachiMaalDebitInvoices   Invoice[]         @relation("KachiMaalDebitAccount")
   accountAdjustments       AccountAdjustment[]
+  reminders                Reminder[]
 
   @@index([categoryId])
   @@index([isHidden])
@@ -760,5 +768,29 @@ model StockAdjustment {
 
   @@index([status])
   @@index([productId])
+  @@index([createdById])
+}
+
+model Reminder {
+  id             Int            @id @default(autoincrement())
+  accountId      Int
+  amount         Decimal
+  reminderAt     DateTime
+  note           String?
+  status         ReminderStatus @default(PENDING)
+  createdById    Int
+  createdByRole  UserRole
+  settledAt      DateTime?
+  settledById    Int?
+  lastNotifiedAt DateTime?
+  notifyCount    Int            @default(0)
+  createdAt      DateTime       @default(now())
+
+  account   Account @relation(fields: [accountId], references: [id])
+  createdBy User    @relation("ReminderCreatedBy", fields: [createdById], references: [id])
+  settledBy User?   @relation("ReminderSettledBy", fields: [settledById], references: [id])
+
+  @@index([status, reminderAt])
+  @@index([accountId])
   @@index([createdById])
 }

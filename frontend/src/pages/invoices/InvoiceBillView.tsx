@@ -24,6 +24,7 @@ import {
   type BillLineRow,
   type CommissionBillRow,
 } from '../../lib/billPrintFormat';
+import { computePurchaseMaalInvoiceTotals } from '../../lib/purchaseMaalCalculations';
 import { computeSaleCommissionInvoiceTotals } from '../../lib/saleCommissionCalculations';
 
 const billFont =
@@ -443,6 +444,36 @@ function PurchaseMaalBillBody({
   const showGrandTotal =
     Boolean(invoice.mazduriEnabled) || misc !== 0 || lowerBardana !== 0;
 
+  const totalKg = billFromRows.reduce((sum, row) => sum + row.totalKg, 0);
+  const baseAmount = billFromRows.reduce((sum, row) => sum + row.amount, 0);
+  const dammiTotal = billFromRows.reduce((sum, row) => sum + row.dammi, 0);
+  const bardanaTotal = billFromRows.reduce((sum, row) => sum + row.bardanaAmount, 0);
+  const invoiceExpenseTotals = computePurchaseMaalInvoiceTotals(
+    lines.map((line) => ({
+      amount: Number(line.amount ?? 0),
+      totalWeightKg: Number(line.totalWeightKg ?? 0),
+      bhartii: Number(line.bhartii ?? 0),
+      dammiAmount: line.dammiChecked ? Number(line.dammiAmount ?? 0) : 0,
+    })),
+    {
+      daamiPercent: prefs.daamiPercent,
+      mazduriPercent: prefs.mazduriPercent,
+      marketFeeRate: prefs.marketFeeRate,
+    },
+    {
+      marketFeeEnabled: Boolean(invoice.marketFeeEnabled),
+      mazduriEnabled: Boolean(invoice.mazduriEnabled),
+    },
+  );
+  const otherExpenses =
+    misc
+    + lowerBardana
+    + invoiceExpenseTotals.marketFeeAmount
+    + invoiceExpenseTotals.mazduriAmount;
+  const withExpenseAmount = baseAmount + dammiTotal + bardanaTotal + otherExpenses;
+  const avgRateWithoutExpense = totalKg > 0 ? baseAmount / totalKg : 0;
+  const avgRateWithExpense = totalKg > 0 ? withExpenseAmount / totalKg : 0;
+
   return (
     <>
       <BillHeader title={title} prefs={prefs} />
@@ -499,6 +530,18 @@ function PurchaseMaalBillBody({
           />
         </section>
       ) : null}
+      <div className="mt-4 flex justify-end">
+        <div className="min-w-[280px] space-y-1 text-[12px]">
+          <div className="flex justify-between gap-8">
+            <span>Avg Rate with Expense</span>
+            <span className="tabular-nums">{formatBillAmount(avgRateWithExpense)}</span>
+          </div>
+          <div className="flex justify-between gap-8">
+            <span>Avg Rate without Expense</span>
+            <span className="tabular-nums">{formatBillAmount(avgRateWithoutExpense)}</span>
+          </div>
+        </div>
+      </div>
     </>
   );
 }

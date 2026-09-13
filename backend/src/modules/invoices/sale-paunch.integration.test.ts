@@ -168,6 +168,51 @@ describe('Sale Paunch posting', () => {
     expect(tb.isBalanced).toBe(true);
   });
 
+  it('creates a StockMovement OUT with the correct bag count on approve', async () => {
+    const invoice = await createApprovedSalePaunchInvoice({
+      invoiceDate,
+      salePartyAccountId: salePartyId,
+      billNo: `SP-STOCK-OUT-${Date.now()}`,
+      lines: [
+        {
+          maalKhataAccountId: wheatMaalKhataId,
+          boriOrThelaMode: BoriThelaMode.BORI,
+          bagCount: 10,
+          thelaCount: 0,
+          compWeightKg: 1000,
+          upperRatePerMaund: 2000,
+          lowerRatePerMaund: 2500,
+          kanta: 400,
+          dammiChecked: true,
+        },
+      ],
+      createdById: userId,
+    });
+
+    const wheatProduct = await prisma.product.findFirst({
+      where: { accountId: wheatMaalKhataId, isActive: true },
+      select: { id: true },
+    });
+    expect(wheatProduct).toBeTruthy();
+
+    const stockOut = await prisma.stockMovement.findMany({
+      where: {
+        invoiceId: invoice.id,
+        productId: wheatProduct!.id,
+        direction: 'OUT',
+      },
+      select: { bags: true, bagType: true, invoiceReference: true },
+    });
+    expect(stockOut).toHaveLength(1);
+    expect(stockOut[0]).toEqual(
+      expect.objectContaining({
+        bagType: 'BORI',
+        invoiceReference: invoice.reference,
+      }),
+    );
+    expect(Number(stockOut[0]!.bags)).toBe(10);
+  });
+
   it('credits misc and increases sale party debit (opposite of tax/bilty party credit)', async () => {
     let miscId: number;
     await prisma.$transaction(async (tx) => {
