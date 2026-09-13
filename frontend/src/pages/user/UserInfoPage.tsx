@@ -78,6 +78,9 @@ export function UserInfoPage() {
 
         <Panel>
           <h2 className="mb-4 text-base font-semibold text-textPrimary">Change password</h2>
+          <p className="mb-3 text-sm text-textSecondary">
+            Update the password for this signed-in account (admin and clerks).
+          </p>
           <form className="space-y-4" onSubmit={onChangePassword}>
             <div>
               <FieldLabel>Current password</FieldLabel>

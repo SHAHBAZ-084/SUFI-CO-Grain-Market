@@ -23,13 +23,15 @@ type VoucherDraft = {
   predictedNumber?: number | null;
 };
 
-const VOUCHER_TYPES: Record<string, string> = {
+type VoucherFormKind = 'payment' | 'journal' | 'receipt';
+
+const VOUCHER_TYPES: Record<VoucherFormKind, 'PAYMENT' | 'JOURNAL' | 'RECEIPT'> = {
   payment: 'PAYMENT',
   journal: 'JOURNAL',
   receipt: 'RECEIPT',
 };
 
-const VOUCHER_PAGE_TITLES: Record<string, string> = {
+const VOUCHER_PAGE_TITLES: Record<VoucherFormKind, string> = {
   payment: 'Payment Voucher',
   journal: 'Journal Voucher',
   receipt: 'Receipt Voucher',
@@ -43,7 +45,7 @@ function todayInputValue() {
   return `${y}-${m}-${day}`;
 }
 
-function AccountSideFields({
+export function AccountSideFields({
   label,
   categoryId,
   accountId,
@@ -122,14 +124,14 @@ function AccountSideFields({
   );
 }
 
-function isBankOrCashCategory(name: string) {
+export function isBankOrCashCategory(name: string) {
   const n = name.trim().toLowerCase();
   return n.includes('bank') || n.includes('cash');
 }
 
-function categoriesForSide(
+export function categoriesForSide(
   all: AccountCategory[],
-  kind: keyof typeof VOUCHER_TYPES,
+  kind: VoucherFormKind,
   side: 'credit' | 'debit',
 ): AccountCategory[] {
   if (kind === 'journal') return all;
@@ -141,7 +143,7 @@ function categoriesForSide(
   return filtered.length > 0 ? filtered : all;
 }
 
-export function VoucherFormPage({ kind }: { kind: keyof typeof VOUCHER_TYPES }) {
+export function VoucherFormPage({ kind }: { kind: VoucherFormKind }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editVoucherId = Number(searchParams.get('editVoucherId') ?? 0);

@@ -70,6 +70,31 @@ export type Reminder = {
   settledBy?: { id: number; displayName: string | null; username: string } | null;
 };
 
+export type ScheduleFrequency = 'HOURLY' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+export type ScheduleStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'DELETED';
+
+export type ScheduledVoucher = {
+  id: number;
+  voucherType: 'PAYMENT' | 'RECEIPT' | 'JOURNAL';
+  debitAccountId: number;
+  creditAccountId: number;
+  amount: number;
+  description: string | null;
+  frequency: ScheduleFrequency;
+  startAt: string;
+  endAt: string | null;
+  occurrenceLimit: number | null;
+  occurrencesRun: number;
+  nextRunAt: string;
+  lastRunAt: string | null;
+  status: ScheduleStatus;
+  createdById: number;
+  createdAt: string;
+  debitAccount?: { id: number; name: string; code: string } | null;
+  creditAccount?: { id: number; name: string; code: string } | null;
+  createdBy?: { id: number; displayName: string | null; username: string } | null;
+};
+
 export type Product = {
   id: number;
   name: string;
@@ -376,6 +401,22 @@ export const api = {
   },
   createUser(data: { username: string; password: string; displayName?: string }) {
     return request<{ user: User }>('/api/auth/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  updateUser(id: number, data: {
+    username?: string;
+    displayName?: string | null;
+    role?: 'ADMIN' | 'USER';
+  }) {
+    return request<{ user: User }>(`/api/auth/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+  resetUserPassword(id: number, data: { newPassword: string }) {
+    return request<{ ok: boolean }>(`/api/auth/users/${id}/reset-password`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -1390,5 +1431,54 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data ?? {}),
     });
+  },
+
+  listSchedules() {
+    return request<ScheduledVoucher[]>('/api/schedules');
+  },
+  createSchedule(data: {
+    voucherType: 'PAYMENT' | 'RECEIPT' | 'JOURNAL';
+    debitAccountId: number;
+    creditAccountId: number;
+    amount: number;
+    description?: string | null;
+    frequency: ScheduleFrequency;
+    startAt: string;
+    endAt?: string | null;
+    occurrenceLimit?: number | null;
+  }) {
+    return request<ScheduledVoucher>('/api/schedules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  updateSchedule(
+    id: number,
+    data: Partial<{
+      voucherType: 'PAYMENT' | 'RECEIPT' | 'JOURNAL';
+      debitAccountId: number;
+      creditAccountId: number;
+      amount: number;
+      description: string | null;
+      frequency: ScheduleFrequency;
+      startAt: string;
+      endAt: string | null;
+      occurrenceLimit: number | null;
+      resetNextRun: boolean;
+    }>,
+  ) {
+    return request<ScheduledVoucher>(`/api/schedules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+  pauseSchedule(id: number) {
+    return request<ScheduledVoucher>(`/api/schedules/${id}/pause`, { method: 'POST' });
+  },
+  resumeSchedule(id: number) {
+    return request<ScheduledVoucher>(`/api/schedules/${id}/resume`, { method: 'POST' });
+  },
+  deleteSchedule(id: number) {
+    return request<ScheduledVoucher>(`/api/schedules/${id}`, { method: 'DELETE' });
   },
 };

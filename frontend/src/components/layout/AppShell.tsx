@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { ContentHeader } from './ContentHeader';
 import { MinimizedFormsTray } from './MinimizedFormsTray';
+import { ReminderInAppToasts } from './ReminderInAppToasts';
 import { TopBar } from './TopBar';
 
 export function AppShell() {
@@ -14,6 +15,7 @@ export function AppShell() {
         </main>
         <MinimizedFormsTray />
       </div>
+      <ReminderInAppToasts />
     </div>
   );
 }

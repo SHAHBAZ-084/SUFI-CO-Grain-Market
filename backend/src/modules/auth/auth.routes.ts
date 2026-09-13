@@ -95,6 +95,48 @@ authRouter.delete(
   }),
 );
 
+authRouter.patch(
+  '/users/:id',
+  requireAuth,
+  requireAdmin,
+  validateBody(
+    z.object({
+      username: z.string().min(1).optional(),
+      displayName: z.string().optional().nullable(),
+      role: z.enum(['ADMIN', 'USER']).optional(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const id = Number(param(req.params.id));
+    if (!Number.isFinite(id) || id < 1) {
+      res.status(400).json({ error: 'Invalid user id' });
+      return;
+    }
+    const user = await authService.updateUser(id, req.body);
+    res.json({ user });
+  }),
+);
+
+authRouter.post(
+  '/users/:id/reset-password',
+  requireAuth,
+  requireAdmin,
+  validateBody(
+    z.object({
+      newPassword: z.string().min(1),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const id = Number(param(req.params.id));
+    if (!Number.isFinite(id) || id < 1) {
+      res.status(400).json({ error: 'Invalid user id' });
+      return;
+    }
+    const result = await authService.resetUserPassword(id, req.body);
+    res.json(result);
+  }),
+);
+
 authRouter.post(
   '/change-password',
   requireAuth,

@@ -5,6 +5,10 @@ import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { initializeDatabase, shutdownDatabase } from './lib/startup';
 import { logger } from './lib/logger';
+import {
+  startScheduleRunner,
+  stopScheduleRunner,
+} from './modules/schedules/schedules.service';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -37,10 +41,13 @@ export async function startGrainPosServer(): Promise<{
     httpServer.on('error', (err) => reject(err));
   });
 
+  startScheduleRunner();
+
   return { ok: true, port: env.port };
 }
 
 export async function stopGrainPosServer(): Promise<void> {
+  stopScheduleRunner();
   if (httpServer) {
     await new Promise<void>((resolve) => {
       httpServer?.close(() => resolve());

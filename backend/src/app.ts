@@ -19,6 +19,7 @@ import { reportsRouter } from './modules/reports/reports.routes';
 import { approvalsRouter } from './modules/approvals/approvals.routes';
 import { adjustmentsRouter } from './modules/adjustments/adjustments.routes';
 import { remindersRouter } from './modules/reminders/reminders.routes';
+import { schedulesRouter } from './modules/schedules/schedules.routes';
 import type { StartupStatus } from './lib/startup';
 
 declare module 'express-session' {
@@ -69,6 +70,7 @@ export function createApp(getStartupStatus?: () => StartupStatus | null) {
   app.use('/api/approvals', approvalsRouter);
   app.use('/api/adjustments', adjustmentsRouter);
   app.use('/api/reminders', remindersRouter);
+  app.use('/api/schedules', schedulesRouter);
   app.use('/api/system', systemRouter);
   app.use('/api/system', googleDriveRouter);
 

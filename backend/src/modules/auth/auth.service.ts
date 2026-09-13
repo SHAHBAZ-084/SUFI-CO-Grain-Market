@@ -128,6 +128,80 @@ export async function deleteUser(targetUserId: number, actorUserId: number) {
   return { ok: true };
 }
 
+export async function updateUser(
+  targetUserId: number,
+  data: {
+    username?: string;
+    displayName?: string | null;
+    role?: UserRole;
+  },
+) {
+  const target = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!target) throw new AppError(404, 'User not found');
+
+  const nextUsername =
+    data.username != null ? data.username.trim() : target.username;
+  if (!nextUsername) throw new AppError(400, 'Username is required');
+  if (nextUsername.length < 2) {
+    throw new AppError(400, 'Username must be at least 2 characters');
+  }
+
+  if (nextUsername !== target.username) {
+    const taken = await prisma.user.findUnique({ where: { username: nextUsername } });
+    if (taken) throw new AppError(400, `Username "${nextUsername}" is already taken`);
+  }
+
+  const nextRole = data.role ?? target.role;
+  if (nextRole !== UserRole.ADMIN && nextRole !== UserRole.USER) {
+    throw new AppError(400, 'Invalid role');
+  }
+
+  if (target.role === UserRole.ADMIN && nextRole !== UserRole.ADMIN) {
+    const adminCount = await prisma.user.count({ where: { role: UserRole.ADMIN } });
+    if (adminCount <= 1) {
+      throw new AppError(400, 'Cannot demote the last admin account');
+    }
+  }
+
+  const displayNameProvided = Object.prototype.hasOwnProperty.call(data, 'displayName');
+  const nextDisplayName = displayNameProvided
+    ? (data.displayName?.trim() || null)
+    : target.displayName;
+
+  const user = await prisma.user.update({
+    where: { id: targetUserId },
+    data: {
+      username: nextUsername,
+      displayName: nextDisplayName,
+      role: nextRole,
+    },
+  });
+
+  return toPublicUser(user);
+}
+
+/** Admin sets a new password for any user (no current-password check). */
+export async function resetUserPassword(
+  targetUserId: number,
+  data: { newPassword: string },
+) {
+  const target = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!target) throw new AppError(404, 'User not found');
+
+  const newPassword = data.newPassword ?? '';
+  if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new AppError(400, `New password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: targetUserId },
+    data: { passwordHash },
+  });
+
+  return { ok: true };
+}
+
 export async function changePassword(
   userId: number,
   data: { currentPassword: string; newPassword: string },

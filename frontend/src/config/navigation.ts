@@ -81,6 +81,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
       { kind: 'link', label: 'Payment Voucher', to: '/vouchers/payment' },
       { kind: 'link', label: 'Journal Voucher', to: '/vouchers/journal' },
       { kind: 'link', label: 'Receipt Voucher', to: '/vouchers/receipt' },
+      { kind: 'link', label: 'Scheduled Vouchers', to: '/vouchers/schedules' },
       { kind: 'link', label: 'View Voucher', to: '/vouchers/view' },
     ],
   },

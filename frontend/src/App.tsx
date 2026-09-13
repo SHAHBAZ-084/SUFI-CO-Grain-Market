@@ -32,6 +32,7 @@ import { AccountAdjustmentPage } from './pages/adjustments/AccountAdjustmentPage
 import { StockAdjustmentPage } from './pages/adjustments/StockAdjustmentPage';
 import { PendingApprovalsPage } from './pages/approvals/PendingApprovalsPage';
 import { UserManagementPage } from './pages/user/UserManagementPage';
+import { SchedulesPage } from './pages/vouchers/SchedulesPage';
 import { VoucherFormPage, VoucherListPage } from './pages/vouchers/VoucherPages';
 
 function ReportsLayout() {
@@ -88,6 +89,7 @@ export default function App() {
                   <Route path="/vouchers/payment" element={<VoucherFormPage kind="payment" />} />
                   <Route path="/vouchers/journal" element={<VoucherFormPage kind="journal" />} />
                   <Route path="/vouchers/receipt" element={<VoucherFormPage kind="receipt" />} />
+                  <Route path="/vouchers/schedules" element={<SchedulesPage />} />
                   <Route path="/vouchers/view" element={<VoucherListPage />} />
 
                   <Route path="/reports" element={<ReportsLayout />}>

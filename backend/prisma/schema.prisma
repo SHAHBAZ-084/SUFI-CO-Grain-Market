@@ -101,6 +101,21 @@ enum ReminderStatus {
   SETTLED
 }
 
+enum ScheduleFrequency {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum ScheduleStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  DELETED
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   username     String   @unique
@@ -122,6 +137,7 @@ model User {
   stockAdjustmentsCreated   StockAdjustment[]   @relation("StockAdjustmentCreatedBy")
   remindersCreated          Reminder[]            @relation("ReminderCreatedBy")
   remindersSettled          Reminder[]            @relation("ReminderSettledBy")
+  scheduledVouchersCreated  ScheduledVoucher[]    @relation("ScheduledVoucherCreatedBy")
 }
 
 model Supplier {
@@ -198,6 +214,8 @@ model Account {
   kachiMaalDebitInvoices   Invoice[]         @relation("KachiMaalDebitAccount")
   accountAdjustments       AccountAdjustment[]
   reminders                Reminder[]
+  scheduledDebitVouchers   ScheduledVoucher[] @relation("ScheduleDebit")
+  scheduledCreditVouchers  ScheduledVoucher[] @relation("ScheduleCredit")
 
   @@index([categoryId])
   @@index([isHidden])
@@ -793,4 +811,32 @@ model Reminder {
   @@index([status, reminderAt])
   @@index([accountId])
   @@index([createdById])
+}
+
+model ScheduledVoucher {
+  id              Int               @id @default(autoincrement())
+  voucherType     VoucherType
+  debitAccountId  Int
+  creditAccountId Int
+  amount          Decimal
+  description     String?
+  frequency       ScheduleFrequency
+  startAt         DateTime
+  endAt           DateTime?
+  occurrenceLimit Int?
+  occurrencesRun  Int               @default(0)
+  nextRunAt       DateTime
+  lastRunAt       DateTime?
+  status          ScheduleStatus    @default(ACTIVE)
+  createdById     Int
+  createdAt       DateTime          @default(now())
+
+  debitAccount  Account @relation("ScheduleDebit", fields: [debitAccountId], references: [id])
+  creditAccount Account @relation("ScheduleCredit", fields: [creditAccountId], references: [id])
+  createdBy     User    @relation("ScheduledVoucherCreatedBy", fields: [createdById], references: [id])
+
+  @@index([status, nextRunAt])
+  @@index([createdById])
+  @@index([debitAccountId])
+  @@index([creditAccountId])
 }

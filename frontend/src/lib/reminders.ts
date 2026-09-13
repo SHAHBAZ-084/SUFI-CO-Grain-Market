@@ -1,6 +1,7 @@
 import { api, type Reminder } from './api';
 
 export const REMINDERS_CHANGED_EVENT = 'reminders-changed';
+export const REMINDER_IN_APP_EVENT = 'reminder-in-app';
 
 export function notifyRemindersChanged() {
   window.dispatchEvent(new Event(REMINDERS_CHANGED_EVENT));
@@ -10,6 +11,29 @@ export const REMINDER_HOUR_MS = 60 * 60 * 1000;
 export const REMINDER_MAX_NOTIFICATIONS = 9;
 
 export type ReminderSeverity = 'green' | 'yellow' | 'red';
+
+export type ReminderInAppToast = {
+  id: string;
+  reminderId: number;
+  severity: ReminderSeverity;
+  title: string;
+  body: string;
+  notifyCount: number;
+  catchUp?: boolean;
+};
+
+export function notifyReminderInApp(toast: Omit<ReminderInAppToast, 'id'> & { id?: string }) {
+  const detail: ReminderInAppToast = {
+    id: toast.id ?? `reminder-${toast.reminderId}-${toast.notifyCount}-${Date.now()}`,
+    reminderId: toast.reminderId,
+    severity: toast.severity,
+    title: toast.title,
+    body: toast.body,
+    notifyCount: toast.notifyCount,
+    catchUp: toast.catchUp,
+  };
+  window.dispatchEvent(new CustomEvent(REMINDER_IN_APP_EVENT, { detail }));
+}
 
 export function reminderSeverityForCount(notifyCount: number): ReminderSeverity {
   if (notifyCount <= 3) return 'green';
@@ -47,8 +71,12 @@ async function ensureNotificationPermission(): Promise<boolean> {
   if (typeof Notification === 'undefined') return false;
   if (Notification.permission === 'granted') return true;
   if (Notification.permission === 'denied') return false;
-  const result = await Notification.requestPermission();
-  return result === 'granted';
+  try {
+    const result = await Notification.requestPermission();
+    return result === 'granted';
+  } catch {
+    return false;
+  }
 }
 
 function showDesktopNotification(title: string, body: string, tag: string) {
@@ -67,8 +95,14 @@ function tierTitle(severity: ReminderSeverity, n: number): string {
   return `${label} reminder (${n}/${REMINDER_MAX_NOTIFICATIONS})`;
 }
 
+function reminderBody(reminder: Reminder, when: string, amount: string) {
+  const accountName = reminder.account?.name ?? `Account #${reminder.accountId}`;
+  return `${accountName} — Rs ${amount}${reminder.note ? ` — ${reminder.note}` : ''} (due ${when})`;
+}
+
 /**
  * Process due / overdue reminders: catch-up once if behind, else hourly fires up to 9.
+ * Always shows in-app toasts; also fires Windows/desktop notifications when permitted.
  * Persists notifyCount / lastNotifiedAt via the API.
  */
 export async function processReminderNotifications(
@@ -77,8 +111,8 @@ export async function processReminderNotifications(
   const pending = reminders.filter((r) => r.status === 'PENDING');
   if (pending.length === 0) return false;
 
-  const allowed = await ensureNotificationPermission();
-  if (!allowed) return false;
+  // Desktop permission is optional — in-app popups still fire without it.
+  await ensureNotificationPermission();
 
   const now = Date.now();
   let changed = false;
@@ -100,14 +134,22 @@ export async function processReminderNotifications(
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+    const body = reminderBody(reminder, when, amount);
 
     if (expected > reminder.notifyCount + 1) {
       // Missed multiple hourly slots while closed/idle — one catch-up, jump tier.
-      showDesktopNotification(
-        `You're late — ${accountName}`,
-        `Reminder for ${accountName} (Rs ${amount}) was due ${when}. Please settle it.`,
-        `reminder-catchup-${reminder.id}`,
-      );
+      const severity = reminderSeverityForCount(expected);
+      const title = `You're late — ${accountName}`;
+      const catchUpBody = `Reminder for ${accountName} (Rs ${amount}) was due ${when}. Please settle it.`;
+      notifyReminderInApp({
+        reminderId: reminder.id,
+        severity,
+        title,
+        body: catchUpBody,
+        notifyCount: expected,
+        catchUp: true,
+      });
+      showDesktopNotification(title, catchUpBody, `reminder-catchup-${reminder.id}`);
       await api.recordReminderNotification(reminder.id, { notifyCount: expected });
       changed = true;
       continue;
@@ -115,11 +157,15 @@ export async function processReminderNotifications(
 
     const nextCount = Math.min(REMINDER_MAX_NOTIFICATIONS, reminder.notifyCount + 1);
     const severity = reminderSeverityForCount(nextCount);
-    showDesktopNotification(
-      tierTitle(severity, nextCount),
-      `${accountName} — Rs ${amount}${reminder.note ? ` — ${reminder.note}` : ''} (due ${when})`,
-      `reminder-${reminder.id}-${nextCount}`,
-    );
+    const title = tierTitle(severity, nextCount);
+    notifyReminderInApp({
+      reminderId: reminder.id,
+      severity,
+      title,
+      body,
+      notifyCount: nextCount,
+    });
+    showDesktopNotification(title, body, `reminder-${reminder.id}-${nextCount}`);
     await api.recordReminderNotification(reminder.id, { notifyCount: nextCount });
     changed = true;
   }
