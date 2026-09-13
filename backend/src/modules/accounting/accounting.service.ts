@@ -3,6 +3,10 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { AppError } from '../../utils/helpers';
 import { PaginatedResult } from '../../utils/pagination';
+import {
+  groupAccountsByCategory,
+  paginateCategoryAccountGroups,
+} from '../../utils/category-report-pagination';
 import { assertNotMaalKhataLinkedAccount, isMaalKhataCategoryName } from '../products/maal-khata';
 import { IMMEDIATE_ACTIVE_STATUS, USER_VISIBLE_ACCOUNT_STATUS, USER_VISIBLE_VOUCHER_STATUS } from '../approvals/record-status';
 import {
@@ -985,6 +989,9 @@ export async function createAccount(data: {
   type?: AccountType;
   openingBalance?: number;
   openingBalanceSide?: 'DR' | 'CR';
+  phone?: string | null;
+  address?: string | null;
+  cnic?: string | null;
   createdById?: number;
 }) {
   const trimmedName = await assertUniqueAccountName(data.name);
@@ -1015,6 +1022,13 @@ export async function createAccount(data: {
     );
   }
 
+  const allowContact = isPartyContactCategoryName(category.name);
+  const phone = allowContact ? normalizeOptionalContact(data.phone) : null;
+  const address = allowContact ? normalizeOptionalContact(data.address) : null;
+  const cnic = allowContact ? normalizeOptionalContact(data.cnic) : null;
+  if (phone) await assertUniquePartyPhone(phone);
+  if (cnic) await assertUniquePartyCnic(cnic);
+
   const type = await resolveAccountType(data.categoryId, data.type);
   const trimmedCode = data.code
     ? await assertUniqueAccountCode(data.code)
@@ -1036,6 +1050,9 @@ export async function createAccount(data: {
         createdById: data.createdById,
         pendingOpeningBalance: storePendingOb ? amount : null,
         pendingOpeningBalanceSide: storePendingOb ? side : null,
+        phone,
+        address,
+        cnic,
       },
     });
 
@@ -1116,25 +1133,63 @@ async function assertUniqueCategoryName(name: string) {
   return trimmed;
 }
 
-async function assertUniqueAccountName(name: string) {
+async function assertUniqueAccountName(name: string, excludeAccountId?: number) {
   const trimmed = normalizeLabel(name);
   if (!trimmed) throw new AppError(400, 'Account name is required');
 
   const existing = await prisma.account.findFirst({
-    where: { name: { equals: trimmed } },
+    where: {
+      name: { equals: trimmed },
+      ...(excludeAccountId != null ? { id: { not: excludeAccountId } } : {}),
+    },
   });
   if (existing) {
-    throw new AppError(400, `Account "${existing.name}" already exists`);
+    throw new AppError(400, `An account with this name already exists: "${existing.name}"`);
   }
   return trimmed;
 }
 
-async function assertUniqueAccountCode(code: string) {
+async function assertUniquePartyPhone(phone: string, excludeAccountId?: number) {
+  const existing = await prisma.account.findFirst({
+    where: {
+      phone: { equals: phone },
+      category: { name: { in: [...PARTY_CONTACT_CATEGORY_NAMES] } },
+      ...(excludeAccountId != null ? { id: { not: excludeAccountId } } : {}),
+    },
+  });
+  if (existing) {
+    throw new AppError(
+      400,
+      `An account with this phone number already exists: "${existing.name}"`,
+    );
+  }
+}
+
+async function assertUniquePartyCnic(cnic: string, excludeAccountId?: number) {
+  const existing = await prisma.account.findFirst({
+    where: {
+      cnic: { equals: cnic },
+      category: { name: { in: [...PARTY_CONTACT_CATEGORY_NAMES] } },
+      ...(excludeAccountId != null ? { id: { not: excludeAccountId } } : {}),
+    },
+  });
+  if (existing) {
+    throw new AppError(
+      400,
+      `An account with this CNIC already exists: "${existing.name}"`,
+    );
+  }
+}
+
+async function assertUniqueAccountCode(code: string, excludeAccountId?: number) {
   const trimmed = normalizeLabel(code);
   if (!trimmed) throw new AppError(400, 'Account code is required');
 
   const existing = await prisma.account.findFirst({
-    where: { code: { equals: trimmed } },
+    where: {
+      code: { equals: trimmed },
+      ...(excludeAccountId != null ? { id: { not: excludeAccountId } } : {}),
+    },
   });
   if (existing) {
     throw new AppError(400, `Account code "${existing.code}" already exists`);
@@ -1495,6 +1550,25 @@ export const KACHI_MAAL_CATEGORY_NAMES = {
   SALE_FEE: 'Sale Fee',
   BARDANA: 'Bardana',
 } as const;
+
+/** Party categories that collect optional phone / address / CNIC. */
+export const PARTY_CONTACT_CATEGORY_NAMES = [
+  KACHI_MAAL_CATEGORY_NAMES.SALE_PARTY,
+  KACHI_MAAL_CATEGORY_NAMES.INT_PURCHASE,
+  KACHI_MAAL_CATEGORY_NAMES.EXT_PURCHASE,
+] as const;
+
+export function isPartyContactCategoryName(name?: string | null): boolean {
+  return PARTY_CONTACT_CATEGORY_NAMES.includes(
+    name as (typeof PARTY_CONTACT_CATEGORY_NAMES)[number],
+  );
+}
+
+function normalizeOptionalContact(value?: string | null): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
 
 export type KachiMaalSystemAccounts = {
   bori: { id: number; name: string };
@@ -2923,110 +2997,29 @@ export async function getAccountBalancesAsOf(params: {
     });
   }
 
-  const groupsMap = new Map<number, { categoryId: number; categoryName: string; accounts: BalanceRow[] }>();
-  for (const row of rows) {
-    const existing = groupsMap.get(row.categoryId);
-    if (existing) {
-      existing.accounts.push(row);
-    } else {
-      groupsMap.set(row.categoryId, {
-        categoryId: row.categoryId,
-        categoryName: row.categoryName,
-        accounts: [row],
-      });
-    }
-  }
-
-  const groups = Array.from(groupsMap.values());
+  const groups = groupAccountsByCategory(rows);
   const totalDebit = rows.reduce((sum, row) => sum + row.debit, 0);
   const totalCredit = rows.reduce((sum, row) => sum + row.credit, 0);
   const grandBalance = rows.reduce((sum, row) => sum + row.balance, 0);
 
   const pagination = params.pagination ?? null;
-  if (!pagination) {
-    return {
-      date: params.date,
-      side,
-      categoryId: params.categoryId ?? null,
-      accounts: rows,
-      groups,
-      totalDebit,
-      totalCredit,
-      grandBalance,
-      total: rows.length,
-      limit: rows.length,
-      offset: 0,
-      pageCount: 1,
-    };
-  }
-
-  const { limit, offset } = pagination;
-
-  // Single-category (or flat) view: simple account slice.
-  if (params.categoryId != null || groups.length <= 1) {
-    const pageAccounts = rows.slice(offset, offset + limit);
-    const pageGroups = groups
-      .map((group) => ({
-        ...group,
-        accounts: group.accounts.filter((a) =>
-          pageAccounts.some((p) => p.accountId === a.accountId),
-        ),
-      }))
-      .filter((g) => g.accounts.length > 0);
-    const pageCount = rows.length === 0 ? 0 : Math.ceil(rows.length / limit);
-    return {
-      date: params.date,
-      side,
-      categoryId: params.categoryId ?? null,
-      accounts: pageAccounts,
-      groups: pageGroups,
-      totalDebit,
-      totalCredit,
-      grandBalance,
-      total: rows.length,
-      limit,
-      offset,
-      pageCount,
-    };
-  }
-
-  // All Groups: pack whole categories into pages (~limit accounts), never split a category.
-  const pages: typeof groups[] = [];
-  let current: typeof groups = [];
-  let currentCount = 0;
-  for (const group of groups) {
-    const n = group.accounts.length;
-    if (currentCount > 0 && currentCount + n > limit) {
-      pages.push(current);
-      current = [];
-      currentCount = 0;
-    }
-    current.push(group);
-    currentCount += n;
-  }
-  if (current.length) pages.push(current);
-
-  const pageCount = pages.length;
-  const pageIndex = Math.min(
-    Math.floor(offset / limit),
-    Math.max(pageCount - 1, 0),
-  );
-  const pageGroups = pageCount === 0 ? [] : (pages[pageIndex] ?? []);
-  const pageAccounts = pageGroups.flatMap((g) => g.accounts);
+  const mode =
+    params.categoryId != null || groups.length <= 1 ? 'slice' : 'pack';
+  const page = paginateCategoryAccountGroups(groups, rows, pagination, mode);
 
   return {
     date: params.date,
     side,
     categoryId: params.categoryId ?? null,
-    accounts: pageAccounts,
-    groups: pageGroups,
+    accounts: page.accounts,
+    groups: page.groups,
     totalDebit,
     totalCredit,
     grandBalance,
-    total: rows.length,
-    limit,
-    offset: pageIndex * limit,
-    pageCount,
+    total: page.total,
+    limit: page.limit,
+    offset: page.offset,
+    pageCount: page.pageCount,
   };
 }
 
@@ -3047,6 +3040,21 @@ export async function getTrialBalance(
   const year = await prisma.financialYear.findFirst({ where: { id: yearId } });
   if (!year) throw new AppError(404, 'Financial year not found');
 
+  type TrialRow = {
+    accountId: number;
+    accountCode: string;
+    accountName: string;
+    accountType: string;
+    categoryId: number;
+    categoryName: string;
+    balance: number;
+    debit: number;
+    credit: number;
+    isHidden: boolean;
+  };
+
+  let mapped: TrialRow[] = [];
+
   // Closed years: use closing-balance snapshots. Active year: live ledger balances.
   if (year.status === FinancialYearStatus.CLOSED) {
     const snapshots = await prisma.financialYearClosingBalance.findMany({
@@ -3054,11 +3062,14 @@ export async function getTrialBalance(
         financialYearId: yearId,
         account: { status: USER_VISIBLE_ACCOUNT_STATUS },
       },
-      include: { account: true },
-      orderBy: [{ account: { type: 'asc' } }, { account: { code: 'asc' } }],
+      include: { account: { include: { category: true } } },
+      orderBy: [
+        { account: { category: { name: 'asc' } } },
+        { account: { code: 'asc' } },
+      ],
     });
 
-    const mapped = snapshots.map((s) => {
+    mapped = snapshots.map((s) => {
       const balance = Number(s.balance);
       const { debit, credit } = trialBalanceFromSignedBalance(balance);
       return {
@@ -3066,58 +3077,41 @@ export async function getTrialBalance(
         accountCode: s.account.code,
         accountName: s.account.name,
         accountType: s.account.type,
+        categoryId: s.account.categoryId,
+        categoryName: s.account.category?.name ?? '',
         isHidden: s.account.isHidden,
         balance,
         debit,
         credit,
       };
     });
+  } else {
+    const ledgers = await prisma.ledger.findMany({
+      where: { account: { isActive: true, status: USER_VISIBLE_ACCOUNT_STATUS } },
+      include: { account: { include: { category: true } } },
+      orderBy: [
+        { account: { category: { name: 'asc' } } },
+        { account: { code: 'asc' } },
+      ],
+    });
 
-    const totalDebit = mapped.reduce((sum, a) => sum + a.debit, 0);
-    const totalCredit = mapped.reduce((sum, a) => sum + a.credit, 0);
-    const accountsAll = mapped
-      .filter((a) => !a.isHidden)
-      .map(({ isHidden: _hidden, ...row }) => row);
-
-    const limit = pagination?.limit ?? accountsAll.length;
-    const offset = pagination?.offset ?? 0;
-    const accounts = pagination
-      ? accountsAll.slice(offset, offset + limit)
-      : accountsAll;
-
-    return {
-      accounts,
-      totalDebit,
-      totalCredit,
-      isBalanced: isTrialBalanceBalanced(totalDebit, totalCredit),
-      financialYearId: yearId,
-      financialYearLabel: year.label,
-      total: accountsAll.length,
-      limit: pagination ? limit : accountsAll.length,
-      offset: pagination ? offset : 0,
-    };
+    mapped = ledgers.map((l: (typeof ledgers)[number]) => {
+      const balance = Number(l.balance);
+      const { debit, credit } = trialBalanceFromSignedBalance(balance);
+      return {
+        accountId: l.accountId,
+        accountCode: l.account.code,
+        accountName: l.account.name,
+        accountType: l.account.type,
+        categoryId: l.account.categoryId,
+        categoryName: l.account.category?.name ?? '',
+        isHidden: l.account.isHidden,
+        balance,
+        debit,
+        credit,
+      };
+    });
   }
-
-  const ledgers = await prisma.ledger.findMany({
-    where: { account: { isActive: true, status: USER_VISIBLE_ACCOUNT_STATUS } },
-    include: { account: true },
-    orderBy: [{ account: { type: 'asc' } }, { account: { code: 'asc' } }],
-  });
-
-  const mapped = ledgers.map((l: (typeof ledgers)[number]) => {
-    const balance = Number(l.balance);
-    const { debit, credit } = trialBalanceFromSignedBalance(balance);
-    return {
-      accountId: l.accountId,
-      accountCode: l.account.code,
-      accountName: l.account.name,
-      accountType: l.account.type,
-      isHidden: l.account.isHidden,
-      balance,
-      debit,
-      credit,
-    };
-  });
 
   // Totals include hidden control accounts so the books still balance on screen.
   const totalDebit = mapped.reduce((s, a) => s + a.debit, 0);
@@ -3127,22 +3121,26 @@ export async function getTrialBalance(
     .filter((a) => !a.isHidden)
     .map(({ isHidden: _hidden, ...row }) => row);
 
-  const limit = pagination?.limit ?? accountsAll.length;
-  const offset = pagination?.offset ?? 0;
-  const accounts = pagination
-    ? accountsAll.slice(offset, offset + limit)
-    : accountsAll;
+  const groups = groupAccountsByCategory(accountsAll);
+  const page = paginateCategoryAccountGroups(
+    groups,
+    accountsAll,
+    pagination ?? null,
+    'pack',
+  );
 
   return {
-    accounts,
+    accounts: page.accounts,
+    groups: page.groups,
     totalDebit,
     totalCredit,
     isBalanced: isTrialBalanceBalanced(totalDebit, totalCredit),
     financialYearId: yearId,
     financialYearLabel: year.label,
-    total: accountsAll.length,
-    limit: pagination ? limit : accountsAll.length,
-    offset: pagination ? offset : 0,
+    total: page.total,
+    limit: page.limit,
+    offset: page.offset,
+    pageCount: page.pageCount,
   };
 }
 
@@ -3401,11 +3399,55 @@ export async function listTrialBalanceApprovals() {
 
 export async function updateAccount(
   id: number,
-  data: Partial<{ name: string; code: string; isActive: boolean }>
+  data: Partial<{
+    name: string;
+    code: string;
+    isActive: boolean;
+    phone: string | null;
+    address: string | null;
+    cnic: string | null;
+  }>,
 ) {
-  const account = await prisma.account.findFirst({ where: { id } });
+  const account = await prisma.account.findFirst({
+    where: { id },
+    include: { category: true },
+  });
   if (!account) throw new AppError(404, 'Account not found');
-  return prisma.account.update({ where: { id }, data });
+
+  const patch: Prisma.AccountUpdateInput = {};
+
+  if (data.name != null) {
+    patch.name = await assertUniqueAccountName(data.name, id);
+  }
+  if (data.code != null) {
+    patch.code = await assertUniqueAccountCode(data.code, id);
+  }
+  if (data.isActive != null) {
+    patch.isActive = data.isActive;
+  }
+
+  const allowContact = isPartyContactCategoryName(account.category?.name);
+  if (allowContact) {
+    if (data.phone !== undefined) {
+      const phone = normalizeOptionalContact(data.phone);
+      if (phone) await assertUniquePartyPhone(phone, id);
+      patch.phone = phone;
+    }
+    if (data.address !== undefined) {
+      patch.address = normalizeOptionalContact(data.address);
+    }
+    if (data.cnic !== undefined) {
+      const cnic = normalizeOptionalContact(data.cnic);
+      if (cnic) await assertUniquePartyCnic(cnic, id);
+      patch.cnic = cnic;
+    }
+  }
+
+  return prisma.account.update({
+    where: { id },
+    data: patch,
+    include: { category: true, ledger: true },
+  });
 }
 
 /** Soft-delete: hides account from lists; ledger entries are kept until vouchers are cancelled. */

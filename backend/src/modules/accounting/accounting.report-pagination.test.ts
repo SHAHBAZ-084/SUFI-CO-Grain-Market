@@ -134,18 +134,56 @@ describe('report pagination + full-period totals', () => {
     expect(page1.totals.totalAmount).toBeGreaterThanOrEqual(expectedVoucherTotal);
   });
 
-  it('trial balance keeps full totals when paginated', async () => {
+  it('trial balance packs whole categories and keeps full totals when paginated', async () => {
     const full = await getTrialBalance(financialYearId, null);
     const page1 = await getTrialBalance(financialYearId, { limit: 30, offset: 0 });
     const page2 = await getTrialBalance(financialYearId, { limit: 30, offset: 30 });
 
     expect(full.total).toBeGreaterThan(30);
-    expect(page1.accounts.length).toBe(30);
+    expect(full.groups.length).toBeGreaterThan(1);
+    expect(page1.accounts.length).toBeGreaterThan(0);
     expect(page2.accounts.length).toBeGreaterThan(0);
+    expect(page1.pageCount).toBeGreaterThan(1);
     expect(page1.totalDebit).toBe(full.totalDebit);
     expect(page1.totalCredit).toBe(full.totalCredit);
     expect(page2.totalDebit).toBe(full.totalDebit);
     expect(page2.totalCredit).toBe(full.totalCredit);
+    expect(page1.accounts[0]).toMatchObject({
+      categoryId: expect.any(Number),
+      categoryName: expect.any(String),
+    });
+
+    for (const group of page1.groups) {
+      const fullGroup = full.groups.find((g) => g.categoryId === group.categoryId);
+      expect(fullGroup).toBeTruthy();
+      expect(group.accounts.length).toBe(fullGroup!.accounts.length);
+    }
+  });
+
+  it('trial balance excludes hidden accounts from rows/groups but keeps them in totals', async () => {
+    const before = await getTrialBalance(financialYearId, null);
+    const expenseCat = await prisma.accountCategory.findFirst({ where: { name: 'Expenses' } });
+    if (!expenseCat) throw new Error('Expenses category missing');
+
+    const hidden = await prisma.account.create({
+      data: {
+        categoryId: expenseCat.id,
+        name: `RPAG Hidden ${stamp}`,
+        code: `RPH-${stamp}`,
+        type: 'EXPENSE',
+        status: RecordStatus.ACTIVE,
+        isHidden: true,
+      },
+    });
+    await prisma.ledger.create({ data: { accountId: hidden.id, balance: 12345 } });
+
+    const tb = await getTrialBalance(financialYearId, null);
+    expect(tb.accounts.some((a) => a.accountId === hidden.id)).toBe(false);
+    expect(
+      tb.groups.some((g) => g.accounts.some((a) => a.accountId === hidden.id)),
+    ).toBe(false);
+    expect(tb.totalDebit).toBe(before.totalDebit + 12345);
+    expect(tb.totalCredit).toBe(before.totalCredit);
   });
 
   it('account balance packs whole categories and returns full grandBalance', async () => {

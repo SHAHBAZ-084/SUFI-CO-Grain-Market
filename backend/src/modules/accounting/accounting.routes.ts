@@ -56,6 +56,9 @@ accountingRouter.post(
       type: z.nativeEnum(AccountType).optional(),
       openingBalance: z.number().min(0).optional(),
       openingBalanceSide: z.enum(['DR', 'CR']).optional(),
+      phone: z.string().optional().nullable(),
+      address: z.string().optional().nullable(),
+      cnic: z.string().optional().nullable(),
     }),
   ),
   asyncHandler(async (req, res) => {
@@ -345,6 +348,9 @@ accountingRouter.patch(
       name: z.string().optional(),
       code: z.string().optional(),
       isActive: z.boolean().optional(),
+      phone: z.string().optional().nullable(),
+      address: z.string().optional().nullable(),
+      cnic: z.string().optional().nullable(),
     }),
   ),
   asyncHandler(async (req, res) => {

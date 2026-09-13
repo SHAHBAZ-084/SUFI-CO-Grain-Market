@@ -5,7 +5,6 @@ import { formatBusinessContactLine } from '../../lib/reportExport';
 import {
   computeKachiDeductions,
   computeMaalBillFromTotals,
-  computePurchaseDeductions,
   computeSalePaunchBillFromTotals,
   formatBillAmount,
   formatBillDate,
@@ -118,9 +117,11 @@ function PartyBlock({
             <span className="font-semibold">{billToLabel}</span>
             <div className="mt-1">{partyContent}</div>
           </div>
-          <div className="shrink-0">
-            <strong>Product:</strong>&nbsp;{product || '—'}
-          </div>
+          {product.trim() ? (
+            <div className="shrink-0">
+              <strong>Product:</strong>&nbsp;{product}
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -132,9 +133,11 @@ function PartyBlock({
         <span className="font-semibold">{billToLabel}</span>
         <div className="mt-1">{partyContent}</div>
       </div>
-      <div className="shrink-0 pt-1">
-        <strong>Product:</strong>&nbsp;{product || '—'}
-      </div>
+      {product.trim() ? (
+        <div className="shrink-0 pt-1">
+          <strong>Product:</strong>&nbsp;{product}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -245,10 +248,7 @@ function MaalBillBody({
   prefs: SystemPreferences;
   title: string;
 }) {
-  const lines =
-    invoice.type === 'KACHI_MAAL'
-      ? (invoice.kachiMaalLines ?? [])
-      : (invoice.purchaseMaalLines ?? []);
+  const lines = invoice.kachiMaalLines ?? [];
 
   const tableRows = lines.map((l) => maalLineToBillRow(l, prefs.kaatPercent));
   const goodsTotal = sumLineAmounts(tableRows);
@@ -261,20 +261,8 @@ function MaalBillBody({
   const lowerBori = lowerMode === 'BORI' ? lowerQty : 0;
   const lowerThela = lowerMode === 'THELA' ? lowerQty : 0;
 
-  let deduction = 0;
-  let deductionLabel = 'Deduction Of Bilty';
-  if (invoice.type === 'KACHI_MAAL') {
-    deduction = computeKachiDeductions(lines, prefs).deduction;
-  } else {
-    const calc = computePurchaseDeductions(
-      lines,
-      prefs,
-      invoice.marketFeeEnabled ?? false,
-      invoice.mazduriEnabled ?? false,
-    );
-    deduction = calc.kanta + calc.marketFee;
-    deductionLabel = 'Less Kanta';
-  }
+  const deduction = computeKachiDeductions(lines, prefs).deduction;
+  const deductionLabel = 'Deduction Of Bilty';
 
   const debit = invoice.debitAccount;
   const extraLine =
@@ -320,6 +308,196 @@ function MaalBillBody({
           totals={billFrom.totals}
           netAmount={formatBillAmount(billFrom.purchaseNet)}
         />
+      ) : null}
+    </>
+  );
+}
+
+type PurchaseMaalBillToRow = {
+  totalBag: number;
+  totalKg: number;
+  rate: number;
+  dammi: number;
+  totalAmount: number;
+};
+
+type PurchaseMaalBillFromRow = {
+  partyName: string;
+  totalBag: number;
+  totalKg: number;
+  rate: number;
+  amount: number;
+  dammi: number;
+  bardanaAmount: number;
+  totalAmount: number;
+};
+
+function purchaseMaalToBillToRow(line: NonNullable<InvoiceDetail['purchaseMaalLines']>[number]): PurchaseMaalBillToRow {
+  return {
+    totalBag: Number(line.bagCount ?? 0),
+    totalKg: Number(line.totalWeightKg ?? 0),
+    rate: Number(line.ratePerMaund ?? 0),
+    dammi: line.dammiChecked ? Number(line.dammiAmount ?? 0) : 0,
+    totalAmount: Number(line.amount ?? 0),
+  };
+}
+
+function purchaseMaalToBillFromRow(line: NonNullable<InvoiceDetail['purchaseMaalLines']>[number]): PurchaseMaalBillFromRow {
+  return {
+    partyName: line.partyAccount?.name?.trim() || '—',
+    totalBag: Number(line.bagCount ?? 0),
+    totalKg: Number(line.totalWeightKg ?? 0),
+    rate: Number(line.ratePerMaund ?? 0),
+    amount: Number(line.amount ?? 0),
+    dammi: line.dammiChecked ? Number(line.dammiAmount ?? 0) : 0,
+    bardanaAmount: Number(line.bardanaAmount ?? 0),
+    totalAmount: Number(line.netCreditToParty ?? 0),
+  };
+}
+
+function purchaseMaalProductLabel(invoice: InvoiceDetail, lines: NonNullable<InvoiceDetail['purchaseMaalLines']>) {
+  const jins = (invoice.jins ?? lines[0]?.jins ?? '').trim();
+  if (!jins) return 'Maal Khata';
+  if (/^maal\s*khata/i.test(jins)) return jins;
+  return `Maal Khata ${jins}`;
+}
+
+function PurchaseMaalBillToTable({ rows }: { rows: PurchaseMaalBillToRow[] }) {
+  return (
+    <table className="mt-3 w-full border-collapse text-[12px]">
+      <thead>
+        <tr className="border-b border-black">
+          <th className="py-1.5 pr-2 text-right font-semibold">Total Bag</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Total Kg</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Rate</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Dammi</th>
+          <th className="py-1.5 pl-1 text-right font-semibold">Total Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            <td className="py-1.5 pr-2 text-right tabular-nums">{row.totalBag || '0'}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillWeight(row.totalKg)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.rate)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.dammi)}</td>
+            <td className="py-1.5 pl-1 text-right tabular-nums">{formatBillAmount(row.totalAmount)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function PurchaseMaalBillFromTable({ rows }: { rows: PurchaseMaalBillFromRow[] }) {
+  return (
+    <table className="mt-3 w-full border-collapse text-[12px]">
+      <thead>
+        <tr className="border-b border-black">
+          <th className="py-1.5 pr-2 text-left font-semibold">Party Name</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Total Bag</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Total Kg</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Rate</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Amount</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Dammi</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Bardana Amount</th>
+          <th className="py-1.5 pl-1 text-right font-semibold">Total Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            <td className="py-1.5 pr-2">{row.partyName}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{row.totalBag || '0'}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillWeight(row.totalKg)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.rate)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.amount)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.dammi)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.bardanaAmount)}</td>
+            <td className="py-1.5 pl-1 text-right tabular-nums">{formatBillAmount(row.totalAmount)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function PurchaseMaalBillBody({
+  invoice,
+  prefs,
+  title,
+}: {
+  invoice: InvoiceDetail;
+  prefs: SystemPreferences;
+  title: string;
+}) {
+  const lines = invoice.purchaseMaalLines ?? [];
+  const billToRows = lines.map(purchaseMaalToBillToRow);
+  const billFromRows = lines.map(purchaseMaalToBillFromRow);
+  const debit = invoice.debitAccount;
+  const productLabel = purchaseMaalProductLabel(invoice, lines);
+  const billFromParty = resolveMaalBillFromPartyName(invoice, lines);
+
+  const misc = Number(invoice.miscAmount ?? 0);
+  const lowerBardana = Number(invoice.lowerBardanaAmount ?? 0);
+  const showGrandTotal =
+    Boolean(invoice.mazduriEnabled) || misc !== 0 || lowerBardana !== 0;
+
+  return (
+    <>
+      <BillHeader title={title} prefs={prefs} />
+      <MetaRow
+        invoiceNo={parseInvoiceDisplayNumber(invoice.reference)}
+        date={formatBillDate(invoiceBillDate(invoice))}
+        billNo={invoice.billNo ?? ''}
+        gariNo={invoice.gariNo ?? ''}
+      />
+      <PartyBlock
+        billToLabel="Bill To:"
+        partyCode={debit?.code}
+        partyName={debit?.name ?? '—'}
+        product=""
+      />
+      <p className="mt-3 text-[12px] font-semibold">{productLabel}</p>
+      <PurchaseMaalBillToTable
+        rows={
+          billToRows.length
+            ? billToRows
+            : [{ totalBag: 0, totalKg: 0, rate: 0, dammi: 0, totalAmount: 0 }]
+        }
+      />
+      {showGrandTotal ? (
+        <div className="mt-4 flex justify-end">
+          <div className="min-w-[280px] text-[12px]">
+            <div className="flex items-center justify-between gap-4 pt-2">
+              <span className="font-bold">Grand Total:</span>
+              <span className="border-2 border-black px-3 py-0.5 text-[13px] font-bold tabular-nums">
+                {formatBillAmount(invoice.total)}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {billFromParty ? (
+        <section className="mt-8">
+          <p className="text-[12px] font-semibold">Bill From:&nbsp;{billFromParty}</p>
+          <PurchaseMaalBillFromTable
+            rows={
+              billFromRows.length
+                ? billFromRows
+                : [{
+                    partyName: billFromParty,
+                    totalBag: 0,
+                    totalKg: 0,
+                    rate: 0,
+                    amount: 0,
+                    dammi: 0,
+                    bardanaAmount: 0,
+                    totalAmount: 0,
+                  }]
+            }
+          />
+        </section>
       ) : null}
     </>
   );
@@ -644,24 +822,31 @@ function GeneralTradeBillBody({
 }) {
   const purchaseLines = invoice.generalPurchaseLines ?? [];
   const saleLines = invoice.generalSaleLines ?? [];
-  const rows = purchaseLines.map((purchase, index) => {
-    const sale = saleLines[index];
+
+  const saleRows = saleLines.map((sale, index) => {
+    const purchase = purchaseLines[index];
     return {
-      product: purchase.product?.name ?? '—',
-      quantity: Number(purchase.quantity),
-      unit: purchase.product?.unit?.trim() || '—',
-      purchaseRate: Number(purchase.rate),
-      purchaseTotal: Number(purchase.lineTotal),
-      saleRate: Number(sale?.rate ?? 0),
-      saleTotal: Number(sale?.lineTotal ?? 0),
+      product: sale.product?.name?.trim() || purchase?.product?.name?.trim() || '—',
+      rate: Number(sale.rate),
+      quantity: Number(sale.quantity),
+      amount: Number(sale.lineTotal),
     };
   });
-  const purchaseTotal = rows.reduce((s, r) => s + r.purchaseTotal, 0);
-  const saleTotal = rows.reduce((s, r) => s + r.saleTotal, 0);
-  const mazduriTotal = purchaseLines.reduce(
-    (s, line) => s + Math.max(0, Number(line.mazduriAmount ?? 0)),
-    0,
-  );
+
+  const purchaseRows = purchaseLines.map((purchase) => ({
+    product: purchase.product?.name?.trim() || '—',
+    rate: Number(purchase.rate),
+    quantity: Number(purchase.quantity),
+    amount: Number(purchase.lineTotal),
+  }));
+
+  const saleTotal = saleRows.reduce((s, r) => s + r.amount, 0);
+  const purchaseTotal = purchaseRows.reduce((s, r) => s + r.amount, 0);
+  const difference = Math.round((saleTotal - purchaseTotal) * 100) / 100;
+
+  const emptyTradeRow = { product: '—', rate: 0, quantity: 0, amount: 0 };
+  const saleTableRows = saleRows.length ? saleRows : [emptyTradeRow];
+  const purchaseTableRows = purchaseRows.length ? purchaseRows : [emptyTradeRow];
 
   return (
     <>
@@ -672,63 +857,79 @@ function GeneralTradeBillBody({
         billNo={invoice.billNo ?? ''}
         gariNo={invoice.gariNo ?? ''}
       />
+
       <PartyBlock
-        billToLabel="Buy from:"
-        partyCode={invoice.partyAccount?.code}
-        partyName={invoice.partyAccount?.name ?? '—'}
-        product={generalGoodsProductLabel(purchaseLines)}
+        billToLabel="Bill To:"
+        partyCode={invoice.salePartyAccount?.code}
+        partyName={invoice.salePartyAccount?.name ?? '—'}
+        product=""
       />
-      <p className="mb-3 text-sm text-textPrimary">
-        <span className="font-semibold">Sell to:</span>{' '}
-        {invoice.salePartyAccount?.name ?? '—'}
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+      <table className="mt-3 w-full border-collapse text-[12px]">
+        <thead>
+          <tr className="border-b border-black">
+            <th className="py-1.5 pr-2 text-left font-semibold">Product</th>
+            <th className="px-1 py-1.5 text-right font-semibold">Sale Rate</th>
+            <th className="px-1 py-1.5 text-right font-semibold">Qty</th>
+            <th className="py-1.5 pl-1 text-right font-semibold">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {saleTableRows.map((row, i) => (
+            <tr key={i}>
+              <td className="py-1.5 pr-2">{row.product}</td>
+              <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.rate)}</td>
+              <td className="px-1 py-1.5 text-right tabular-nums">{row.quantity || '0'}</td>
+              <td className="py-1.5 pl-1 text-right tabular-nums">{formatBillAmount(row.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="mt-3 flex justify-end text-[12px]">
+        <div className="flex min-w-[280px] justify-between gap-8 font-semibold">
+          <span>Sale Goods Total</span>
+          <span className="tabular-nums">{formatBillAmount(saleTotal)}</span>
+        </div>
+      </div>
+
+      <section className="mt-8">
+        <p className="text-[12px] font-semibold">
+          Bill From:&nbsp;{invoice.partyAccount?.name ?? '—'}
+        </p>
+        <table className="mt-3 w-full border-collapse text-[12px]">
           <thead>
-            <tr className="border-b border-border text-textSecondary">
-              <th className="py-2 pr-2">Product</th>
-              <th className="py-2 pr-2 text-right">Qty</th>
-              <th className="py-2 pr-2 text-right">Buy rate</th>
-              <th className="py-2 pr-2 text-right">Buy total</th>
-              <th className="py-2 pr-2 text-right">Sale rate</th>
-              <th className="py-2 text-right">Sale total</th>
+            <tr className="border-b border-black">
+              <th className="py-1.5 pr-2 text-left font-semibold">Product</th>
+              <th className="px-1 py-1.5 text-right font-semibold">Purchase Rate</th>
+              <th className="px-1 py-1.5 text-right font-semibold">Qty</th>
+              <th className="py-1.5 pl-1 text-right font-semibold">Amount</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-4 text-center text-textSecondary">
-                  No lines
-                </td>
+            {purchaseTableRows.map((row, i) => (
+              <tr key={i}>
+                <td className="py-1.5 pr-2">{row.product}</td>
+                <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.rate)}</td>
+                <td className="px-1 py-1.5 text-right tabular-nums">{row.quantity || '0'}</td>
+                <td className="py-1.5 pl-1 text-right tabular-nums">{formatBillAmount(row.amount)}</td>
               </tr>
-            ) : (
-              rows.map((row, i) => (
-                <tr key={i} className="border-b border-border/60">
-                  <td className="py-2 pr-2">
-                    {row.product}
-                    {row.unit !== '—' ? ` (${row.unit})` : ''}
-                  </td>
-                  <td className="py-2 pr-2 text-right">{row.quantity}</td>
-                  <td className="py-2 pr-2 text-right">{formatBillAmount(row.purchaseRate)}</td>
-                  <td className="py-2 pr-2 text-right">{formatBillAmount(row.purchaseTotal)}</td>
-                  <td className="py-2 pr-2 text-right">{formatBillAmount(row.saleRate)}</td>
-                  <td className="py-2 text-right">{formatBillAmount(row.saleTotal)}</td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
-      </div>
+        <div className="mt-3 flex justify-end text-[12px]">
+          <div className="flex min-w-[280px] justify-between gap-8 font-semibold">
+            <span>Purchase Total</span>
+            <span className="tabular-nums">{formatBillAmount(purchaseTotal)}</span>
+          </div>
+        </div>
+      </section>
+
       <TotalsStack
         lines={[
-          { label: 'Purchase goods:', value: formatBillAmount(purchaseTotal), bold: true },
-          ...(mazduriTotal > 0
-            ? [{ label: 'Mazduri (paid separately):', value: formatBillAmount(mazduriTotal) }]
-            : []),
-          { label: 'Sale total:', value: formatBillAmount(saleTotal), bold: true },
+          { label: 'Sale Total:', value: formatBillAmount(saleTotal), bold: true },
+          { label: 'Purchase Total:', value: formatBillAmount(purchaseTotal), bold: true },
         ]}
-        netAmount={formatBillAmount(Number(invoice.total))}
-        netLabel="Net Receivable (Sale):"
+        netAmount={formatBillAmount(difference)}
+        netLabel="Difference (Revenue):"
       />
       <BillSignature />
     </>
@@ -877,8 +1078,11 @@ export function InvoiceBillView({
 
   return (
     <div className={`${billFont} bg-white px-6 py-8`}>
-      {invoice.type === 'KACHI_MAAL' || invoice.type === 'PURCHASE_MAAL' ? (
+      {invoice.type === 'KACHI_MAAL' ? (
         <MaalBillBody invoice={invoice} prefs={p} title={title} />
+      ) : null}
+      {invoice.type === 'PURCHASE_MAAL' ? (
+        <PurchaseMaalBillBody invoice={invoice} prefs={p} title={title} />
       ) : null}
       {invoice.type === 'SALE_PAUNCH' ? (
         <SalePaunchBillBody invoice={invoice} prefs={p} />

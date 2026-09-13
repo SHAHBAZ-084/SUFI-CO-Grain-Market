@@ -224,6 +224,60 @@ export function downloadPdf(
     subtitle?: string;
   },
 ) {
+  const doc = buildReportPdf(title, headers, rows, businessInfo, options);
+  doc.save(filename);
+}
+
+/** Build the same PDF as downloadPdf, then open the browser print dialog (full report). */
+export function printReportPdf(
+  title: string,
+  headers: string[],
+  rows: (string | number)[][],
+  businessInfo: ReportBusinessInfo,
+  options?: {
+    subtitle?: string;
+  },
+) {
+  const doc = buildReportPdf(title, headers, rows, businessInfo, options);
+  doc.autoPrint();
+  const blobUrl = String(doc.output('bloburl'));
+  const printWindow = window.open(blobUrl, '_blank');
+  if (!printWindow) {
+    // Popup blocked — fall back to hidden iframe print.
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.src = blobUrl;
+    document.body.appendChild(iframe);
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } finally {
+        window.setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+          iframe.remove();
+        }, 60_000);
+      }
+    };
+    return;
+  }
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
+function buildReportPdf(
+  title: string,
+  headers: string[],
+  rows: (string | number)[][],
+  businessInfo: ReportBusinessInfo,
+  options?: {
+    subtitle?: string;
+  },
+) {
   const doc = new jsPDF({ orientation: rows[0]?.length > 6 ? 'landscape' : 'portrait' });
   const startY = drawReportLetterhead(doc, businessInfo, title, options?.subtitle);
 
@@ -239,5 +293,5 @@ export function downloadPdf(
     },
   });
 
-  doc.save(filename);
+  return doc;
 }

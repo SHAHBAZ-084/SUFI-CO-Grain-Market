@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Account, type AccountCategory, type Voucher } from '../../lib/api';
 import { DEFAULT_BUSINESS_INFO, loadBusinessInfo } from '../../lib/businessInfo';
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
-import { downloadExcel, downloadPdf, formatBusinessContactLine, type ReportBusinessInfo } from '../../lib/reportExport';
+import { downloadExcel, downloadPdf, formatBusinessContactLine, printReportPdf, type ReportBusinessInfo } from '../../lib/reportExport';
 import { useReportFinancialYear } from '../../contexts/ReportFinancialYearContext';
 import { ReportFinancialYearSelect } from '../../components/reports/ReportFinancialYearSelect';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -11,6 +11,12 @@ import { DateField } from '../../components/ui/DateField';
 import { Modal } from '../../components/ui/Modal';
 import { FieldLabel, FinancialButton, PageShell, Panel, PrimaryButton, SecondaryButton } from '../../components/ui/PageShell';
 import { VoucherDetailCard } from '../vouchers/VoucherPages';
+import {
+  buildCategoryGroupedExportRows,
+  CategoryGroupHeaderRow,
+  CategoryGroupTotalRow,
+  sumGroupField,
+} from './categoryReportGroups';
 
 type LedgerResult = Awaited<ReturnType<typeof api.getLedger>>;
 type AccountBalanceResult = Awaited<ReturnType<typeof api.getAccountBalanceReport>>;
@@ -227,7 +233,7 @@ export function AccountReportsPage() {
     }
   }
 
-  async function exportLedger(format: 'pdf' | 'excel') {
+  async function exportLedger(format: 'pdf' | 'excel' | 'print') {
     if (!ledger) return;
     const accountName = ledger.account.name;
     const period = [fromDate, toDate].filter(Boolean).join(' to ') || 'All dates';
@@ -241,8 +247,6 @@ export function AccountReportsPage() {
           fromDate: fromDate || undefined,
           toDate: toDate || undefined,
           financialYearId: financialYearIdNum,
-          limit: 500,
-          offset: 0,
         });
         exportRows = full.rows;
       } catch {
@@ -274,6 +278,8 @@ export function AccountReportsPage() {
     const base = `ledger-${safeName || 'account'}`;
     if (format === 'excel') {
       downloadExcel(`${base}.xlsx`, 'Ledger', headers, rows, businessInfo);
+    } else if (format === 'print') {
+      printReportPdf(title, headers, rows, businessInfo);
     } else {
       downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
     }
@@ -358,6 +364,7 @@ export function AccountReportsPage() {
                 <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
                 <SecondaryButton type="button" onClick={() => void exportLedger('pdf')}>Download PDF</SecondaryButton>
                 <SecondaryButton type="button" onClick={() => void exportLedger('excel')}>Download Excel</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => void exportLedger('print')}>Print</SecondaryButton>
               </div>
               <ReportPager
                 offset={offset}
@@ -485,18 +492,57 @@ export function TrialBalancePage() {
     }
   }
 
-  function exportTrialBalance(format: 'pdf' | 'excel') {
-    if (!data) return;
+  async function exportTrialBalance(format: 'pdf' | 'excel' | 'print') {
+    if (!data || financialYearIdNum == null) return;
     const headers = ['Account', 'Debit', 'Credit'];
-    const rows = data.accounts.map((row) => [
-      row.accountName,
-      row.debit.toFixed(2),
-      row.credit.toFixed(2),
-    ]);
-    rows.push(['Total', data.totalDebit.toFixed(2), data.totalCredit.toFixed(2)]);
-    const title = `Detail Trial Balance${data.isBalanced ? '' : ' (Out of balance)'}`;
+    let groups = data.groups;
+    let totalDebit = data.totalDebit;
+    let totalCredit = data.totalCredit;
+    let isBalanced = data.isBalanced;
+    if (data.pageCount != null && data.pageCount > 1) {
+      try {
+        const full = await api.getTrialBalance({ financialYearId: financialYearIdNum });
+        groups = full.groups;
+        totalDebit = full.totalDebit;
+        totalCredit = full.totalCredit;
+        isBalanced = full.isBalanced;
+      } catch {
+        // Fall back to current page groups.
+      }
+    }
+    const rows =
+      groups.length > 0
+        ? buildCategoryGroupedExportRows(groups, {
+            headerPadding: ['', ''],
+            formatAccount: (row) => [
+              row.accountName,
+              row.debit.toFixed(2),
+              row.credit.toFixed(2),
+            ],
+            formatCategoryTotal: (categoryName, accounts) => [
+              `${categoryName} Total`,
+              sumGroupField(accounts, (a) => a.debit).toFixed(2),
+              sumGroupField(accounts, (a) => a.credit).toFixed(2),
+            ],
+            grandTotalRow: [
+              'GRAND TOTAL',
+              totalDebit.toFixed(2),
+              totalCredit.toFixed(2),
+            ],
+          })
+        : [
+            ...data.accounts.map((row) => [
+              row.accountName,
+              row.debit.toFixed(2),
+              row.credit.toFixed(2),
+            ]),
+            ['Total', totalDebit.toFixed(2), totalCredit.toFixed(2)],
+          ];
+    const title = `Detail Trial Balance${isBalanced ? '' : ' (Out of balance)'}`;
     if (format === 'excel') {
       downloadExcel('trial-balance.xlsx', 'Trial Balance', headers, rows, businessInfo);
+    } else if (format === 'print') {
+      printReportPdf(title, headers, rows, businessInfo);
     } else {
       downloadPdf('trial-balance.pdf', title, headers, rows, businessInfo);
     }
@@ -545,13 +591,15 @@ export function TrialBalancePage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
-                <SecondaryButton type="button" onClick={() => exportTrialBalance('pdf')}>Download PDF</SecondaryButton>
-                <SecondaryButton type="button" onClick={() => exportTrialBalance('excel')}>Download Excel</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => void exportTrialBalance('pdf')}>Download PDF</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => void exportTrialBalance('excel')}>Download Excel</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => void exportTrialBalance('print')}>Print</SecondaryButton>
               </div>
               <ReportPager
                 offset={offset}
                 limit={data.limit}
                 total={data.total}
+                pageCount={data.pageCount}
                 loading={loading}
                 onChange={(next) => void loadTrialBalance(next)}
               />
@@ -569,25 +617,61 @@ export function TrialBalancePage() {
                 </tr>
               </thead>
               <tbody>
-                {data.accounts.map((row, i) => (
-                  <tr key={i} className="border-b border-border">
-                    <td className="py-2">{row.accountName}</td>
-                    <td className={`py-2 text-right tabular-nums ${ledgerDebitColorClass(row.debit)}`}>
-                      {row.debit.toFixed(2)}
-                    </td>
-                    <td className={`py-2 text-right tabular-nums ${ledgerCreditColorClass(row.credit)}`}>
-                      {row.credit.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+                {(data.groups.length > 0 ? data.groups : []).map((group) => {
+                  const groupDebit = sumGroupField(group.accounts, (a) => a.debit);
+                  const groupCredit = sumGroupField(group.accounts, (a) => a.credit);
+                  return (
+                    <Fragment key={group.categoryId}>
+                      <CategoryGroupHeaderRow name={group.categoryName} colSpan={3} />
+                      {group.accounts.map((row) => (
+                        <tr key={row.accountId} className="border-b border-border">
+                          <td className="py-2">{row.accountName}</td>
+                          <td className={`py-2 text-right tabular-nums ${ledgerDebitColorClass(row.debit)}`}>
+                            {row.debit.toFixed(2)}
+                          </td>
+                          <td className={`py-2 text-right tabular-nums ${ledgerCreditColorClass(row.credit)}`}>
+                            {row.credit.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                      <CategoryGroupTotalRow categoryName={group.categoryName}>
+                        <td className={`py-2 text-right font-bold tabular-nums ${ledgerDebitColorClass(groupDebit)}`}>
+                          {groupDebit.toFixed(2)}
+                        </td>
+                        <td className={`py-2 text-right font-bold tabular-nums ${ledgerCreditColorClass(groupCredit)}`}>
+                          {groupCredit.toFixed(2)}
+                        </td>
+                      </CategoryGroupTotalRow>
+                    </Fragment>
+                  );
+                })}
+                {data.groups.length === 0
+                  ? data.accounts.map((row) => (
+                      <tr key={row.accountId} className="border-b border-border">
+                        <td className="py-2">{row.accountName}</td>
+                        <td className={`py-2 text-right tabular-nums ${ledgerDebitColorClass(row.debit)}`}>
+                          {row.debit.toFixed(2)}
+                        </td>
+                        <td className={`py-2 text-right tabular-nums ${ledgerCreditColorClass(row.credit)}`}>
+                          {row.credit.toFixed(2)}
+                        </td>
+                      </tr>
+                    ))
+                  : null}
+                <tr className="border-t-2 border-borderStrong bg-surface1">
+                  <td className="py-2.5 pr-3 font-bold uppercase tracking-wide text-textPrimary">
+                    Grand Total (full period)
+                  </td>
+                  <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerDebitColorClass(data.totalDebit)}`}>
+                    {data.totalDebit.toFixed(2)}
+                  </td>
+                  <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerCreditColorClass(data.totalCredit)}`}>
+                    {data.totalCredit.toFixed(2)}
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p className="mt-4 text-sm text-textSecondary">
-              Total debit{' '}
-              <span className={ledgerDebitColorClass(data.totalDebit)}>{data.totalDebit.toFixed(2)}</span>
-              {' · '}Total credit{' '}
-              <span className={ledgerCreditColorClass(data.totalCredit)}>{data.totalCredit.toFixed(2)}</span>
-              {' · '}
               {data.isBalanced ? 'Balanced' : 'Out of balance'}
               {' · '}Full period
             </p>
@@ -596,6 +680,7 @@ export function TrialBalancePage() {
                 offset={offset}
                 limit={data.limit}
                 total={data.total}
+                pageCount={data.pageCount}
                 loading={loading}
                 onChange={(next) => void loadTrialBalance(next)}
               />
@@ -777,22 +862,37 @@ export function SalePurchaseReportsPage() {
     return out;
   }
 
-  function onExport(format: 'pdf' | 'excel') {
+  async function onExport(format: 'pdf' | 'excel' | 'print') {
     if (!report) return;
     const headers = ['Invoice #', 'Product', 'Thela', 'Bori', 'Weight', 'Total Price', 'NetBill'];
-    const rows = exportFlatRows(report);
-    const base = `${report.mode.toLowerCase()}-report-${report.fromDate}-to-${report.toDate}`;
+    let exportSource = report;
+    if (report.total > report.limit) {
+      try {
+        exportSource = await api.getSalePurchaseReport({
+          mode,
+          typeFilter,
+          fromDate,
+          toDate,
+          partyAccountId: partyAccountId ? Number(partyAccountId) : undefined,
+          productId: productId ? Number(productId) : undefined,
+        });
+      } catch {
+        // Fall back to current page.
+      }
+    }
+    const rows = exportFlatRows(exportSource);
+    const base = `${exportSource.mode.toLowerCase()}-report-${exportSource.fromDate}-to-${exportSource.toDate}`;
     if (format === 'excel') {
-      downloadExcel(`${base}.xlsx`, report.title, headers, rows, businessInfo);
+      downloadExcel(`${base}.xlsx`, exportSource.title, headers, rows, businessInfo);
+    } else if (format === 'print') {
+      printReportPdf(exportSource.title, headers, rows, businessInfo, {
+        subtitle: filterSummary(exportSource),
+      });
     } else {
-      downloadPdf(`${base}.pdf`, report.title, headers, rows, businessInfo, {
-        subtitle: filterSummary(report),
+      downloadPdf(`${base}.pdf`, exportSource.title, headers, rows, businessInfo, {
+        subtitle: filterSummary(exportSource),
       });
     }
-  }
-
-  function onPrint() {
-    window.print();
   }
 
   function fmtQty(n: number) {
@@ -888,9 +988,9 @@ export function SalePurchaseReportsPage() {
             />
             <div className="flex flex-wrap gap-2">
               <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
-              <SecondaryButton type="button" onClick={onPrint}>Print</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => onExport('pdf')}>PDF</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => onExport('excel')}>Excel</SecondaryButton>
+              <SecondaryButton type="button" onClick={() => void onExport('print')}>Print</SecondaryButton>
+              <SecondaryButton type="button" onClick={() => void onExport('pdf')}>PDF</SecondaryButton>
+              <SecondaryButton type="button" onClick={() => void onExport('excel')}>Excel</SecondaryButton>
             </div>
           </div>
 
@@ -1232,22 +1332,22 @@ function sumAccountBalances(
 function BalanceTable({
   rows,
   groups,
-  reportGrandTotal,
+  reportTotalDebit,
+  reportTotalCredit,
+  isLastPage = true,
 }: {
   rows?: AccountBalanceResult['accounts'];
   groups?: AccountBalanceResult['groups'];
-  /** Full-report signed balance total (period-wide). When set, used for the final total row. */
-  reportGrandTotal?: number;
+  /** Full-report debit/credit totals (period-wide). Shown only on the last page. */
+  reportTotalDebit?: number;
+  reportTotalCredit?: number;
+  /** When false (middle pages of a multi-page report), omit the final Total Debit/Credit rows. */
+  isLastPage?: boolean;
 }) {
   const flatRows = rows ?? [];
   const groupList = groups ?? [];
-  const pageGrandTotal = groups
-    ? groupList.reduce((sum, group) => sum + sumAccountBalances(group.accounts), 0)
-    : sumAccountBalances(flatRows);
-  const grandTotal = reportGrandTotal ?? pageGrandTotal;
-  const singleCategoryTotalLabel = flatRows[0]?.categoryName
-    ? `${flatRows[0].categoryName} Total`
-    : 'Total';
+  const showReportTotals =
+    isLastPage && reportTotalDebit != null && reportTotalCredit != null;
 
   return (
     <table className="w-full text-left text-sm">
@@ -1266,7 +1366,7 @@ function BalanceTable({
                   <tr className="border-b border-border bg-surface1">
                     <td
                       colSpan={2}
-                      className="py-2 pr-3 text-xs font-semibold uppercase tracking-wide text-textMuted"
+                      className="py-2 pr-3 text-sm font-bold uppercase tracking-wide text-textPrimary"
                     >
                       {group.categoryName}
                     </td>
@@ -1280,7 +1380,7 @@ function BalanceTable({
                     </tr>
                   ))}
                   <tr className="border-t-2 border-border bg-surface1">
-                    <td className="py-2 pr-3 font-bold text-textPrimary">
+                    <td className="py-2 pr-3 text-textSecondary">
                       {group.categoryName} Total
                     </td>
                     <td className={`py-2 text-right font-bold tabular-nums ${ledgerBalanceColorClass(groupTotal)}`}>
@@ -1299,26 +1399,21 @@ function BalanceTable({
               </tr>
             ))}
 
-        {!groups && flatRows.length > 0 ? (
-          <tr className="border-t-2 border-border bg-surface1">
-            <td className="py-2 pr-3 font-bold text-textPrimary">
-              {reportGrandTotal != null ? `${singleCategoryTotalLabel} (full period)` : singleCategoryTotalLabel}
-            </td>
-            <td className={`py-2 text-right font-bold tabular-nums ${ledgerBalanceColorClass(grandTotal)}`}>
-              {formatLedgerBalance(grandTotal)}
-            </td>
-          </tr>
-        ) : null}
-
-        {groups && groupList.length > 0 ? (
-          <tr className="border-t-2 border-borderStrong bg-surface1">
-            <td className="py-2.5 pr-3 font-bold uppercase tracking-wide text-textPrimary">
-              {reportGrandTotal != null ? 'Grand Total (full period)' : 'Grand Total'}
-            </td>
-            <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerBalanceColorClass(grandTotal)}`}>
-              {formatLedgerBalance(grandTotal)}
-            </td>
-          </tr>
+        {showReportTotals ? (
+          <>
+            <tr className="border-t-2 border-borderStrong bg-surface1">
+              <td className="py-2.5 pr-3 font-bold text-textPrimary">Total Debit</td>
+              <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerDebitColorClass(reportTotalDebit)}`}>
+                {reportTotalDebit.toFixed(2)}
+              </td>
+            </tr>
+            <tr className="border-t border-border bg-surface1">
+              <td className="py-2.5 pr-3 font-bold text-textPrimary">Total Credit</td>
+              <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerCreditColorClass(reportTotalCredit)}`}>
+                {reportTotalCredit.toFixed(2)}
+              </td>
+            </tr>
+          </>
         ) : null}
       </tbody>
     </table>
@@ -1393,14 +1488,27 @@ export function AccountBalancePage() {
     }
   }
 
-  function exportReport(format: 'pdf' | 'excel') {
-    if (!report) return;
+  async function exportReport(format: 'pdf' | 'excel' | 'print') {
+    if (!report || financialYearIdNum == null) return;
     const headers = ['Account Name', 'Balance'];
+    let exportSource = report;
+    if (report.pageCount != null && report.pageCount > 1) {
+      try {
+        exportSource = await api.getAccountBalanceReport({
+          date: datedOn,
+          categoryId: categoryId ? Number(categoryId) : undefined,
+          side,
+          financialYearId: financialYearIdNum,
+        });
+      } catch {
+        // Fall back to current page.
+      }
+    }
     const rows: (string | number)[][] = [];
-    const showGroupedExport = !categoryId && report.groups.length > 0;
+    const showGroupedExport = !categoryId && exportSource.groups.length > 0;
 
     if (showGroupedExport) {
-      for (const group of report.groups) {
+      for (const group of exportSource.groups) {
         rows.push([group.categoryName.toUpperCase(), '']);
         for (const row of group.accounts) {
           rows.push([row.accountName, formatLedgerBalance(row.balance)]);
@@ -1408,16 +1516,15 @@ export function AccountBalancePage() {
         const groupTotal = sumAccountBalances(group.accounts);
         rows.push([`${group.categoryName} Total`, formatLedgerBalance(groupTotal)]);
       }
-      rows.push(['GRAND TOTAL', formatLedgerBalance(report.grandBalance)]);
+      rows.push(['Total Debit', exportSource.totalDebit.toFixed(2)]);
+      rows.push(['Total Credit', exportSource.totalCredit.toFixed(2)]);
     } else {
-      for (const row of report.accounts) {
+      for (const row of exportSource.accounts) {
         rows.push([row.accountName, formatLedgerBalance(row.balance)]);
       }
-      if (report.accounts.length > 0) {
-        const label = report.accounts[0]?.categoryName
-          ? `${report.accounts[0].categoryName} Total`
-          : 'Total';
-        rows.push([label, formatLedgerBalance(report.grandBalance)]);
+      if (exportSource.accounts.length > 0) {
+        rows.push(['Total Debit', exportSource.totalDebit.toFixed(2)]);
+        rows.push(['Total Credit', exportSource.totalCredit.toFixed(2)]);
       }
     }
 
@@ -1426,12 +1533,19 @@ export function AccountBalancePage() {
     const base = `account-balance-${safeDate}`;
     if (format === 'excel') {
       downloadExcel(`${base}.xlsx`, 'Account Balance', headers, rows, businessInfo);
+    } else if (format === 'print') {
+      printReportPdf(title, headers, rows, businessInfo);
     } else {
       downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
     }
   }
 
   const showGrouped = !categoryId && (report?.groups.length ?? 0) > 0;
+  const isLastPage =
+    !report
+    || report.pageCount == null
+    || report.pageCount <= 1
+    || Math.floor(report.offset / Math.max(report.limit, 1)) >= report.pageCount - 1;
 
   return (
     <PageShell
@@ -1512,8 +1626,9 @@ export function AccountBalancePage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
-                <SecondaryButton type="button" onClick={() => exportReport('pdf')}>Download PDF</SecondaryButton>
-                <SecondaryButton type="button" onClick={() => exportReport('excel')}>Download Excel</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => void exportReport('pdf')}>Download PDF</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => void exportReport('excel')}>Download Excel</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => void exportReport('print')}>Print</SecondaryButton>
               </div>
               <ReportPager
                 offset={offset}
@@ -1530,9 +1645,19 @@ export function AccountBalancePage() {
             />
             <div className="overflow-x-auto">
               {showGrouped ? (
-                <BalanceTable groups={report.groups} reportGrandTotal={report.grandBalance} />
+                <BalanceTable
+                  groups={report.groups}
+                  reportTotalDebit={report.totalDebit}
+                  reportTotalCredit={report.totalCredit}
+                  isLastPage={isLastPage}
+                />
               ) : (
-                <BalanceTable rows={report.accounts} reportGrandTotal={report.grandBalance} />
+                <BalanceTable
+                  rows={report.accounts}
+                  reportTotalDebit={report.totalDebit}
+                  reportTotalCredit={report.totalCredit}
+                  isLastPage={isLastPage}
+                />
               )}
             </div>
             <div className="mt-3">
@@ -1672,10 +1797,28 @@ export function VouchersReportPage() {
     }
   }
 
-  function exportReport(format: 'pdf' | 'excel') {
-    if (!loaded) return;
+  async function exportReport(format: 'pdf' | 'excel' | 'print') {
+    if (!loaded || financialYearIdNum == null) return;
     const headers = ['Voucher #', 'Date', 'Type', 'From/Debit', 'To/Credit', 'Amount', 'Ref#', 'Status'];
-    const rows = vouchers.map((v) => [
+    let exportVouchers = vouchers;
+    let exportTotals = totals;
+    if (listTotal > vouchers.length) {
+      try {
+        const full = await api.listVouchers({
+          fromDate,
+          toDate,
+          type: voucherType === 'all' ? undefined : voucherType,
+          financialYearId: financialYearIdNum,
+          limit: 500,
+          offset: 0,
+        });
+        exportVouchers = full.items;
+        exportTotals = full.totals;
+      } catch {
+        // Fall back to current page.
+      }
+    }
+    const rows = exportVouchers.map((v) => [
       formatVoucherNumber(v.number, v.type),
       formatDate(v.date),
       formatVoucherTypeLabel(v.type),
@@ -1685,11 +1828,13 @@ export function VouchersReportPage() {
       v.reference ?? '',
       v.status === 'CANCELLED' ? 'Cancelled' : 'Active',
     ]);
-    rows.push(['Total', '', '', '', '', formatLedgerAmount(totals.totalAmount), '', '']);
+    rows.push(['Total', '', '', '', '', formatLedgerAmount(exportTotals.totalAmount), '', '']);
     const title = `Vouchers ${fromDate} to ${toDate}`;
     const base = `vouchers-${fromDate}-to-${toDate}`;
     if (format === 'excel') {
       downloadExcel(`${base}.xlsx`, 'Vouchers', headers, rows, businessInfo);
+    } else if (format === 'print') {
+      printReportPdf(title, headers, rows, businessInfo);
     } else {
       downloadPdf(`${base}.pdf`, title, headers, rows, businessInfo);
     }
@@ -1785,8 +1930,9 @@ export function VouchersReportPage() {
           <>
             <div className="mb-4 flex flex-wrap gap-2">
               <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Edit filters</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => exportReport('pdf')}>Download PDF</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => exportReport('excel')}>Download Excel</SecondaryButton>
+              <SecondaryButton type="button" onClick={() => void exportReport('pdf')}>Download PDF</SecondaryButton>
+              <SecondaryButton type="button" onClick={() => void exportReport('excel')}>Download Excel</SecondaryButton>
+              <SecondaryButton type="button" onClick={() => void exportReport('print')}>Print</SecondaryButton>
             </div>
             <ReportLetterheadBlock
               businessInfo={businessInfo}

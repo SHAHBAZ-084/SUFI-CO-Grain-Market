@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { formatLedgerBalance } from '../../lib/format';
+import { PARTY_ACCOUNT_CATEGORIES } from '../../lib/kachiMaalCalculations';
 import { api, type Account, type AccountCategory } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { FieldLabel, PageShell, Panel, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/PageShell';
@@ -19,6 +20,10 @@ function defaultOpeningSideForCategory(categoryId: number, accounts: Account[]):
     return sibling.type === 'ASSET' || sibling.type === 'EXPENSE' ? 'DR' : 'CR';
   }
   return 'DR';
+}
+
+function isPartyContactCategory(name?: string | null): boolean {
+  return Boolean(name && (PARTY_ACCOUNT_CATEGORIES as readonly string[]).includes(name));
 }
 
 const DELETE_TIMEOUT_MS = 30_000;
@@ -46,6 +51,9 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [cnic, setCnic] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
   const [openingBalanceSide, setOpeningBalanceSide] = useState<'DR' | 'CR'>('DR');
   const [selectedId, setSelectedId] = useState<number | ''>('');
@@ -62,6 +70,9 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
     if (mode === 'edit' && selectedId) {
       const account = accounts.find((a) => a.id === selectedId);
       setName(account?.name ?? '');
+      setPhone(account?.phone ?? '');
+      setAddress(account?.address ?? '');
+      setCnic(account?.cnic ?? '');
     }
   }, [selectedId, accounts, mode]);
 
@@ -76,6 +87,18 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
     [categories, categoryId],
   );
 
+  const editAccount = useMemo(
+    () => (selectedId ? accounts.find((a) => a.id === selectedId) : undefined),
+    [accounts, selectedId],
+  );
+
+  const showContactFields =
+    mode === 'add'
+      ? isPartyContactCategory(selectedCategory?.name)
+      : mode === 'edit'
+        ? isPartyContactCategory(editAccount?.category?.name)
+        : false;
+
   if (mode === 'remove' && !isAdmin) {
     return <Navigate to="/accounts/manage/add" replace />;
   }
@@ -83,6 +106,16 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
   async function reload() {
     setCategories(await api.listCategories());
     setAccounts(await api.listAccounts());
+  }
+
+  function clearForm() {
+    setCategoryId('');
+    setName('');
+    setPhone('');
+    setAddress('');
+    setCnic('');
+    setOpeningBalance('');
+    setSelectedId('');
   }
 
   async function onSubmit(event: FormEvent) {
@@ -97,9 +130,17 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
         if (openingBalance.trim() && !(parsedOpening >= 0)) {
           throw new Error('Opening balance must be zero or greater');
         }
+        const contactPayload = showContactFields
+          ? {
+              phone: phone.trim() || null,
+              address: address.trim() || null,
+              cnic: cnic.trim() || null,
+            }
+          : {};
         await api.createAccount({
           categoryId: Number(categoryId),
           name,
+          ...contactPayload,
           ...(parsedOpening > 0
             ? { openingBalance: parsedOpening, openingBalanceSide }
             : {}),
@@ -111,16 +152,20 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
         } else {
           setMessage(`Account "${name}" submitted for approval.`);
         }
-        setCategoryId('');
-        setName('');
-        setOpeningBalance('');
+        clearForm();
         setOpeningBalanceSide('DR');
       } else if (mode === 'edit') {
         if (!selectedId) throw new Error('Select an account');
-        await api.updateAccount(Number(selectedId), { name });
+        const contactPayload = showContactFields
+          ? {
+              phone: phone.trim() || null,
+              address: address.trim() || null,
+              cnic: cnic.trim() || null,
+            }
+          : {};
+        await api.updateAccount(Number(selectedId), { name, ...contactPayload });
         setMessage('Account updated.');
-        setSelectedId('');
-        setName('');
+        clearForm();
       } else {
         if (!selectedId) throw new Error('Select an account');
         await withTimeout(
@@ -129,7 +174,7 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
           'Delete failed, please try again',
         );
         setMessage('Account removed.');
-        setSelectedId('');
+        clearForm();
       }
       await reload();
     } catch (err) {
@@ -140,6 +185,23 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
   }
 
   const { title, subtitle } = copy[mode];
+
+  const contactFields = showContactFields ? (
+    <>
+      <div>
+        <FieldLabel>Phone number (optional)</FieldLabel>
+        <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0300-1234567" />
+      </div>
+      <div>
+        <FieldLabel>Address (optional)</FieldLabel>
+        <TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address" />
+      </div>
+      <div>
+        <FieldLabel>CNIC (optional)</FieldLabel>
+        <TextInput value={cnic} onChange={(e) => setCnic(e.target.value)} placeholder="e.g. 35202-1234567-1" />
+      </div>
+    </>
+  ) : null;
 
   return (
     <PageShell title={title} subtitle={subtitle}>
@@ -165,6 +227,7 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
                 <FieldLabel>Account name</FieldLabel>
                 <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
+              {contactFields}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <FieldLabel>Opening balance</FieldLabel>
@@ -213,10 +276,13 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
                 </select>
               </div>
               {mode === 'edit' ? (
-                <div>
-                  <FieldLabel>Account name</FieldLabel>
-                  <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
-                </div>
+                <>
+                  <div>
+                    <FieldLabel>Account name</FieldLabel>
+                    <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+                  </div>
+                  {contactFields}
+                </>
               ) : null}
             </>
           )}
@@ -226,7 +292,7 @@ export function AccountManagePage({ mode }: { mode: Mode }) {
             <PrimaryButton type="submit" disabled={saving}>
               {saving ? (mode === 'remove' ? 'Removing…' : 'Saving…') : mode === 'remove' ? 'Remove' : 'Save'}
             </PrimaryButton>
-            <SecondaryButton type="button" disabled={saving} onClick={() => { setCategoryId(''); setName(''); setOpeningBalance(''); setSelectedId(''); }}>Clear</SecondaryButton>
+            <SecondaryButton type="button" disabled={saving} onClick={clearForm}>Clear</SecondaryButton>
           </div>
         </form>
       </Panel>

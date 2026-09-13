@@ -37,6 +37,9 @@ export type Account = {
   code: string;
   type: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
   isActive: boolean;
+  phone?: string | null;
+  address?: string | null;
+  cnic?: string | null;
   category?: AccountCategory | null;
   ledger?: Ledger | null;
 };
@@ -828,10 +831,20 @@ export const api = {
     type?: Account['type'];
     openingBalance?: number;
     openingBalanceSide?: 'DR' | 'CR';
+    phone?: string | null;
+    address?: string | null;
+    cnic?: string | null;
   }) {
     return request<Account>('/api/accounting/accounts', { method: 'POST', body: JSON.stringify(data) });
   },
-  updateAccount(id: number, data: { name?: string; code?: string; isActive?: boolean }) {
+  updateAccount(id: number, data: {
+    name?: string;
+    code?: string;
+    isActive?: boolean;
+    phone?: string | null;
+    address?: string | null;
+    cnic?: string | null;
+  }) {
     return request<Account>(`/api/accounting/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
   },
   removeAccount(id: number) {
@@ -910,7 +923,32 @@ export const api = {
     if (params?.offset != null) query.set('offset', String(params.offset));
     const suffix = query.toString() ? `?${query}` : '';
     return request<{
-      accounts: { accountName: string; debit: number; credit: number }[];
+      accounts: {
+        accountId: number;
+        accountCode: string;
+        accountName: string;
+        accountType: string;
+        categoryId: number;
+        categoryName: string;
+        balance: number;
+        debit: number;
+        credit: number;
+      }[];
+      groups: {
+        categoryId: number;
+        categoryName: string;
+        accounts: {
+          accountId: number;
+          accountCode: string;
+          accountName: string;
+          accountType: string;
+          categoryId: number;
+          categoryName: string;
+          balance: number;
+          debit: number;
+          credit: number;
+        }[];
+      }[];
       totalDebit: number;
       totalCredit: number;
       isBalanced: boolean;
@@ -919,6 +957,7 @@ export const api = {
       total: number;
       limit: number;
       offset: number;
+      pageCount: number;
     }>(`/api/accounting/trial-balance${suffix}`);
   },
 
