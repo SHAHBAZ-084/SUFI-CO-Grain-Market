@@ -188,6 +188,7 @@ export async function createSchedule(data: CreateScheduleInput) {
 
 export async function listSchedules() {
   const rows = await prisma.scheduledVoucher.findMany({
+    where: { status: { not: ScheduleStatus.DELETED } },
     include: scheduleInclude,
     orderBy: [{ status: 'asc' }, { nextRunAt: 'asc' }, { id: 'desc' }],
   });
@@ -337,6 +338,7 @@ export async function softDeleteSchedule(id: number) {
   if (existing.status === ScheduleStatus.DELETED) {
     throw new AppError(400, 'Schedule is already deleted');
   }
+  // Mark deleted first so an in-flight runner cannot revive the row to ACTIVE.
   const updated = await prisma.scheduledVoucher.update({
     where: { id },
     data: { status: ScheduleStatus.DELETED },
@@ -355,6 +357,9 @@ function scheduleReference(scheduleId: number, occurrenceNumber: number) {
  * bump occurrencesRun, advance nextRunAt by one interval, repeat.
  * Completes when occurrenceLimit is hit or nextRunAt passes endAt.
  */
+/** Cap catch-up per tick so a long backlog cannot hold SQLite write locks for minutes. */
+const MAX_CATCHUP_PER_TICK = 24;
+
 async function runOneDueSchedule(
   scheduleId: number,
   now: Date,
@@ -362,9 +367,9 @@ async function runOneDueSchedule(
   let created = 0;
   let completed = false;
 
-  // Re-load inside the loop so concurrent runners see fresh counters.
+  // Re-load inside the loop so concurrent pause/delete is observed quickly.
   // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (created < MAX_CATCHUP_PER_TICK) {
     const schedule = await prisma.scheduledVoucher.findUnique({ where: { id: scheduleId } });
     if (!schedule || schedule.status !== ScheduleStatus.ACTIVE) break;
 
@@ -374,8 +379,8 @@ async function runOneDueSchedule(
       schedule.occurrenceLimit != null
       && schedule.occurrencesRun >= schedule.occurrenceLimit
     ) {
-      await prisma.scheduledVoucher.update({
-        where: { id: scheduleId },
+      await prisma.scheduledVoucher.updateMany({
+        where: { id: scheduleId, status: ScheduleStatus.ACTIVE },
         data: { status: ScheduleStatus.COMPLETED },
       });
       completed = true;
@@ -383,8 +388,8 @@ async function runOneDueSchedule(
     }
 
     if (schedule.endAt && schedule.nextRunAt.getTime() > schedule.endAt.getTime()) {
-      await prisma.scheduledVoucher.update({
-        where: { id: scheduleId },
+      await prisma.scheduledVoucher.updateMany({
+        where: { id: scheduleId, status: ScheduleStatus.ACTIVE },
         data: { status: ScheduleStatus.COMPLETED },
       });
       completed = true;
@@ -396,6 +401,13 @@ async function runOneDueSchedule(
 
     try {
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Bail if paused/deleted after we loaded the row — do not create or revive.
+        const stillActive = await tx.scheduledVoucher.findFirst({
+          where: { id: scheduleId, status: ScheduleStatus.ACTIVE },
+          select: { id: true },
+        });
+        if (!stillActive) return;
+
         await createVoucherInTx(tx, {
           type: schedule.voucherType,
           debitAccountId: schedule.debitAccountId,
@@ -414,8 +426,9 @@ async function runOneDueSchedule(
           schedule.occurrenceLimit != null && runNumber >= schedule.occurrenceLimit;
         const pastEnd = schedule.endAt != null && nextRunAt.getTime() > schedule.endAt.getTime();
 
-        await tx.scheduledVoucher.update({
-          where: { id: scheduleId },
+        // updateMany + ACTIVE guard: never overwrite DELETED/PAUSED back to ACTIVE.
+        await tx.scheduledVoucher.updateMany({
+          where: { id: scheduleId, status: ScheduleStatus.ACTIVE },
           data: {
             occurrencesRun: runNumber,
             lastRunAt: runAt,
@@ -438,15 +451,21 @@ async function runOneDueSchedule(
       break;
     }
 
+    // Re-check status — delete/pause during the transaction should stop the loop.
+    const after = await prisma.scheduledVoucher.findUnique({
+      where: { id: scheduleId },
+      select: { status: true, occurrencesRun: true, nextRunAt: true, endAt: true, occurrenceLimit: true },
+    });
+    if (!after || after.status !== ScheduleStatus.ACTIVE) break;
+
     created += 1;
     if (
-      schedule.occurrenceLimit != null && runNumber >= schedule.occurrenceLimit
+      after.occurrenceLimit != null && after.occurrencesRun >= after.occurrenceLimit
     ) {
       completed = true;
       break;
     }
-    const advanced = advanceScheduleDate(runAt, schedule.frequency);
-    if (schedule.endAt && advanced.getTime() > schedule.endAt.getTime()) {
+    if (after.endAt && after.nextRunAt.getTime() > after.endAt.getTime()) {
       completed = true;
       break;
     }

@@ -123,6 +123,7 @@ export function SchedulesPage() {
   const [editOccurrenceLimit, setEditOccurrenceLimit] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [deleteRow, setDeleteRow] = useState<ScheduledVoucher | null>(null);
 
   const leftCategoryRef = useRef<HTMLInputElement>(null);
   const leftAccountRef = useRef<HTMLInputElement>(null);
@@ -360,13 +361,23 @@ export function SchedulesPage() {
     }
   }
 
-  async function onDelete(id: number) {
-    if (!window.confirm('Delete this schedule? Future runs will stop.')) return;
+  function askDelete(row: ScheduledVoucher) {
+    setEditRow(null);
+    setDeleteRow(row);
+    setError('');
+    setMessage('');
+  }
+
+  async function onConfirmDelete() {
+    if (!deleteRow) return;
+    const id = deleteRow.id;
     setBusyId(id);
     setError('');
     try {
       await api.deleteSchedule(id);
       setMessage(`Schedule #${id} deleted.`);
+      setDeleteRow(null);
+      setEditRow(null);
       await reloadSchedules();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete');
@@ -628,7 +639,7 @@ export function SchedulesPage() {
                               <DangerButton
                                 type="button"
                                 disabled={busyId === row.id}
-                                onClick={() => void onDelete(row.id)}
+                                onClick={() => askDelete(row)}
                               >
                                 Delete
                               </DangerButton>
@@ -644,6 +655,42 @@ export function SchedulesPage() {
           </Panel>
         )}
       </div>
+
+      <Modal
+        open={Boolean(deleteRow)}
+        onClose={() => {
+          if (busyId == null) setDeleteRow(null);
+        }}
+        title={deleteRow ? `Delete schedule #${deleteRow.id}?` : 'Delete schedule'}
+      >
+        {deleteRow ? (
+          <div className="space-y-4">
+            <p className="text-sm text-textSecondary">
+              Future runs will stop. Vouchers already created stay in Approvals / ledger.
+            </p>
+            <p className="text-sm text-textPrimary">
+              {formatVoucherTypeLabel(deleteRow.voucherType)} · Rs{' '}
+              {formatLedgerAmount(deleteRow.amount)} · {deleteRow.frequency}
+            </p>
+            <div className="flex justify-end gap-2">
+              <SecondaryButton
+                type="button"
+                disabled={busyId === deleteRow.id}
+                onClick={() => setDeleteRow(null)}
+              >
+                Cancel
+              </SecondaryButton>
+              <DangerButton
+                type="button"
+                disabled={busyId === deleteRow.id}
+                onClick={() => void onConfirmDelete()}
+              >
+                {busyId === deleteRow.id ? 'Deleting…' : 'Delete'}
+              </DangerButton>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={Boolean(editRow)}
