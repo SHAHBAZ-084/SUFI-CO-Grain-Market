@@ -720,6 +720,7 @@ export async function approvePendingSalePaunchInvoice(
     boriOrThelaMode: line.boriOrThelaMode,
     bagCount: line.bagCount,
     thelaCount: line.thelaCount ?? 0,
+    netWeightKg: line.netWeightKg,
   }));
 
   const { assertStockAvailableForSalePaunchOut } = await import('../approvals/stock-approval-guards');

@@ -126,7 +126,8 @@ function ApprovalEditModal({
   const [editNotes, setEditNotes] = useState('');
   const [editInvoiceDate, setEditInvoiceDate] = useState('');
   const [editBags, setEditBags] = useState('');
-  const [editBagType, setEditBagType] = useState<'BORI' | 'THELA'>('BORI');
+  const [editKg, setEditKg] = useState('');
+  const [editBagType, setEditBagType] = useState<'BORI' | 'THELA'>('THELA');
   const [editDirection, setEditDirection] = useState<'IN' | 'OUT'>('IN');
 
   useEffect(() => {
@@ -145,6 +146,7 @@ function ApprovalEditModal({
     setEditNotes(recordString(record.notes === null ? '' : record.notes));
     setEditInvoiceDate(toDateInputValue(record.invoiceDate));
     setEditBags(recordNumber(record.bags)?.toString() ?? '');
+    setEditKg(recordNumber(record.kg)?.toString() ?? '');
     setEditBagType(record.bagType === 'THELA' ? 'THELA' : 'BORI');
     setEditDirection(record.direction === 'OUT' ? 'OUT' : 'IN');
   }, [detail, record]);
@@ -191,7 +193,8 @@ function ApprovalEditModal({
         });
       } else if (kind === 'stock-adjustment') {
         await api.patchPendingApproval(kind, id, {
-          bags: Number(editBags),
+          bags: editBags.trim() === '' ? 0 : Number(editBags),
+          kg: editKg.trim() === '' ? 0 : Number(editKg),
           amount: Number(editAmount),
           direction: editDirection,
           bagType: editBagType,
@@ -419,14 +422,23 @@ function ApprovalEditModal({
                   </select>
                 </div>
                 <div>
-                  <FieldLabel>Bags</FieldLabel>
+                  <FieldLabel>Bags (optional)</FieldLabel>
                   <TextInput
                     type="number"
-                    min="0.01"
+                    min="0"
                     step="1"
                     value={editBags}
                     onChange={(e) => setEditBags(e.target.value)}
-                    required
+                  />
+                </div>
+                <div>
+                  <FieldLabel>KG (optional)</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editKg}
+                    onChange={(e) => setEditKg(e.target.value)}
                   />
                 </div>
                 <div>

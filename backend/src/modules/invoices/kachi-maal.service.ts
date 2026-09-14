@@ -603,6 +603,9 @@ export async function approvePendingKachiMaalInvoice(
     data: { invoiceId: invoice.id, voucherId: voucher.id },
   });
 
+  // Kachi Maal does not post product bag/kg stock (no Maal Khata product on the invoice).
+  // Physical kg + bag stock IN is recorded via Purchase to Maal → postPurchaseMaalStockIn.
+
   return tx.invoice.update({
     where: { id: invoice.id },
     data: { status: InvoiceStatus.POSTED },

@@ -201,7 +201,7 @@ describe('Sale Paunch posting', () => {
         productId: wheatProduct!.id,
         direction: 'OUT',
       },
-      select: { bags: true, bagType: true, invoiceReference: true },
+      select: { bags: true, kg: true, bagType: true, invoiceReference: true },
     });
     expect(stockOut).toHaveLength(1);
     expect(stockOut[0]).toEqual(
@@ -211,6 +211,7 @@ describe('Sale Paunch posting', () => {
       }),
     );
     expect(Number(stockOut[0]!.bags)).toBe(10);
+    expect(Number(stockOut[0]!.kg)).toBeGreaterThan(0);
   });
 
   it('credits misc and increases sale party debit (opposite of tax/bilty party credit)', async () => {

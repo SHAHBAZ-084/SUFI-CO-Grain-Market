@@ -1096,7 +1096,7 @@ export function StockReportPage() {
     Array<{ id: number; name: string; code: string; stockMode?: string }>
   >([]);
   const [productId, setProductId] = useState('');
-  const [bagType, setBagType] = useState<StockBagType>('BORI');
+  const [bagType, setBagType] = useState<StockBagType>('THELA');
   const [report, setReport] = useState<StockReportResult | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(true);
@@ -1161,7 +1161,7 @@ export function StockReportPage() {
       subtitle={
         qtyMode
           ? 'Quantity stock for general goods (Purchase IN / Sale OUT). Negatives shown as-is.'
-          : 'Bag stock from Purchase to Maal (IN) and Sale on Paunch (OUT)'
+          : 'Bag + kg stock from Purchase to Maal (IN) and Sale on Paunch (OUT)'
       }
     >
       <Modal
@@ -1241,9 +1241,10 @@ export function StockReportPage() {
                   </>
                 ) : (
                   <>
-                    Tracking from {formatDate(report.trackingStartedAt)} onward.
+                    Tracking from {formatDate(report.trackingStartedAt)} onward
+                    (bags and kg).
                     {!report.historicalBackfill
-                      ? ' Invoices saved before stock tracking started are not included.'
+                      ? ' Invoices saved before stock tracking started are not included — bag and kg totals both reflect activity since that date only.'
                       : null}
                     {' '}Carried loose remainder: {report.carriedRemainderKg} kg
                     ({report.bagType === 'BORI' ? 'Bori' : 'Thela'}).
@@ -1266,6 +1267,9 @@ export function StockReportPage() {
                     <th className="py-2 pr-3">Date</th>
                     <th className="py-2 pr-3">Description</th>
                     <th className="py-2 pr-3">Status</th>
+                    {report.stockMode !== 'QUANTITY' ? (
+                      <th className="py-2 pr-3 text-right">KG</th>
+                    ) : null}
                     <th className="py-2 pr-3 text-right">
                       {report.stockMode === 'QUANTITY' ? 'Qty' : 'Bags'}
                     </th>
@@ -1275,7 +1279,10 @@ export function StockReportPage() {
                 <tbody>
                   {report.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-textSecondary">
+                      <td
+                        colSpan={report.stockMode === 'QUANTITY' ? 5 : 6}
+                        className="py-6 text-center text-textSecondary"
+                      >
                         No stock movements for this product yet.
                       </td>
                     </tr>
@@ -1287,6 +1294,11 @@ export function StockReportPage() {
                         <td className={`py-2 pr-3 font-medium ${row.status === 'IN' ? 'text-success' : 'text-danger'}`}>
                           {row.status}
                         </td>
+                        {report.stockMode !== 'QUANTITY' ? (
+                          <td className="py-2 pr-3 text-right tabular-nums">
+                            {row.kg ?? 0}
+                          </td>
+                        ) : null}
                         <td className="py-2 pr-3 text-right tabular-nums">
                           {row.quantity ?? row.bags}
                         </td>
@@ -1299,7 +1311,17 @@ export function StockReportPage() {
                   <tr className="border-t-2 border-border font-semibold">
                     <td className="py-2 pr-3" colSpan={3}>
                       Full period — Total In {report.totals.totalIn} · Total Out {report.totals.totalOut}
+                      {report.stockMode !== 'QUANTITY' ? (
+                        <>
+                          {' '}· Total KG in stock {report.totals.productKgBalance ?? report.totals.netKg ?? 0}
+                        </>
+                      ) : null}
                     </td>
+                    {report.stockMode !== 'QUANTITY' ? (
+                      <td className="py-2 pr-3 text-right tabular-nums">
+                        {report.totals.netKg ?? 0}
+                      </td>
+                    ) : null}
                     <td className="py-2 pr-3 text-right tabular-nums" />
                     <td className="py-2 text-right tabular-nums">
                       Net {report.totals.netBalance}

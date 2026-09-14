@@ -13,7 +13,7 @@ function bagLabel(bagType: BagType) {
 
 export function BardanaPage() {
   const [report, setReport] = useState<EmptyBardanaReport | null>(null);
-  const [bagType, setBagType] = useState<BagType>('BORI');
+  const [bagType, setBagType] = useState<BagType>('THELA');
   const [quantity, setQuantity] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -59,15 +59,15 @@ export function BardanaPage() {
       <Panel className="mb-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-sm text-textSecondary">Bori count</p>
-            <p className={`mt-1 text-3xl font-semibold tabular-nums ${bori < 0 ? 'text-danger' : 'text-textPrimary'}`}>
-              {bori}
-            </p>
-          </div>
-          <div>
             <p className="text-sm text-textSecondary">Thela count</p>
             <p className={`mt-1 text-3xl font-semibold tabular-nums ${thela < 0 ? 'text-danger' : 'text-textPrimary'}`}>
               {thela}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-textSecondary">Bori count</p>
+            <p className={`mt-1 text-3xl font-semibold tabular-nums ${bori < 0 ? 'text-danger' : 'text-textPrimary'}`}>
+              {bori}
             </p>
           </div>
         </div>

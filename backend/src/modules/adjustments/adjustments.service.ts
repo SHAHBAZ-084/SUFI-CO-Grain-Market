@@ -85,15 +85,19 @@ export async function createStockAdjustment(data: {
   productId: number;
   bagType: 'BORI' | 'THELA';
   direction: 'IN' | 'OUT';
-  bags: number;
+  bags?: number;
+  kg?: number;
   amount: number;
   adjustmentDate: string;
   notes?: string;
   createdById: number;
 }) {
-  const bags = Number(data.bags);
+  const bags = Math.max(0, Number(data.bags) || 0);
+  const kg = Math.max(0, Number(data.kg) || 0);
   const amount = Number(data.amount);
-  if (!(bags > 0)) throw new AppError(400, 'Bag quantity must be greater than zero');
+  if (!(bags > 0) && !(kg > 0)) {
+    throw new AppError(400, 'Enter bags, KG, or both (at least one must be greater than zero)');
+  }
   if (!(amount > 0)) throw new AppError(400, 'Amount must be greater than zero');
 
   const product = await prisma.product.findFirst({
@@ -116,6 +120,7 @@ export async function createStockAdjustment(data: {
       bagType,
       direction,
       bags,
+      kg,
       amount,
       side,
       adjustmentDate,
@@ -180,6 +185,7 @@ export async function approvePendingStockAdjustmentInTx(
   if (!adjustment) throw new AppError(404, 'Pending stock adjustment not found');
 
   const bags = Number(adjustment.bags);
+  const kg = Number(adjustment.kg ?? 0);
   if (adjustment.direction === StockDirection.OUT) {
     await assertStockAvailableForOut(
       tx,
@@ -222,6 +228,7 @@ export async function approvePendingStockAdjustmentInTx(
       bagType: adjustment.bagType,
       direction: adjustment.direction,
       bags,
+      kg,
       date: adjustment.adjustmentDate,
       invoiceReference: reference,
       description: adjustment.notes?.trim() || reference,
@@ -300,8 +307,17 @@ export async function patchPendingStockAdjustment(
   const updates: Prisma.StockAdjustmentUpdateInput = {};
   if (data.bags != null) {
     const bags = Number(data.bags);
-    if (!(bags > 0)) throw new AppError(400, 'Bag quantity must be greater than zero');
+    if (!(bags >= 0) || !Number.isFinite(bags)) {
+      throw new AppError(400, 'Bag quantity must be zero or greater');
+    }
     updates.bags = bags;
+  }
+  if (data.kg != null) {
+    const kg = Number(data.kg);
+    if (!(kg >= 0) || !Number.isFinite(kg)) {
+      throw new AppError(400, 'KG must be zero or greater');
+    }
+    updates.kg = kg;
   }
   if (data.amount != null) {
     const amount = Number(data.amount);
@@ -332,6 +348,18 @@ export async function patchPendingStockAdjustment(
   if (Object.keys(updates).length === 0) {
     throw new AppError(400, 'No valid fields to update');
   }
+
+  // Ensure the row still has bags and/or kg after partial patch.
+  const existing = await prisma.stockAdjustment.findFirst({
+    where: { id, status: AdjustmentStatus.PENDING_APPROVAL },
+  });
+  if (!existing) throw new AppError(404, 'Pending stock adjustment not found');
+  const nextBags = updates.bags != null ? Number(updates.bags) : Number(existing.bags);
+  const nextKg = updates.kg != null ? Number(updates.kg) : Number(existing.kg ?? 0);
+  if (!(nextBags > 0) && !(nextKg > 0)) {
+    throw new AppError(400, 'Enter bags, KG, or both (at least one must be greater than zero)');
+  }
+
   return prisma.stockAdjustment.update({
     where: { id },
     data: updates,

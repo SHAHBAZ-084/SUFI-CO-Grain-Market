@@ -36,6 +36,24 @@ export type StockInRowResult = {
   looseKgTotal: number;
 };
 
+/**
+ * Raw physical weight that arrived on a purchase line.
+ * Independent of bag bucketing / carried remainder — do not route through computeStockInFromRow.
+ * Formula: wholeBags * bhartii + dharanCount * STOCK_DHARAN_KG + looseKg
+ */
+export function computeRawStockInKg(input: {
+  wholeBags: number;
+  bhartii: number;
+  dharanCount: number;
+  looseKg: number;
+}): number {
+  return roundWeightKg(
+    Math.max(0, Number(input.wholeBags) || 0) * Math.max(0, Number(input.bhartii) || 0)
+    + Math.max(0, Number(input.dharanCount) || 0) * STOCK_DHARAN_KG
+    + Math.max(0, Number(input.looseKg) || 0),
+  );
+}
+
 /** Purchase to Maal stock IN — whole bags trusted; loose converts via bhartii + carried remainder. */
 export function computeStockInFromRow(input: StockInRowInput): StockInRowResult {
   const wholeBags = Math.max(0, Number(input.wholeBags) || 0);

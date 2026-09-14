@@ -167,7 +167,7 @@ export function PurchaseMaalInvoicePage() {
   const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
 
   const [partyAccountId, setPartyAccountId] = useState(() => restoredState?.partyAccountId ?? '');
-  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriThelaMode ?? 'BORI');
+  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriThelaMode ?? 'THELA');
   const [bagCount, setBagCount] = useState(() => restoredState?.bagCount ?? '');
   const [bhartii, setBhartii] = useState(() => restoredState?.bhartii ?? '');
   const [dharanCount, setDharanCount] = useState(() => restoredState?.dharanCount ?? '');
@@ -179,7 +179,7 @@ export function PurchaseMaalInvoicePage() {
 
   const [marketFeeEnabled, setMarketFeeEnabled] = useState(() => restoredState?.marketFeeEnabled ?? false);
   const [mazduriEnabled, setMazduriEnabled] = useState(() => restoredState?.mazduriEnabled ?? false);
-  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>(() => restoredState?.lowerBoriThela ?? 'BORI');
+  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>(() => restoredState?.lowerBoriThela ?? 'THELA');
   const [lowerBardanaQty, setLowerBardanaQty] = useState(() => restoredState?.lowerBardanaQty ?? '');
   const [lowerBardanaRate, setLowerBardanaRate] = useState(() => restoredState?.lowerBardanaRate ?? '');
 
@@ -237,7 +237,7 @@ export function PurchaseMaalInvoicePage() {
         setTafseel(String(record.tafseel ?? record.notes ?? ''));
         setMarketFeeEnabled(Boolean(record.marketFeeEnabled));
         setMazduriEnabled(Boolean(record.mazduriEnabled));
-        setLowerBoriThela((record.lowerBardanaMode as BoriThelaMode | null) ?? 'BORI');
+        setLowerBoriThela((record.lowerBardanaMode as BoriThelaMode | null) ?? 'THELA');
         setLowerBardanaQty(record.lowerBardanaQty != null ? String(record.lowerBardanaQty) : '');
         setLowerBardanaRate(record.lowerBardanaRate != null ? String(record.lowerBardanaRate) : '');
         setGridRows((record.purchaseMaalLines ?? []).map((line, index) => {

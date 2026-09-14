@@ -31,15 +31,20 @@ adjustmentsRouter.post(
 adjustmentsRouter.post(
   '/stock',
   validateBody(
-    z.object({
-      productId: z.number().int().positive(),
-      bagType: z.enum(['BORI', 'THELA']),
-      direction: z.enum(['IN', 'OUT']),
-      bags: z.number().positive(),
-      amount: z.number().positive(),
-      adjustmentDate: z.string().min(1),
-      notes: z.string().optional(),
-    }),
+    z
+      .object({
+        productId: z.number().int().positive(),
+        bagType: z.enum(['BORI', 'THELA']),
+        direction: z.enum(['IN', 'OUT']),
+        bags: z.number().nonnegative().optional().default(0),
+        kg: z.number().nonnegative().optional().default(0),
+        amount: z.number().positive(),
+        adjustmentDate: z.string().min(1),
+        notes: z.string().optional(),
+      })
+      .refine((body) => body.bags > 0 || body.kg > 0, {
+        message: 'Enter bags, KG, or both (at least one must be greater than zero)',
+      }),
   ),
   asyncHandler(async (req, res) => {
     const row = await adjustmentsService.createStockAdjustment({

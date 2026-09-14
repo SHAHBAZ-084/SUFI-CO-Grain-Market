@@ -158,7 +158,7 @@ export function SaleCommissionInvoicePage() {
   const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
 
   const [partyAccountId, setPartyAccountId] = useState(() => restoredState?.partyAccountId ?? '');
-  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriThelaMode ?? 'BORI');
+  const [boriThelaMode, setBoriThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriThelaMode ?? 'THELA');
   const [bagCount, setBagCount] = useState(() => restoredState?.bagCount ?? '');
   const [bhartii, setBhartii] = useState(() => restoredState?.bhartii ?? '');
   const [dharanCount, setDharanCount] = useState(() => restoredState?.dharanCount ?? '');

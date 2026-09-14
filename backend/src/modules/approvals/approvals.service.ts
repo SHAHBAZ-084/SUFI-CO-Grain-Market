@@ -336,7 +336,12 @@ export async function listPendingApprovals(): Promise<PendingApprovalItem[]> {
         typeLabel: `Stock ${row.direction}`,
         debitAccount,
         creditAccount,
-        description: row.notes ?? `${row.bags} bags (${row.bagType})`,
+        description: row.notes
+          ?? [
+            Number(row.bags) > 0 ? `${row.bags} bags` : null,
+            Number(row.kg ?? 0) > 0 ? `${row.kg} kg` : null,
+            `(${row.bagType})`,
+          ].filter(Boolean).join(' '),
         createdAt: row.createdAt.toISOString(),
         createdBy: row.createdBy,
       };

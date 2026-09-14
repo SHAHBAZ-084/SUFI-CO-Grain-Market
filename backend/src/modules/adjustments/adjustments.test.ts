@@ -69,7 +69,7 @@ describe('adjustments', () => {
     expect(row?.debit).toBeCloseTo(2500, 2);
   });
 
-  it('posts approved stock adjustment IN with stock movement', async () => {
+  it('posts approved stock adjustment IN with bags + kg on the stock movement', async () => {
     await bootstrapChartOfAccounts();
     const product = await createProduct({
       name: `Adj Stock ${Date.now()}`,
@@ -80,9 +80,10 @@ describe('adjustments', () => {
 
     const pending = await createStockAdjustment({
       productId: product.id,
-      bagType: 'BORI',
+      bagType: 'THELA',
       direction: 'IN',
-      bags: 5,
+      bags: 1200,
+      kg: 3000,
       amount: 10000,
       adjustmentDate: new Date().toISOString().slice(0, 10),
       createdById: 1,
@@ -95,6 +96,48 @@ describe('adjustments', () => {
       where: { stockAdjustmentId: pending.id },
     });
     expect(movement).toBeTruthy();
-    expect(Number(movement!.bags)).toBe(5);
+    expect(Number(movement!.bags)).toBe(1200);
+    expect(Number(movement!.kg)).toBe(3000);
+    expect(movement!.direction).toBe('IN');
+
+    const { getStockReport, getProductStockBalances } = await import('../stock/stock.service');
+    const report = await getStockReport({ productId: product.id, bagType: 'THELA' });
+    expect(report.totals.netBalance).toBe(1200);
+    expect(report.totals.productKgBalance).toBe(3000);
+
+    const balances = await getProductStockBalances();
+    const row = balances.find((b) => b.productId === product.id);
+    expect(row?.thela).toBe(1200);
+    expect(row?.kg).toBe(3000);
+  });
+
+  it('allows kg-only opening stock adjustment (no bags)', async () => {
+    await bootstrapChartOfAccounts();
+    const product = await createProduct({
+      name: `Adj Kg Only ${Date.now()}`,
+      openingBalance: 0,
+      createdById: 1,
+    });
+    await approveProduct(product.id);
+
+    const pending = await createStockAdjustment({
+      productId: product.id,
+      bagType: 'THELA',
+      direction: 'IN',
+      bags: 0,
+      kg: 500,
+      amount: 1000,
+      adjustmentDate: new Date().toISOString().slice(0, 10),
+      createdById: 1,
+    });
+
+    const { approvePendingStockAdjustmentInTx } = await import('./adjustments.service');
+    await prisma.$transaction((tx) => approvePendingStockAdjustmentInTx(tx, pending.id));
+
+    const movement = await prisma.stockMovement.findFirst({
+      where: { stockAdjustmentId: pending.id },
+    });
+    expect(Number(movement!.bags)).toBe(0);
+    expect(Number(movement!.kg)).toBe(500);
   });
 });

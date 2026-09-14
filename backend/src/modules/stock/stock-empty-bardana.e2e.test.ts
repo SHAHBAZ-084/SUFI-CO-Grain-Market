@@ -194,9 +194,14 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(stock.rows).toHaveLength(1);
     expect(stock.rows[0]!.status).toBe('IN');
     expect(stock.rows[0]!.bags).toBe(10);
+    expect(stock.rows[0]!.kg).toBe(425); // 10×40 + 3×5 + 10
     expect(stock.rows[0]!.runningBalance).toBe(10);
     expect(stock.carriedRemainderKg).toBe(25);
-    expect(stock.totals).toEqual({ totalIn: 10, totalOut: 0, netBalance: 10 });
+    expect(stock.totals.totalIn).toBe(10);
+    expect(stock.totals.totalOut).toBe(0);
+    expect(stock.totals.netBalance).toBe(10);
+    expect(stock.totals.totalKgIn).toBe(425);
+    expect(stock.totals.productKgBalance).toBe(425);
 
     let empty = await getEmptyBardanaReport();
     printEmptyBardana('After Step 1 — Empty Bardana (PM must not change)', empty);
@@ -231,9 +236,13 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(stock.rows).toHaveLength(2);
     expect(stock.rows[1]!.status).toBe('IN');
     expect(stock.rows[1]!.bags).toBe(6);
+    expect(stock.rows[1]!.kg).toBe(215); // 5×40 + 2×5 + 5 (raw, not bag-bucketed)
     expect(stock.rows[1]!.runningBalance).toBe(16);
     expect(stock.carriedRemainderKg).toBe(0);
-    expect(stock.totals).toEqual({ totalIn: 16, totalOut: 0, netBalance: 16 });
+    expect(stock.totals.totalIn).toBe(16);
+    expect(stock.totals.netBalance).toBe(16);
+    expect(stock.totals.totalKgIn).toBe(640); // 425 + 215
+    expect(stock.totals.productKgBalance).toBe(640);
 
     empty = await getEmptyBardanaReport();
     printEmptyBardana('After Step 2 — Empty Bardana (still unchanged)', empty);
@@ -268,9 +277,13 @@ describe('Stock + Empty Bardana E2E scenario', () => {
     expect(stock.rows).toHaveLength(3);
     expect(stock.rows[2]!.status).toBe('IN');
     expect(stock.rows[2]!.bags).toBe(8);
+    expect(stock.rows[2]!.kg).toBe(320); // 8×40
     expect(stock.rows[2]!.runningBalance).toBe(24);
     expect(stock.carriedRemainderKg).toBe(0);
-    expect(stock.totals).toEqual({ totalIn: 24, totalOut: 0, netBalance: 24 });
+    expect(stock.totals.totalIn).toBe(24);
+    expect(stock.totals.netBalance).toBe(24);
+    expect(stock.totals.totalKgIn).toBe(960);
+    expect(stock.totals.productKgBalance).toBe(960);
 
     empty = await getEmptyBardanaReport();
     printEmptyBardana('After Step 3 — Empty Bardana (still unchanged)', empty);
@@ -299,13 +312,19 @@ describe('Stock + Empty Bardana E2E scenario', () => {
 
     stock = await getStockReport({ productId: wheatProductId, bagType: 'BORI' });
     printStockTable('FINAL — Product Stock Report (Wheat, Bori)', stock);
-    expect(stock.rows.map((r) => ({ status: r.status, bags: r.bags, running: r.runningBalance }))).toEqual([
-      { status: 'IN', bags: 10, running: 10 },
-      { status: 'IN', bags: 6, running: 16 },
-      { status: 'IN', bags: 8, running: 24 },
-      { status: 'OUT', bags: 12, running: 12 },
+    expect(stock.rows.map((r) => ({ status: r.status, bags: r.bags, kg: r.kg, running: r.runningBalance }))).toEqual([
+      { status: 'IN', bags: 10, kg: 425, running: 10 },
+      { status: 'IN', bags: 6, kg: 215, running: 16 },
+      { status: 'IN', bags: 8, kg: 320, running: 24 },
+      { status: 'OUT', bags: 12, kg: 480, running: 12 },
     ]);
-    expect(stock.totals).toEqual({ totalIn: 24, totalOut: 12, netBalance: 12 });
+    expect(stock.totals.totalIn).toBe(24);
+    expect(stock.totals.totalOut).toBe(12);
+    expect(stock.totals.netBalance).toBe(12);
+    expect(stock.totals.totalKgIn).toBe(960);
+    expect(stock.totals.totalKgOut).toBe(480);
+    expect(stock.totals.netKg).toBe(480);
+    expect(stock.totals.productKgBalance).toBe(480);
     expect(stock.carriedRemainderKg).toBe(0);
 
     empty = await getEmptyBardanaReport();

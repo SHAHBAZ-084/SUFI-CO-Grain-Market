@@ -12,6 +12,7 @@ import { isMaalKhataCategoryName } from '../products/maal-khata';
 import {
   STOCK_TRACKING_STARTED_AT,
   bagTypeFromMode,
+  computeRawStockInKg,
   computeStockInFromRow,
   computeStockOutBags,
   type StockBagKind,
@@ -105,8 +106,9 @@ export async function postPurchaseMaalStockIn(
   },
 ) {
   const remainders = new Map<StockBagType, number>();
-  /** Aggregate bagsIn per bag type so one invoice produces one StockMovement per bag type. */
+  /** Aggregate bagsIn / rawKg per bag type so one invoice produces one StockMovement per bag type. */
   const bagsInByType = new Map<StockBagType, number>();
+  const kgInByType = new Map<StockBagType, number>();
 
   for (const line of data.lines) {
     const bagType = toStockBagType(bagTypeFromMode(line.boriOrThelaMode));
@@ -125,12 +127,26 @@ export async function postPurchaseMaalStockIn(
 
     remainders.set(bagType, result.newRemainderKg);
 
+    // Raw kg is the physical arrival weight — not bag-bucketed.
+    const rawKg = computeRawStockInKg({
+      wholeBags: Number(line.bagCount),
+      bhartii: Number(line.bhartii),
+      dharanCount: Number(line.dharanCount),
+      looseKg: Number(line.looseKg),
+    });
+    if (rawKg > 0) {
+      kgInByType.set(bagType, (kgInByType.get(bagType) ?? 0) + rawKg);
+    }
+
     if (!(result.bagsIn > 0)) continue;
     bagsInByType.set(bagType, (bagsInByType.get(bagType) ?? 0) + result.bagsIn);
   }
 
-  for (const [bagType, bagsIn] of bagsInByType) {
-    if (!(bagsIn > 0)) continue;
+  const bagTypes = new Set<StockBagType>([...bagsInByType.keys(), ...kgInByType.keys()]);
+  for (const bagType of bagTypes) {
+    const bagsIn = bagsInByType.get(bagType) ?? 0;
+    const kgIn = kgInByType.get(bagType) ?? 0;
+    if (!(bagsIn > 0) && !(kgIn > 0)) continue;
 
     await tx.stockMovement.create({
       data: {
@@ -138,6 +154,7 @@ export async function postPurchaseMaalStockIn(
         bagType,
         direction: StockDirection.IN,
         bags: bagsIn,
+        kg: kgIn,
         date: data.invoiceDate,
         invoiceId: data.invoiceId,
         invoiceType: InvoiceType.PURCHASE_MAAL,
@@ -157,6 +174,8 @@ export type SalePaunchStockLine = {
   boriOrThelaMode: BoriThelaMode;
   bagCount: number;
   thelaCount: number;
+  /** Already-computed Sale Paunch net weight (kg) for this line. */
+  netWeightKg: number;
 };
 
 /** Post Stock OUT movements for a Sale on Paunch invoice (same DB transaction). */
@@ -172,14 +191,15 @@ export async function postSalePaunchStockOut(
   for (const line of data.lines) {
     const kind = bagTypeFromMode(line.boriOrThelaMode);
     const bagsOut = computeStockOutBags(line.bagCount, line.thelaCount, kind);
-    if (!(bagsOut > 0)) continue;
+    const kgOut = Math.max(0, Number(line.netWeightKg) || 0);
+    if (!(bagsOut > 0) && !(kgOut > 0)) continue;
 
     const resolved = await resolveSalePaunchStockProduct(tx, line.maalKhataAccountId);
     if (!resolved) {
       // Int/Ext Purchase Party lines: no product bag stock by design.
       console.warn(
-        `[stock] Sale Paunch ${data.invoiceReference}: skipping bag stock OUT for account #${line.maalKhataAccountId} `
-        + `(not linked to a product; Int/Ext party line). bagsOut=${bagsOut}`,
+        `[stock] Sale Paunch ${data.invoiceReference}: skipping bag/kg stock OUT for account #${line.maalKhataAccountId} `
+        + `(not linked to a product; Int/Ext party line). bagsOut=${bagsOut} kgOut=${kgOut}`,
       );
       continue;
     }
@@ -190,6 +210,7 @@ export async function postSalePaunchStockOut(
         bagType: toStockBagType(kind),
         direction: StockDirection.OUT,
         bags: bagsOut,
+        kg: kgOut,
         date: data.invoiceDate,
         invoiceId: data.invoiceId,
         invoiceType: InvoiceType.SALE_PAUNCH,
@@ -229,16 +250,24 @@ export async function getStockReport(params: {
   });
 
   let running = 0;
+  let runningKg = 0;
   let totalIn = 0;
   let totalOut = 0;
+  let totalKgIn = 0;
+  let totalKgOut = 0;
   const allRows = movements.map((m) => {
     const bags = Number(m.bags);
+    const kg = Number(m.kg ?? 0);
     if (m.direction === StockDirection.IN) {
       running += bags;
+      runningKg += kg;
       totalIn += bags;
+      totalKgIn += kg;
     } else {
       running -= bags;
+      runningKg -= kg;
       totalOut += bags;
+      totalKgOut += kg;
     }
     return {
       id: m.id,
@@ -248,10 +277,23 @@ export async function getStockReport(params: {
       invoiceType: m.invoiceType,
       status: m.direction as 'IN' | 'OUT',
       bags,
+      kg,
       quantity: bags,
       runningBalance: running,
+      runningKg,
     };
   });
+
+  /** Product-wide kg (both Bori and Thela) — genuine total KG in stock. */
+  const allProductMovements = await prisma.stockMovement.findMany({
+    where: { productId: params.productId },
+    select: { direction: true, kg: true },
+  });
+  let productKgBalance = 0;
+  for (const m of allProductMovements) {
+    const kg = Number(m.kg ?? 0);
+    productKgBalance += m.direction === StockDirection.IN ? kg : -kg;
+  }
 
   const total = allRows.length;
   let rows = allRows;
@@ -274,7 +316,7 @@ export async function getStockReport(params: {
     bagType: params.bagType,
     stockMode: 'GRAIN_BAGS' as const,
     trackingStartedAt: STOCK_TRACKING_STARTED_AT.toISOString(),
-    /** Historical invoices before stock feature ship are not backfilled. */
+    /** Historical invoices before stock feature ship are not backfilled (bags or kg). */
     historicalBackfill: false as const,
     carriedRemainderKg: remainder ? Number(remainder.remainderKg) : 0,
     rows,
@@ -285,6 +327,11 @@ export async function getStockReport(params: {
       totalIn,
       totalOut,
       netBalance: running,
+      totalKgIn,
+      totalKgOut,
+      netKg: runningKg,
+      /** Net physical kg across Bori + Thela for this product. */
+      productKgBalance,
     },
   };
 }
@@ -328,8 +375,10 @@ export async function getQuantityStockReport(params: {
       invoiceType: m.invoiceType,
       status: m.direction as 'IN' | 'OUT',
       bags: quantity,
+      kg: 0,
       quantity,
       runningBalance: running,
+      runningKg: 0,
     };
   });
 
@@ -364,11 +413,15 @@ export async function getQuantityStockReport(params: {
       totalIn,
       totalOut,
       netBalance: running,
+      totalKgIn: 0,
+      totalKgOut: 0,
+      netKg: 0,
+      productKgBalance: 0,
     },
   };
 }
 
-/** Net Bori/Thela bag balances per product for dashboard glance. */
+/** Net Bori/Thela bag balances + physical kg per product for dashboard glance. */
 export async function getProductStockBalances() {
   const products = await prisma.product.findMany({
     where: { isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
@@ -379,29 +432,33 @@ export async function getProductStockBalances() {
 
   const movements = await prisma.stockMovement.findMany({
     where: { productId: { in: products.map((p) => p.id) } },
-    select: { productId: true, bagType: true, direction: true, bags: true },
+    select: { productId: true, bagType: true, direction: true, bags: true, kg: true },
   });
 
-  const nets = new Map<number, { bori: number; thela: number }>();
+  const nets = new Map<number, { bori: number; thela: number; kg: number }>();
   for (const m of movements) {
-    const row = nets.get(m.productId) ?? { bori: 0, thela: 0 };
+    const row = nets.get(m.productId) ?? { bori: 0, thela: 0, kg: 0 };
     const bags = Number(m.bags);
-    const signed = m.direction === StockDirection.IN ? bags : -bags;
-    if (m.bagType === StockBagType.THELA) row.thela += signed;
-    else row.bori += signed;
+    const kg = Number(m.kg ?? 0);
+    const signedBags = m.direction === StockDirection.IN ? bags : -bags;
+    const signedKg = m.direction === StockDirection.IN ? kg : -kg;
+    if (m.bagType === StockBagType.THELA) row.thela += signedBags;
+    else row.bori += signedBags;
+    row.kg += signedKg;
     nets.set(m.productId, row);
   }
 
   return products
     .map((p) => {
-      const net = nets.get(p.id) ?? { bori: 0, thela: 0 };
+      const net = nets.get(p.id) ?? { bori: 0, thela: 0, kg: 0 };
       return {
         productId: p.id,
         name: p.name,
         code: p.code,
         bori: net.bori,
         thela: net.thela,
+        kg: net.kg,
       };
     })
-    .filter((p) => p.bori !== 0 || p.thela !== 0);
+    .filter((p) => p.bori !== 0 || p.thela !== 0 || p.kg !== 0);
 }

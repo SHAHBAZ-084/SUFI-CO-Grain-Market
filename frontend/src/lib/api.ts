@@ -898,6 +898,7 @@ export const api = {
         code: string;
         bori: number;
         thela: number;
+        kg: number;
       }>;
       vouchersToday: number;
       recentVouchers: {
@@ -1222,13 +1223,23 @@ export const api = {
         invoiceType: string;
         status: 'IN' | 'OUT';
         bags: number;
+        kg?: number;
         quantity?: number;
         runningBalance: number;
+        runningKg?: number;
       }>;
       total: number;
       limit: number;
       offset: number;
-      totals: { totalIn: number; totalOut: number; netBalance: number };
+      totals: {
+        totalIn: number;
+        totalOut: number;
+        netBalance: number;
+        totalKgIn?: number;
+        totalKgOut?: number;
+        netKg?: number;
+        productKgBalance?: number;
+      };
     }>(`/api/stock/report?${query.toString()}`);
   },
 
@@ -1397,7 +1408,8 @@ export const api = {
     productId: number;
     bagType: 'BORI' | 'THELA';
     direction: 'IN' | 'OUT';
-    bags: number;
+    bags?: number;
+    kg?: number;
     amount: number;
     adjustmentDate: string;
     notes?: string;

@@ -710,6 +710,8 @@ model StockMovement {
   bagType          StockBagType
   direction        StockDirection
   bags             Decimal
+  /** Physical kg for this movement (parallel to bags; 0 for pre-feature rows). */
+  kg               Decimal        @default(0)
   date             DateTime
   invoiceId        Int?
   invoiceType      InvoiceType?
@@ -771,6 +773,8 @@ model StockAdjustment {
   bagType        StockBagType
   direction      StockDirection
   bags           Decimal
+  /** Physical kg for this adjustment (parallel to bags; opening/seed stock). */
+  kg             Decimal            @default(0)
   amount         Decimal
   side           OpeningBalanceSide
   adjustmentDate DateTime

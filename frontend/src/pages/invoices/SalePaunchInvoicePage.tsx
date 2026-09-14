@@ -171,7 +171,7 @@ export function SalePaunchInvoicePage() {
   const [tafseel, setTafseel] = useState(() => restoredState?.tafseel ?? '');
 
   const [maalKhataAccountId, setMaalKhataAccountId] = useState(() => restoredState?.maalKhataAccountId ?? '');
-  const [boriOrThelaMode, setBoriOrThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriOrThelaMode ?? 'BORI');
+  const [boriOrThelaMode, setBoriOrThelaMode] = useState<BoriThelaMode>(() => restoredState?.boriOrThelaMode ?? 'THELA');
   const [bagCount, setBagCount] = useState(() => restoredState?.bagCount ?? '');
   const [compWeightKg, setCompWeightKg] = useState(() => restoredState?.compWeightKg ?? '');
   const [kaatKg, setKaatKg] = useState(() => restoredState?.kaatKg ?? '');
@@ -187,7 +187,7 @@ export function SalePaunchInvoicePage() {
   const [taxAmount, setTaxAmount] = useState(() => restoredState?.taxAmount ?? '');
   const [miscAmount, setMiscAmount] = useState(() => restoredState?.miscAmount ?? '');
   const [biltyKirayaAmount, setBiltyKirayaAmount] = useState(() => restoredState?.biltyKirayaAmount ?? '');
-  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>(() => restoredState?.lowerBoriThela ?? 'BORI');
+  const [lowerBoriThela, setLowerBoriThela] = useState<BoriThelaMode>(() => restoredState?.lowerBoriThela ?? 'THELA');
   const [lowerBardanaQty, setLowerBardanaQty] = useState(() => restoredState?.lowerBardanaQty ?? '');
   const [lowerBardanaRate, setLowerBardanaRate] = useState(() => restoredState?.lowerBardanaRate ?? '');
 
@@ -235,7 +235,7 @@ export function SalePaunchInvoicePage() {
         setTaxAmount(record.taxAmount != null ? String(record.taxAmount) : '');
         setMiscAmount(record.miscAmount != null ? String(record.miscAmount) : '');
         setBiltyKirayaAmount(record.biltyKirayaAmount != null ? String(record.biltyKirayaAmount) : '');
-        setLowerBoriThela((record.lowerBardanaMode as BoriThelaMode | null) ?? 'BORI');
+        setLowerBoriThela((record.lowerBardanaMode as BoriThelaMode | null) ?? 'THELA');
         setLowerBardanaQty(record.lowerBardanaQty != null ? String(record.lowerBardanaQty) : '');
         setLowerBardanaRate(record.lowerBardanaRate != null ? String(record.lowerBardanaRate) : '');
         const firstLine = record.salePaunchLines?.[0];

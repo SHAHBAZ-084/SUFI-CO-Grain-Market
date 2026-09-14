@@ -16,9 +16,10 @@ function todayInputValue() {
 export function StockAdjustmentPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productId, setProductId] = useState('');
-  const [bagType, setBagType] = useState<'BORI' | 'THELA'>('BORI');
+  const [bagType, setBagType] = useState<'BORI' | 'THELA'>('THELA');
   const [direction, setDirection] = useState<'IN' | 'OUT'>('IN');
   const [bags, setBags] = useState('');
+  const [kg, setKg] = useState('');
   const [amount, setAmount] = useState('');
   const [adjustmentDate, setAdjustmentDate] = useState(todayInputValue());
   const [notes, setNotes] = useState('');
@@ -42,10 +43,15 @@ export function StockAdjustmentPage() {
     setMessage('');
     try {
       const id = parseInt(productId, 10);
-      const bagQty = parseFloat(bags);
+      const bagQty = bags.trim() === '' ? 0 : parseFloat(bags);
+      const kgQty = kg.trim() === '' ? 0 : parseFloat(kg);
       const value = parseFloat(amount);
       if (!Number.isFinite(id) || id < 1) throw new Error('Select a product');
-      if (!Number.isFinite(bagQty) || bagQty <= 0) throw new Error('Enter a valid bag quantity');
+      if (!Number.isFinite(bagQty) || bagQty < 0) throw new Error('Enter a valid bag quantity (or leave blank)');
+      if (!Number.isFinite(kgQty) || kgQty < 0) throw new Error('Enter a valid KG amount (or leave blank)');
+      if (!(bagQty > 0) && !(kgQty > 0)) {
+        throw new Error('Enter bags, KG, or both (at least one must be greater than zero)');
+      }
       if (!Number.isFinite(value) || value <= 0) throw new Error('Enter a valid ledger amount');
 
       await api.createStockAdjustment({
@@ -53,6 +59,7 @@ export function StockAdjustmentPage() {
         bagType,
         direction,
         bags: bagQty,
+        kg: kgQty,
         amount: value,
         adjustmentDate,
         notes: notes.trim() || undefined,
@@ -60,6 +67,7 @@ export function StockAdjustmentPage() {
       setMessage('Stock adjustment submitted for approval.');
       notifyApprovalsChanged();
       setBags('');
+      setKg('');
       setAmount('');
       setNotes('');
     } catch (err) {
@@ -72,12 +80,13 @@ export function StockAdjustmentPage() {
   return (
     <PageShell
       title="Stock Adjustment"
-      subtitle="Correct physical bag stock and Maal Khata ledger value — posts after admin approval"
+      subtitle="Correct bag/KG stock and Maal Khata ledger value — posts after admin approval. Use IN + past date to seed opening stock that existed before tracking."
     >
       <Panel>
         <p className="mb-4 text-sm text-textMuted">
-          IN increases stock (debits Maal Khata); OUT decreases stock (credits Maal Khata). OUT is
-          blocked if it would take stock below zero.
+          IN increases stock (debits Maal Khata); OUT decreases stock (credits Maal Khata). Bags and
+          KG are independent — enter either or both. OUT is blocked if bag count would go below
+          zero. Date can be any day in the active financial year (not limited to today).
         </p>
         <form className="max-w-md space-y-4" onSubmit={onSubmit}>
           <div>
@@ -96,8 +105,8 @@ export function StockAdjustmentPage() {
               value={bagType}
               onChange={(e) => setBagType(e.target.value as 'BORI' | 'THELA')}
             >
-              <option value="BORI">Bori</option>
               <option value="THELA">Thela</option>
+              <option value="BORI">Bori</option>
             </select>
           </div>
           <div>
@@ -107,19 +116,30 @@ export function StockAdjustmentPage() {
               value={direction}
               onChange={(e) => setDirection(e.target.value as 'IN' | 'OUT')}
             >
-              <option value="IN">IN (add bags)</option>
-              <option value="OUT">OUT (remove bags)</option>
+              <option value="IN">IN (add stock)</option>
+              <option value="OUT">OUT (remove stock)</option>
             </select>
           </div>
           <div>
-            <FieldLabel>Bags</FieldLabel>
+            <FieldLabel>Bags (optional)</FieldLabel>
             <TextInput
               type="number"
-              min="0.01"
+              min="0"
               step="1"
               value={bags}
               onChange={(e) => setBags(e.target.value)}
-              required
+              placeholder="e.g. 1200"
+            />
+          </div>
+          <div>
+            <FieldLabel>KG (optional)</FieldLabel>
+            <TextInput
+              type="number"
+              min="0"
+              step="0.01"
+              value={kg}
+              onChange={(e) => setKg(e.target.value)}
+              placeholder="e.g. 3000"
             />
           </div>
           <div>
