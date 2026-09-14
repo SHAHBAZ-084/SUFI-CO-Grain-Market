@@ -95,7 +95,10 @@ describe('InvoiceBillView General Goods', () => {
     };
     const html = renderToStaticMarkup(createElement(InvoiceBillView, { invoice, prefs: null }));
     expect(html).toContain('Kachi Maal Bill');
-    expect(html).toContain('Variety');
+    expect(html).toContain('Product');
+    expect(html).toContain('Our Dammi');
+    expect(html).not.toContain('CompWeight');
+    expect(html).not.toContain('Deduction Of Bilty');
     expect(html).not.toContain('Line Total');
   });
 });

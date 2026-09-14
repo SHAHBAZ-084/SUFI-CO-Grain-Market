@@ -3,8 +3,6 @@ import type { InvoiceDetail, SystemPreferences } from '../../lib/api';
 import { DEFAULT_BUSINESS_INFO, businessInfoFromPrefs } from '../../lib/businessInfo';
 import { formatBusinessContactLine } from '../../lib/reportExport';
 import {
-  computeKachiDeductions,
-  computeMaalBillFromTotals,
   computeSalePaunchBillFromTotals,
   formatBillAmount,
   formatBillDate,
@@ -12,7 +10,6 @@ import {
   formatBoriThelaLine,
   formatCommissionBardanaLine,
   invoiceBillDate,
-  maalLineToBillRow,
   parseInvoiceDisplayNumber,
   resolveMaalBillFromPartyName,
   resolveSalePaunchBillFromLabel,
@@ -240,6 +237,54 @@ function BillFromSection({
   );
 }
 
+type KachiBillRow = {
+  product: string;
+  netWeightKg: number;
+  rate: number;
+  total: number;
+  fee: number;
+  netTotal: number;
+};
+
+function kachiProductLabel(invoice: InvoiceDetail, line: NonNullable<InvoiceDetail['kachiMaalLines']>[number]) {
+  return (line.jins ?? line.qism ?? invoice.jins ?? '').trim() || '—';
+}
+
+function KachiBillTable({
+  rows,
+  feeLabel,
+}: {
+  rows: KachiBillRow[];
+  feeLabel: string;
+}) {
+  return (
+    <table className="mt-3 w-full border-collapse text-[12px]">
+      <thead>
+        <tr className="border-b border-black">
+          <th className="py-1.5 pr-2 text-left font-semibold">Product</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Net Weight</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Rate</th>
+          <th className="px-1 py-1.5 text-right font-semibold">Total</th>
+          <th className="px-1 py-1.5 text-right font-semibold">{feeLabel}</th>
+          <th className="py-1.5 pl-1 text-right font-semibold">Net Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            <td className="py-1.5 pr-2">{row.product}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillWeight(row.netWeightKg)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.rate)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.total)}</td>
+            <td className="px-1 py-1.5 text-right tabular-nums">{formatBillAmount(row.fee)}</td>
+            <td className="py-1.5 pl-1 text-right tabular-nums">{formatBillAmount(row.netTotal)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function MaalBillBody({
   invoice,
   prefs,
@@ -250,32 +295,39 @@ function MaalBillBody({
   title: string;
 }) {
   const lines = invoice.kachiMaalLines ?? [];
+  const daamiPercent = Number(prefs.daamiPercent ?? 0);
+  const MAZDURI_PERCENT = 1;
 
-  const tableRows = lines.map((l) => maalLineToBillRow(l, prefs.kaatPercent));
-  const goodsTotal = sumLineAmounts(tableRows);
-  const misc = Number(invoice.miscAmount ?? 0);
+  const billToRows: KachiBillRow[] = lines.map((line) => {
+    const total = Number(line.amount ?? 0);
+    const dammi = Math.round(total * (daamiPercent / 100) * 100) / 100;
+    return {
+      product: kachiProductLabel(invoice, line),
+      netWeightKg: Number(line.totalWeightKg ?? 0),
+      rate: Number(line.ratePerMaund ?? 0),
+      total,
+      fee: dammi,
+      netTotal: Math.round((total + dammi) * 100) / 100,
+    };
+  });
 
-  const lowerQty = Number(invoice.lowerBardanaQty ?? 0);
-  const lowerRate = Number(invoice.lowerBardanaRate ?? 0);
-  const lowerAmount = Number(invoice.lowerBardanaAmount ?? 0);
-  const lowerMode = invoice.lowerBardanaMode;
-  const lowerBori = lowerMode === 'BORI' ? lowerQty : 0;
-  const lowerThela = lowerMode === 'THELA' ? lowerQty : 0;
+  const billFromRows: KachiBillRow[] = lines.map((line) => {
+    const total = Number(line.amount ?? 0);
+    const mazduri = Math.round(total * (MAZDURI_PERCENT / 100) * 100) / 100;
+    return {
+      product: kachiProductLabel(invoice, line),
+      netWeightKg: Number(line.totalWeightKg ?? 0),
+      rate: Number(line.ratePerMaund ?? 0),
+      total,
+      fee: mazduri,
+      netTotal: Math.max(0, Math.round((total - mazduri) * 100) / 100),
+    };
+  });
 
-  const deduction = computeKachiDeductions(lines, prefs).deduction;
-  const deductionLabel = 'Deduction Of Bilty';
-
+  const billToNet = billToRows.reduce((s, r) => s + r.netTotal, 0);
+  const billFromNet = billFromRows.reduce((s, r) => s + r.netTotal, 0);
   const debit = invoice.debitAccount;
-  const extraLine =
-    lowerQty > 0 && lowerRate > 0
-      ? formatBoriThelaLine(lowerBori, lowerRate, lowerThela, lowerRate)
-      : formatBoriThelaLine(0, 0, 0, 0);
-
   const billFromParty = resolveMaalBillFromPartyName(invoice, lines);
-  const billFrom =
-    billFromParty != null
-      ? computeMaalBillFromTotals(lines, tableRows, prefs, invoice.type)
-      : null;
 
   return (
     <>
@@ -290,25 +342,25 @@ function MaalBillBody({
         billToLabel="Bill To:"
         partyCode={debit?.code}
         partyName={debit?.name ?? '—'}
-        product={invoice.jins ?? ''}
+        product=""
       />
-      <LineTable rows={tableRows} />
-      <TotalsStack
-        lines={[
-          { label: 'Misc. Expanse:', value: formatBillAmount(misc) },
-          { label: 'Total Amount:', value: formatBillAmount(goodsTotal), bold: true },
-          { label: extraLine, value: formatBillAmount(lowerAmount) },
-          { label: deductionLabel, value: formatBillAmount(deduction) },
-        ]}
-        netAmount={formatBillAmount(invoice.total)}
-      />
-      {billFromParty && billFrom ? (
-        <BillFromSection
-          supplierName={billFromParty}
-          rows={tableRows}
-          totals={billFrom.totals}
-          netAmount={formatBillAmount(billFrom.purchaseNet)}
-        />
+      <KachiBillTable rows={billToRows} feeLabel="Our Dammi" />
+      <TotalsStack lines={[]} netAmount={formatBillAmount(billToNet)} />
+      {billFromParty ? (
+        <section className="mt-8">
+          <p className="text-[12px] font-semibold">
+            Bill From:&nbsp;{billFromParty}
+          </p>
+          <KachiBillTable rows={billFromRows} feeLabel="Mazduri (1%)" />
+          <div className="mt-4 flex justify-end">
+            <div className="min-w-[280px] space-y-1 text-[12px]">
+              <div className="flex justify-between gap-8 pt-1 font-bold underline decoration-1 underline-offset-2">
+                <span>Net Amount</span>
+                <span className="tabular-nums">{formatBillAmount(billFromNet)}</span>
+              </div>
+            </div>
+          </div>
+        </section>
       ) : null}
     </>
   );
