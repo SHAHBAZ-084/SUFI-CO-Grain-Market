@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { APP_BRAND_NAME } from '../config/brand';
 import { useAuth } from '../contexts/AuthContext';
 
 export function LoginPage() {
@@ -32,6 +33,7 @@ export function LoginPage() {
       <div className="w-full max-w-md border border-border bg-surface2">
         <div className="border-b border-border bg-financial px-6 py-5 text-center text-onFinancial">
           <img src="/sufi-co-logo.png" alt="Sufi & Co" className="login-brand-logo mx-auto" />
+          <p className="login-brand-name mt-3 text-lg font-semibold tracking-wide">{APP_BRAND_NAME}</p>
         </div>
 
         <form className="space-y-4 p-6" onSubmit={handleSubmit}>

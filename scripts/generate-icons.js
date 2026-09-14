@@ -20,8 +20,8 @@ async function main() {
 
   fs.mkdirSync(buildDir, { recursive: true });
 
-  // Flatten onto brand charcoal so JPEG/partial-alpha sources never leave checkerboard.
-  const brandBg = { r: 26, g: 26, b: 26, alpha: 1 };
+  // Flatten onto white so the colorful circular mark stays crisp (no charcoal plate).
+  const brandBg = { r: 255, g: 255, b: 255, alpha: 1 };
 
   const masterPng = await sharp(src)
     .ensureAlpha()
