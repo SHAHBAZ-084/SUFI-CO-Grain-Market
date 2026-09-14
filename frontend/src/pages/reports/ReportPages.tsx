@@ -658,17 +658,19 @@ export function TrialBalancePage() {
                       </tr>
                     ))
                   : null}
-                <tr className="border-t-2 border-borderStrong bg-surface1">
-                  <td className="py-2.5 pr-3 font-bold uppercase tracking-wide text-textPrimary">
-                    Grand Total (full period)
-                  </td>
-                  <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerDebitColorClass(data.totalDebit)}`}>
-                    {data.totalDebit.toFixed(2)}
-                  </td>
-                  <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerCreditColorClass(data.totalCredit)}`}>
-                    {data.totalCredit.toFixed(2)}
-                  </td>
-                </tr>
+                {offset + data.limit >= data.total ? (
+                  <tr className="border-t-2 border-borderStrong bg-surface1">
+                    <td className="py-2.5 pr-3 font-bold uppercase tracking-wide text-textPrimary">
+                      Grand Total (full period)
+                    </td>
+                    <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerDebitColorClass(data.totalDebit)}`}>
+                      {data.totalDebit.toFixed(2)}
+                    </td>
+                    <td className={`py-2.5 text-right font-bold tabular-nums ${ledgerCreditColorClass(data.totalCredit)}`}>
+                      {data.totalCredit.toFixed(2)}
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
             <p className="mt-4 text-sm text-textSecondary">
