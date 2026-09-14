@@ -47,6 +47,7 @@ export function ViewInvoicePage() {
   const paramType = searchParams.get('type') ?? '';
   const paramNumber = searchParams.get('number') ?? '';
   const paramId = searchParams.get('id') ?? '';
+  const wantAutoPrint = searchParams.get('autoprint') === '1';
   const initialType = isInvoiceTypeKey(paramType) ? paramType : 'KACHI_MAAL';
   const initialNumber = /^\d+$/.test(paramNumber) ? paramNumber : '';
 
@@ -58,6 +59,7 @@ export function ViewInvoicePage() {
   const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
   const [notFoundRef, setNotFoundRef] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const autoPrintDone = useRef(false);
 
   const fetchInvoiceById = useCallback(async (id: number) => {
     setError('');
@@ -135,6 +137,21 @@ export function ViewInvoicePage() {
     void fetchInvoice(paramType, paramNumber);
   }, [paramType, paramNumber, paramId, fetchInvoice, fetchInvoiceById]);
 
+  useEffect(() => {
+    autoPrintDone.current = false;
+  }, [paramType, paramNumber, paramId, wantAutoPrint]);
+
+  useEffect(() => {
+    if (!wantAutoPrint || loading || !invoice || autoPrintDone.current) return;
+    autoPrintDone.current = true;
+    const timer = window.setTimeout(() => {
+      requestAnimationFrame(() => {
+        window.print();
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [wantAutoPrint, loading, invoice]);
+
   async function onFetch(event: FormEvent) {
     event.preventDefault();
     await fetchInvoice(invoiceType, invoiceNumber);
@@ -164,7 +181,7 @@ export function ViewInvoicePage() {
 
   return (
     <PageShell title="View Invoice" subtitle="Look up a bill by type and number (posted or pending)">
-      <Panel className="mb-6">
+      <Panel className="mb-6 print:hidden">
         <form onSubmit={onFetch} className="flex flex-wrap items-end gap-4">
           <div className="min-w-[220px] flex-1">
             <FieldLabel>Invoice type</FieldLabel>
@@ -201,7 +218,7 @@ export function ViewInvoicePage() {
 
       {invoice ? (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end print:hidden">
             <SecondaryButton type="button" disabled={downloading} onClick={onDownloadPdf}>
               {downloading ? 'Generating PDF…' : 'Download PDF'}
             </SecondaryButton>

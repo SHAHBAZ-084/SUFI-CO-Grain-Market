@@ -104,8 +104,21 @@ export function FormRow({ label, children }: { label: ReactNode; children: React
 
 export const TextInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   function TextInput(props, ref) {
-    const { className = '', ...rest } = props;
-    return <input ref={ref} {...rest} className={`app-input ${className}`.trim()} />;
+    const { className = '', onWheel, type, ...rest } = props;
+    return (
+      <input
+        ref={ref}
+        type={type}
+        {...rest}
+        className={`app-input ${className}`.trim()}
+        onWheel={(e) => {
+          onWheel?.(e);
+          if (type === 'number') {
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+      />
+    );
   },
 );
 

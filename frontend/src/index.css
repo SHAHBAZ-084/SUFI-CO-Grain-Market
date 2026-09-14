@@ -1352,6 +1352,16 @@
 
   }
 
+  .app-input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  .app-input[type='number']::-webkit-outer-spin-button,
+  .app-input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
 
 
   .app-input[type='date'],

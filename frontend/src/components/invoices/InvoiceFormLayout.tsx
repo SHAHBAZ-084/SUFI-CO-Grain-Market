@@ -159,7 +159,7 @@ export function InvoiceAddRowAction({
   );
 }
 
-/** Settlement footer: total + messages + Save / Minimize / Close (shared FormActionFooter). */
+/** Settlement footer: total + messages + Save / optional Save & Print / Minimize / Close. */
 export function InvoiceFormFooter({
   totalLabel,
   totalValue,
@@ -169,6 +169,8 @@ export function InvoiceFormFooter({
   onClose,
   onMinimize,
   primaryLabel = 'Save invoice',
+  secondaryLabel,
+  onSecondary,
 }: {
   totalLabel: string;
   totalValue: number;
@@ -178,6 +180,8 @@ export function InvoiceFormFooter({
   onClose: () => void;
   onMinimize?: () => void;
   primaryLabel?: string;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
 }) {
   return (
     <FormActionFooter
@@ -195,6 +199,8 @@ export function InvoiceFormFooter({
       saving={saving}
       onClose={onClose}
       onMinimize={onMinimize}
+      secondaryLabel={secondaryLabel}
+      onSecondary={onSecondary}
     />
   );
 }

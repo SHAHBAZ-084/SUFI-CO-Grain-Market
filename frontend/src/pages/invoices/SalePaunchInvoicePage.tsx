@@ -427,8 +427,7 @@ export function SalePaunchInvoicePage() {
     setGridRows((prev) => prev.filter((r) => r.clientId !== clientId));
   }
 
-  async function onSave(event: FormEvent) {
-    event.preventDefault();
+  async function saveInvoice(options: { printAfter: boolean }) {
     setError('');
     setMessage('');
     if (gridRows.length === 0) {
@@ -505,6 +504,18 @@ export function SalePaunchInvoicePage() {
       const result = isEditMode
         ? await api.updatePendingSalePaunchInvoice(editInvoiceId, payload)
         : await api.createSalePaunchInvoice(payload);
+
+      if (options.printAfter) {
+        const numMatch = /-(\d+)$/.exec(result.reference ?? '');
+        const number = numMatch ? parseInt(numMatch[1]!, 10) : NaN;
+        if (!Number.isFinite(number) || number < 1) {
+          setError('Saved, but could not open print view (missing invoice number).');
+          return;
+        }
+        navigate(`/invoices/view?type=SALE_PAUNCH&number=${number}&autoprint=1`);
+        return;
+      }
+
       if (isEditMode) {
         navigate('/approvals');
         return;
@@ -526,6 +537,15 @@ export function SalePaunchInvoicePage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function onSave(event: FormEvent) {
+    event.preventDefault();
+    await saveInvoice({ printAfter: false });
+  }
+
+  function handleSaveAndPrint() {
+    void saveInvoice({ printAfter: true });
   }
 
   return (
@@ -764,6 +784,8 @@ export function SalePaunchInvoicePage() {
                 message={message}
                 saving={saving}
                 primaryLabel={isEditMode ? 'Update' : 'Save invoice'}
+                secondaryLabel="Save & Print"
+                onSecondary={handleSaveAndPrint}
                 onClose={() => navigate('/')}
                 onMinimize={() =>
                   minimize(
