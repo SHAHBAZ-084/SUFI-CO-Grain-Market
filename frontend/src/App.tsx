@@ -15,8 +15,10 @@ import { InvoiceFormPage } from './pages/invoices/InvoiceFormPage';
 import { ViewInvoicePage } from './pages/invoices/ViewInvoicePage';
 import { LoginPage } from './pages/LoginPage';
 import { BackupPage } from './pages/BackupPage';
+import { BlankHomePage } from './pages/BlankHomePage';
 import { PosHomePage } from './pages/PosHomePage';
 import { DailyReportPage } from './pages/reports/DailyReportPage';
+import { FinancialYearReportsPage } from './pages/reports/FinancialYearReportsPage';
 import {
   AccountReportsPage,
   AccountBalancePage,
@@ -53,7 +55,8 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppShell />}>
-                  <Route path="/" element={<PosHomePage />} />
+                  <Route path="/" element={<BlankHomePage />} />
+                  <Route path="/dashboard" element={<PosHomePage />} />
 
                   <Route path="/vouchers" element={<Navigate to="/vouchers/payment" replace />} />
                   <Route path="/invoices" element={<Navigate to="/invoices/sale-commission" replace />} />
@@ -101,6 +104,7 @@ export default function App() {
                     <Route path="trial-balance" element={<TrialBalancePage />} />
                     <Route path="sale-purchase" element={<SalePurchaseReportsPage />} />
                     <Route path="stock" element={<StockReportPage />} />
+                    <Route path="financial-year" element={<FinancialYearReportsPage />} />
                   </Route>
 
                   <Route path="/system/preferences" element={<SystemPreferencesPage />} />

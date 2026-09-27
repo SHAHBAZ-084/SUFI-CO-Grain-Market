@@ -4,7 +4,6 @@ import { DEFAULT_BUSINESS_INFO, loadBusinessInfo } from '../../lib/businessInfo'
 import { formatDate, formatLedgerAmount, formatLedgerBalance, formatVoucherNumber, formatVoucherTypeLabel, ledgerBalanceColorClass, ledgerCreditColorClass, ledgerDebitColorClass, voucherTypeColorClass } from '../../lib/format';
 import { downloadExcel, downloadPdf, formatBusinessContactLine, printReportPdf, type ReportBusinessInfo } from '../../lib/reportExport';
 import { useReportFinancialYear } from '../../contexts/ReportFinancialYearContext';
-import { ReportFinancialYearSelect } from '../../components/reports/ReportFinancialYearSelect';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { DateField } from '../../components/ui/DateField';
@@ -445,12 +444,9 @@ export function AccountReportsPage() {
 
 export function TrialBalancePage() {
   const {
-    years,
     financialYearId,
-    setFinancialYearId,
     financialYearIdNum,
     selectedYear,
-    loading: yearsLoading,
   } = useReportFinancialYear();
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getTrialBalance>> | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -569,21 +565,18 @@ export function TrialBalancePage() {
           </>
         }
       >
-        <div className="report-filter-stack">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={setFinancialYearId}
-            disabled={yearsLoading}
-          />
-        </div>
-        {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+        {error ? <p className="text-sm text-danger">{error}</p> : (
+          <p className="text-sm text-textSecondary">
+            Uses the financial year from Reports → Financial Year
+            {selectedYear ? ` (currently ${selectedYear.label}).` : '.'}
+          </p>
+        )}
       </Modal>
 
       <Panel>
         {!filtersOpen && !loaded ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-textSecondary">Select a financial year to generate the trial balance.</p>
+            <p className="text-sm text-textSecondary">Generate the trial balance for the selected financial year.</p>
             <SecondaryButton type="button" onClick={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
           </div>
         ) : !filtersOpen && data ? (
@@ -720,9 +713,13 @@ export function SalePurchaseReportsPage() {
   useEffect(() => {
     if (!selectedYear?.startDate || dateDefaultsAppliedRef.current) return;
     setFromDate(selectedYear.startDate.slice(0, 10));
-    setToDate(todayInputValue());
+    const end =
+      selectedYear.status === 'CLOSED' && selectedYear.endDate
+        ? selectedYear.endDate.slice(0, 10)
+        : todayInputValue();
+    setToDate(end);
     dateDefaultsAppliedRef.current = true;
-  }, [selectedYear?.id, selectedYear?.startDate]);
+  }, [selectedYear?.id, selectedYear?.startDate, selectedYear?.status, selectedYear?.endDate]);
 
   useEffect(() => {
     api.listAccounts()
@@ -1703,12 +1700,9 @@ export function AccountBalancePage() {
 
 export function VouchersReportPage() {
   const {
-    years,
     financialYearId,
-    setFinancialYearId,
     financialYearIdNum,
     selectedYear,
-    loading: yearsLoading,
   } = useReportFinancialYear();
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -1891,12 +1885,6 @@ export function VouchersReportPage() {
         }
       >
         <div className="report-filter-stack">
-          <ReportFinancialYearSelect
-            value={financialYearId}
-            years={years}
-            onChange={setFinancialYearId}
-            disabled={yearsLoading}
-          />
           <div>
             <FieldLabel>From Date</FieldLabel>
             <DateField value={fromDate} onChange={setFromDate} />

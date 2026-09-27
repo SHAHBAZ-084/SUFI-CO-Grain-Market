@@ -5,19 +5,19 @@ import { APP_BRAND_NAME } from '../../config/brand';
 
 export function Sidebar() {
   const location = useLocation();
-  const dashboardActive = location.pathname === '/';
+  const dashboardActive = location.pathname === '/dashboard';
 
   return (
     <aside className="app-sidebar">
       <div className="app-sidebar-brand">
-        <Link to="/" className="app-sidebar-brand-link" aria-label="Sufi & Co — Dashboard">
+        <Link to="/dashboard" className="app-sidebar-brand-link" aria-label="Sufi & Co — Dashboard">
           <img src="/sufi-co-logo.png" alt="Sufi & Co" className="app-sidebar-brand-logo" />
         </Link>
         <p className="app-sidebar-brand-sub">{APP_BRAND_NAME}</p>
       </div>
 
       <nav className="app-sidebar-nav">
-        <Link to="/" className={`app-sidebar-link app-sidebar-link-top ${dashboardActive ? 'is-active' : ''}`}>
+        <Link to="/dashboard" className={`app-sidebar-link app-sidebar-link-top ${dashboardActive ? 'is-active' : ''}`}>
           <LayoutDashboard className="app-sidebar-nav-icon shrink-0" strokeWidth={2} />
           <span>Dashboard</span>
         </Link>

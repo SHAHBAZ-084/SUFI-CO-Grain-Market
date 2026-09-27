@@ -115,6 +115,7 @@ export const SIDEBAR_NAV: SidebarSection[] = [
       { kind: 'link', label: 'Sale/Purchase Reports', to: '/reports/sale-purchase' },
       { kind: 'link', label: 'Stock Report', to: '/reports/stock' },
       { kind: 'link', label: 'Empty Bardana', to: '/inventory/bardana' },
+      { kind: 'link', label: 'Financial Year', to: '/reports/financial-year' },
     ],
   },
   {
@@ -227,7 +228,8 @@ export const REPORT_QUICK_LINKS: NavLink[] = (
 );
 
 const ROUTE_TITLES: Record<string, string> = {
-  '/': 'Dashboard',
+  '/': '',
+  '/dashboard': 'Dashboard',
   '/user': 'User Information',
   '/backup': 'Database Backup',
   '/approvals': 'Approval',

@@ -21,9 +21,10 @@ function hidesContentHeaderTitle(pathname: string) {
 export function ContentHeader() {
   const location = useLocation();
   const title = getPageTitle(location.pathname);
-  const isDashboard = location.pathname === '/';
+  const isBlankHome = location.pathname === '/';
+  const isDashboard = location.pathname === '/dashboard';
 
-  if (hidesContentHeaderTitle(location.pathname)) {
+  if (hidesContentHeaderTitle(location.pathname) || isBlankHome) {
     return null;
   }
 

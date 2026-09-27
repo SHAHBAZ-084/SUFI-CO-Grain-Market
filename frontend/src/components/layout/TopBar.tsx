@@ -164,7 +164,7 @@ export function TopBar() {
   const location = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
-  const dashboardActive = location.pathname === '/';
+  const dashboardActive = location.pathname === '/dashboard';
   const approvalsActive = location.pathname === '/approvals';
   const sectionsById = useMemo(
     () => Object.fromEntries(SIDEBAR_NAV.map((section) => [section.id, section])),
@@ -185,7 +185,7 @@ export function TopBar() {
     <header className="app-topnav">
       <div className="app-topnav-inner">
         <Link
-          to="/"
+          to="/dashboard"
           className={`app-topnav-brand ${dashboardActive ? 'is-active' : ''}`}
           aria-label={`${APP_BRAND_NAME} — Dashboard`}
         >
