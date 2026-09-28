@@ -235,4 +235,50 @@ describe('report pagination + full-period totals', () => {
       full.rows.filter((r) => r.filterKey === 'PAYMENT').length,
     );
   });
+
+  it('listVouchers excludes invoice-generated voucher types from All and type filters', async () => {
+    const invoiceVoucher = await prisma.voucher.create({
+      data: {
+        type: VoucherType.KACHI,
+        number: 90_000 + (stamp % 1000),
+        date: new Date(`${voucherDate}T12:00:00.000Z`),
+        amount: 999_999,
+        reference: `RPAG-KACHI-${stamp}`,
+        description: 'Invoice posting must stay off vouchers report',
+        status: 'ACTIVE',
+        createdById: userId,
+        financialYearId,
+      },
+    });
+
+    try {
+      const all = await listVouchers(
+        { fromDate: voucherDate, toDate: voucherDate, financialYearId },
+        { limit: 500, offset: 0 },
+      );
+      expect(all.items.every((v) => ['PAYMENT', 'RECEIPT', 'JOURNAL'].includes(v.type))).toBe(true);
+      expect(all.items.some((v) => v.id === invoiceVoucher.id)).toBe(false);
+      expect(all.totals.byType).toEqual({
+        PAYMENT: expect.any(Number),
+        RECEIPT: expect.any(Number),
+        JOURNAL: expect.any(Number),
+      });
+      expect('KACHI' in all.totals.byType).toBe(false);
+
+      const byInvoiceType = await listVouchers(
+        {
+          fromDate: voucherDate,
+          toDate: voucherDate,
+          type: VoucherType.KACHI,
+          financialYearId,
+        },
+        { limit: 50, offset: 0 },
+      );
+      expect(byInvoiceType.items).toEqual([]);
+      expect(byInvoiceType.total).toBe(0);
+      expect(byInvoiceType.totals.totalAmount).toBe(0);
+    } finally {
+      await prisma.voucher.delete({ where: { id: invoiceVoucher.id } });
+    }
+  });
 });

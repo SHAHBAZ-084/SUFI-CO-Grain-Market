@@ -20,7 +20,7 @@ import {
 type LedgerResult = Awaited<ReturnType<typeof api.getLedger>>;
 type AccountBalanceResult = Awaited<ReturnType<typeof api.getAccountBalanceReport>>;
 type BalanceSideFilter = 'debit' | 'credit' | 'both';
-type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL' | 'KACHI' | 'PURCHASE_MAAL';
+type VoucherTypeFilter = 'all' | 'PAYMENT' | 'RECEIPT' | 'JOURNAL';
 
 export const REPORT_PAGE_SIZE = 30;
 
@@ -121,13 +121,11 @@ function todayInputValue() {
 }
 
 function voucherFromAccount(voucher: Voucher) {
-  if (voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL') return 'Multi-leg';
   if (voucher.type === 'JOURNAL') return voucher.debitAccount?.name ?? '—';
   return voucher.creditAccount?.name ?? '—';
 }
 
 function voucherToAccount(voucher: Voucher) {
-  if (voucher.type === 'KACHI' || voucher.type === 'PURCHASE_MAAL') return `${voucher.ledgerEntries?.length ?? 0} legs`;
   if (voucher.type === 'JOURNAL') return voucher.creditAccount?.name ?? '—';
   return voucher.debitAccount?.name ?? '—';
 }
@@ -1751,12 +1749,10 @@ export function VouchersReportPage() {
       PAYMENT: number;
       RECEIPT: number;
       JOURNAL: number;
-      KACHI: number;
-      PURCHASE_MAAL: number;
     };
   }>({
     totalAmount: 0,
-    byType: { PAYMENT: 0, RECEIPT: 0, JOURNAL: 0, KACHI: 0, PURCHASE_MAAL: 0 },
+    byType: { PAYMENT: 0, RECEIPT: 0, JOURNAL: 0 },
   });
   const [offset, setOffset] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -1783,7 +1779,7 @@ export function VouchersReportPage() {
     setOffset(0);
     setTotals({
       totalAmount: 0,
-      byType: { PAYMENT: 0, RECEIPT: 0, JOURNAL: 0, KACHI: 0, PURCHASE_MAAL: 0 },
+      byType: { PAYMENT: 0, RECEIPT: 0, JOURNAL: 0 },
     });
   }, [financialYearId]);
 
@@ -1940,8 +1936,6 @@ export function VouchersReportPage() {
                 { value: 'PAYMENT', label: 'Payment' },
                 { value: 'RECEIPT', label: 'Receipt' },
                 { value: 'JOURNAL', label: 'Journal' },
-                { value: 'KACHI', label: 'Kachi' },
-                { value: 'PURCHASE_MAAL', label: 'Purchase Maal' },
               ]}
             />
           </div>
@@ -2050,8 +2044,7 @@ export function VouchersReportPage() {
                       <td className="py-2" colSpan={8}>
                         Full period — Payments: {formatLedgerAmount(totals.byType.PAYMENT)} · Receipts:{' '}
                         {formatLedgerAmount(totals.byType.RECEIPT)} · Journal:{' '}
-                        {formatLedgerAmount(totals.byType.JOURNAL)} · Kachi:{' '}
-                        {formatLedgerAmount(totals.byType.KACHI)}
+                        {formatLedgerAmount(totals.byType.JOURNAL)}
                       </td>
                     </tr>
                   ) : null}

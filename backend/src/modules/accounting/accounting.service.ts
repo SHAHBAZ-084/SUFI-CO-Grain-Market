@@ -2550,15 +2550,6 @@ function voucherDashboardAccountLabel(voucher: {
   debitAccount?: { name: string } | null;
   creditAccount?: { name: string } | null;
 }) {
-  if (voucher.type === 'KACHI') {
-    return voucher.description?.trim() || 'Kachi Maal';
-  }
-  if (voucher.type === 'PURCHASE_MAAL') {
-    return voucher.description?.trim() || 'Purchase Maal';
-  }
-  if (voucher.type === 'SALE_PAUNCH') {
-    return voucher.description?.trim() || 'Sale Paunch';
-  }
   if (voucher.type === 'RECEIPT') return voucher.creditAccount?.name ?? '—';
   if (voucher.type === 'PAYMENT') return voucher.debitAccount?.name ?? '—';
   const debit = voucher.debitAccount?.name ?? '—';
@@ -2589,17 +2580,22 @@ export async function getDashboardSummary() {
   const todayStart = startOfDay(new Date());
   const todayEnd = endOfDay(new Date());
 
+  const standardVoucherWhere: Prisma.VoucherWhereInput = {
+    financialYearId,
+    status: USER_VISIBLE_VOUCHER_STATUS,
+    type: { in: STANDARD_VOUCHER_TYPES },
+  };
+
   const [vouchersToday, recentRows, productStock] = financialYearId
     ? await Promise.all([
         prisma.voucher.count({
           where: {
-            financialYearId,
-            status: USER_VISIBLE_VOUCHER_STATUS,
+            ...standardVoucherWhere,
             date: { gte: todayStart, lte: todayEnd },
           },
         }),
         prisma.voucher.findMany({
-          where: { financialYearId, status: USER_VISIBLE_VOUCHER_STATUS },
+          where: standardVoucherWhere,
           include: voucherInclude,
           orderBy: [{ date: 'desc' }, { number: 'desc' }],
           take: 10,
@@ -2677,8 +2673,6 @@ export async function listVouchers(
         PAYMENT: number;
         RECEIPT: number;
         JOURNAL: number;
-        KACHI: number;
-        PURCHASE_MAAL: number;
       };
     };
   }
@@ -2695,9 +2689,27 @@ export async function listVouchers(
     if (!year) throw new AppError(404, 'Financial year not found');
   }
 
+  // Voucher list/report is Payment / Receipt / Journal only — never invoice postings.
+  const limit = pagination?.limit ?? 200;
+  const offset = pagination?.offset ?? 0;
+
+  if (filters?.type && !isStandardVoucherType(filters.type)) {
+    return {
+      items: [],
+      total: 0,
+      limit,
+      offset,
+      totals: {
+        totalAmount: 0,
+        byType: { PAYMENT: 0, RECEIPT: 0, JOURNAL: 0 },
+      },
+    };
+  }
+
   const where: Prisma.VoucherWhereInput = {
     status: USER_VISIBLE_VOUCHER_STATUS,
     ...(financialYearId != null && { financialYearId }),
+    type: filters?.type ?? { in: STANDARD_VOUCHER_TYPES },
   };
 
   if (filters?.fromDate || filters?.toDate) {
@@ -2709,13 +2721,6 @@ export async function listVouchers(
       where.date.lte = parseDateEnd(filters.toDate);
     }
   }
-
-  if (filters?.type) {
-    where.type = filters.type;
-  }
-
-  const limit = pagination?.limit ?? 200;
-  const offset = pagination?.offset ?? 0;
 
   const [items, total, grouped] = await Promise.all([
     fetchVoucherListPage(where, limit, offset),
@@ -2731,8 +2736,6 @@ export async function listVouchers(
     PAYMENT: 0,
     RECEIPT: 0,
     JOURNAL: 0,
-    KACHI: 0,
-    PURCHASE_MAAL: 0,
   };
   let totalAmount = 0;
   for (const row of grouped) {

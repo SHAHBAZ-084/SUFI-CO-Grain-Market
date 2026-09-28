@@ -824,8 +824,6 @@ export const api = {
             PAYMENT: number;
             RECEIPT: number;
             JOURNAL: number;
-            KACHI: number;
-            PURCHASE_MAAL: number;
           };
         };
       }
