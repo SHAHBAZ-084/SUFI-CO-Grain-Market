@@ -1,6 +1,7 @@
 import { InvoiceType, VoucherType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import { getActiveFinancialYearId } from '../accounting/accounting.service';
 import { endOfDay, startOfDay } from '../accounting/ledger-utils';
 import {
   invoiceApprovalAccounts,
@@ -137,20 +138,47 @@ export async function getDailyReport(
   options?: {
     filterKey?: DailyReportFilterKey;
     pagination?: { limit: number; offset: number } | null;
+    financialYearId?: number;
   },
 ): Promise<DailyReportResult> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new AppError(400, 'date must be YYYY-MM-DD');
   }
 
+  const financialYearId =
+    options?.financialYearId != null
+      ? options.financialYearId
+      : await getActiveFinancialYearId(prisma);
+
+  const year = await prisma.financialYear.findFirst({ where: { id: financialYearId } });
+  if (!year) throw new AppError(404, 'Financial year not found');
+
+  const yearStart = startOfDay(year.startDate);
+  const yearEnd = year.endDate ? endOfDay(year.endDate) : null;
+
   const from = parseDay(date, false);
   const to = parseDay(date, true);
+
+  // Date outside the selected year → empty report (do not leak another year's rows).
+  if (from < yearStart || (yearEnd != null && from > yearEnd)) {
+    return {
+      date,
+      rows: [],
+      totals: { count: 0, amount: 0 },
+      filteredTotals: { count: 0, amount: 0 },
+      kindCounts: {},
+      total: 0,
+      limit: options?.pagination?.limit ?? 0,
+      offset: options?.pagination?.offset ?? 0,
+    };
+  }
 
   const [vouchers, invoices] = await Promise.all([
     prisma.voucher.findMany({
       where: {
         status: USER_VISIBLE_VOUCHER_STATUS,
         type: { in: DAILY_VOUCHER_TYPES },
+        financialYearId,
         date: { gte: from, lte: to },
       },
       include: {
@@ -163,6 +191,7 @@ export async function getDailyReport(
       where: {
         status: USER_VISIBLE_INVOICE_STATUS,
         type: { in: DAILY_INVOICE_TYPES },
+        financialYearId,
         invoiceDate: { gte: from, lte: to },
       },
       include: {

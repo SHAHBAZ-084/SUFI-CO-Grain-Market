@@ -11,6 +11,7 @@ import {
   InvoiceHeaderRow,
   InvoiceReadOnlyField,
   InvoiceToggleField,
+  useStickyRowToggles,
 } from '../../components/invoices/InvoiceFormLayout';
 import { DateField } from '../../components/ui/DateField';
 import {
@@ -175,7 +176,10 @@ export function PurchaseMaalInvoicePage() {
   const [ratePerMaund, setRatePerMaund] = useState(() => restoredState?.ratePerMaund ?? '');
   const [rowBardanaQty, setRowBardanaQty] = useState(() => restoredState?.rowBardanaQty ?? '');
   const [rowBardanaRate, setRowBardanaRate] = useState(() => restoredState?.rowBardanaRate ?? '');
-  const [dammiChecked, setDammiChecked] = useState(() => restoredState?.dammiChecked ?? false);
+  const { stickyToggles, setStickyToggle, resetStickyToggles } = useStickyRowToggles(() => ({
+    dammi: restoredState?.dammiChecked ?? false,
+  }));
+  const dammiChecked = stickyToggles.dammi;
 
   const [marketFeeEnabled, setMarketFeeEnabled] = useState(() => restoredState?.marketFeeEnabled ?? false);
   const [mazduriEnabled, setMazduriEnabled] = useState(() => restoredState?.mazduriEnabled ?? false);
@@ -366,7 +370,6 @@ export function PurchaseMaalInvoicePage() {
     setRatePerMaund('');
     setRowBardanaQty('');
     setRowBardanaRate('');
-    setDammiChecked(false);
   }
 
   function removeRow(clientId: string) {
@@ -440,6 +443,7 @@ export function PurchaseMaalInvoicePage() {
       setLowerBardanaRate('');
       setMarketFeeEnabled(false);
       setMazduriEnabled(false);
+      resetStickyToggles();
       const refRow = await api.getNextPurchaseMaalReference();
       setPredictedRef(refRow.reference);
     } catch (err) {
@@ -547,7 +551,7 @@ export function PurchaseMaalInvoicePage() {
                     <InvoiceToggleField
                       label={`Dammi (${prefRates.daamiPercent}%)`}
                       checked={dammiChecked}
-                      onChange={setDammiChecked}
+                      onChange={(checked) => setStickyToggle('dammi', checked)}
                     />
                   </InvoiceFieldRow>
                 </InvoiceFieldGroup>

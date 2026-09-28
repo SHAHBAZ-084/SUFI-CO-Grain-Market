@@ -12,8 +12,9 @@ import {
   SecondaryButton,
 } from '../../components/ui/PageShell';
 
-/** Reports that read ReportFinancialYearContext (Daily / Empty Bardana do not). */
+/** Reports that read ReportFinancialYearContext. */
 const CLOSED_YEAR_REPORT_LINKS: Array<{ label: string; to: string; note?: string }> = [
+  { label: 'Daily Report', to: '/reports/daily' },
   { label: 'Account Ledger', to: '/reports/accounts' },
   { label: 'Account Balance', to: '/reports/account-balance' },
   { label: 'Vouchers', to: '/reports/vouchers' },
@@ -22,7 +23,6 @@ const CLOSED_YEAR_REPORT_LINKS: Array<{ label: string; to: string; note?: string
   {
     label: 'Stock Report',
     to: '/reports/stock',
-    note: 'Stock movements are not FY-scoped; year is stored for other reports only.',
   },
 ];
 

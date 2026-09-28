@@ -3,6 +3,7 @@ import { FieldLabel, FinancialButton } from '../ui/PageShell';
 import { FormActionFooter } from '../ui/FormActionFooter';
 import { formatLedgerAmount } from '../../lib/format';
 
+export { useStickyRowToggles } from './useStickyRowToggles';
 /** Section block with accent tick header (invoice forms). */
 export function InvoiceFormSection({
   label,

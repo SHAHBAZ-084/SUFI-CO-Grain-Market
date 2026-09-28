@@ -1089,6 +1089,7 @@ type StockBagType = 'BORI' | 'THELA';
 type StockReportResult = Awaited<ReturnType<typeof api.getStockReport>>;
 
 export function StockReportPage() {
+  const { financialYearIdNum, selectedYear } = useReportFinancialYear();
   const [products, setProducts] = useState<
     Array<{ id: number; name: string; code: string; stockMode?: string }>
   >([]);
@@ -1117,15 +1118,26 @@ export function StockReportPage() {
       .catch(() => setProducts([]));
   }, []);
 
+  useEffect(() => {
+    setLoaded(false);
+    setReport(null);
+    setOffset(0);
+  }, [financialYearIdNum]);
+
   const selectedProduct = products.find((p) => String(p.id) === productId);
   const isQuantityProduct = selectedProduct?.stockMode === 'QUANTITY';
   const qtyMode = report?.stockMode === 'QUANTITY' || isQuantityProduct;
+  const showRemainder = selectedYear?.status === 'ACTIVE' && report?.stockMode !== 'QUANTITY';
 
   async function loadReport(nextOffset = 0) {
     setError('');
     const id = Number(productId);
     if (!Number.isFinite(id) || id < 1) {
       setError('Select a product');
+      return;
+    }
+    if (financialYearIdNum == null) {
+      setError('Select a financial year');
       return;
     }
     setLoading(true);
@@ -1135,6 +1147,7 @@ export function StockReportPage() {
         bagType,
         limit: REPORT_PAGE_SIZE,
         offset: nextOffset,
+        financialYearId: financialYearIdNum,
       });
       setReport(result);
       setOffset(result.offset);
@@ -1167,7 +1180,7 @@ export function StockReportPage() {
         onClose={() => setFiltersOpen(false)}
         footer={
           <>
-            <FinancialButton type="button" onClick={onLoad} disabled={loading}>
+            <FinancialButton type="button" onClick={onLoad} disabled={loading || !financialYearIdNum}>
               {loading ? 'Loading…' : 'Generate Report'}
             </FinancialButton>
           </>
@@ -1230,7 +1243,9 @@ export function StockReportPage() {
             />
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-textSecondary">
-                {report.stockMode === 'QUANTITY' ? (
+                {report.emptyReason ? (
+                  report.emptyReason
+                ) : report.stockMode === 'QUANTITY' ? (
                   <>
                     Quantity stock
                     {report.product.unit ? ` (${report.product.unit})` : ''}. Net balance can be
@@ -1243,8 +1258,12 @@ export function StockReportPage() {
                     {!report.historicalBackfill
                       ? ' Invoices saved before stock tracking started are not included — bag and kg totals both reflect activity since that date only.'
                       : null}
-                    {' '}Carried loose remainder: {report.carriedRemainderKg} kg
-                    ({report.bagType === 'BORI' ? 'Bori' : 'Thela'}).
+                    {showRemainder ? (
+                      <>
+                        {' '}Carried loose remainder: {report.carriedRemainderKg} kg
+                        ({report.bagType === 'BORI' ? 'Bori' : 'Thela'}).
+                      </>
+                    ) : null}
                   </>
                 )}
               </p>
@@ -1274,7 +1293,16 @@ export function StockReportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {report.rows.length === 0 ? (
+                  {report.emptyReason ? (
+                    <tr>
+                      <td
+                        colSpan={report.stockMode === 'QUANTITY' ? 5 : 6}
+                        className="py-6 text-center text-textSecondary"
+                      >
+                        {report.emptyReason}
+                      </td>
+                    </tr>
+                  ) : report.rows.length === 0 ? (
                     <tr>
                       <td
                         colSpan={report.stockMode === 'QUANTITY' ? 5 : 6}
@@ -1304,27 +1332,35 @@ export function StockReportPage() {
                     ))
                   )}
                 </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-border font-semibold">
-                    <td className="py-2 pr-3" colSpan={3}>
-                      Full period — Total In {report.totals.totalIn} · Total Out {report.totals.totalOut}
-                      {report.stockMode !== 'QUANTITY' ? (
-                        <>
-                          {' '}· Total KG in stock {report.totals.productKgBalance ?? report.totals.netKg ?? 0}
-                        </>
-                      ) : null}
-                    </td>
-                    {report.stockMode !== 'QUANTITY' ? (
-                      <td className="py-2 pr-3 text-right tabular-nums">
-                        {report.totals.netKg ?? 0}
+                {!report.emptyReason ? (
+                  <tfoot>
+                    <tr className="border-t-2 border-border font-semibold">
+                      <td className="py-2 pr-3" colSpan={3}>
+                        Opening {report.totals.openingBalance}
+                        {report.stockMode !== 'QUANTITY'
+                          ? ` · Opening KG ${report.totals.openingKg ?? 0}`
+                          : ''}
+                        {' '}· Total In {report.totals.totalIn} · Total Out {report.totals.totalOut}
+                        {' '}· Closing {report.totals.closingBalance}
+                        {report.stockMode !== 'QUANTITY' ? (
+                          <>
+                            {' '}· Closing KG {report.totals.closingKg ?? report.totals.netKg ?? 0}
+                            {' '}· Total KG in stock {report.totals.productKgBalance ?? report.totals.netKg ?? 0}
+                          </>
+                        ) : null}
                       </td>
-                    ) : null}
-                    <td className="py-2 pr-3 text-right tabular-nums" />
-                    <td className="py-2 text-right tabular-nums">
-                      Net {report.totals.netBalance}
-                    </td>
-                  </tr>
-                </tfoot>
+                      {report.stockMode !== 'QUANTITY' ? (
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {report.totals.closingKg ?? report.totals.netKg ?? 0}
+                        </td>
+                      ) : null}
+                      <td className="py-2 pr-3 text-right tabular-nums" />
+                      <td className="py-2 text-right tabular-nums">
+                        Net {report.totals.netBalance}
+                      </td>
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </div>
             <ReportPager

@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { InvoiceType } from '@prisma/client';
 import { z } from 'zod';
-import { requireAuth } from '../../middleware/auth';
+import { requireAdmin, requireAuth } from '../../middleware/auth';
 import { asyncHandler, param, validateBody } from '../../utils/helpers';
 import { parsePagination } from '../../utils/pagination';
+import * as cancelInvoiceService from './cancel-invoice.service';
 import * as invoicesService from './invoices.service';
 import { registerKachiMaalRoutes } from './kachi-maal.routes';
 import { registerPurchaseMaalRoutes } from './purchase-maal.routes';
@@ -65,6 +66,18 @@ invoicesRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
     res.json(await invoicesService.getInvoice(parseInt(param(req.params.id), 10)));
+  }),
+);
+
+invoicesRouter.delete(
+  '/:id',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const invoice = await cancelInvoiceService.cancelInvoice(
+      parseInt(param(req.params.id), 10),
+      req.session.userId!,
+    );
+    res.json(invoice);
   }),
 );
 

@@ -163,3 +163,28 @@ export async function postSalePaunchEmptyBardanaOut(
     });
   }
 }
+
+/** Undo empty-bardana movements for a cancelled Sale Paunch invoice. */
+export async function reverseEmptyBardanaForInvoiceInTx(tx: Tx, invoiceId: number) {
+  const movements = await tx.emptyBardanaMovement.findMany({ where: { invoiceId } });
+  if (movements.length === 0) return;
+
+  await ensureBalances(tx);
+
+  for (const movement of movements) {
+    const qty = Number(movement.qty);
+    if (!(qty > 0)) continue;
+    // OUT reduced stock → add back; IN increased stock → subtract.
+    const undo =
+      movement.direction === EmptyBardanaDirection.OUT ? qty : -qty;
+    const current = await tx.emptyBardanaBalance.findUniqueOrThrow({
+      where: { bagType: movement.bagType },
+    });
+    await tx.emptyBardanaBalance.update({
+      where: { bagType: movement.bagType },
+      data: { balance: Number(current.balance) + undo },
+    });
+  }
+
+  await tx.emptyBardanaMovement.deleteMany({ where: { invoiceId } });
+}

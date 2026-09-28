@@ -11,6 +11,7 @@ import {
   InvoiceHeaderRow,
   InvoiceReadOnlyField,
   InvoiceToggleField,
+  useStickyRowToggles,
 } from '../../components/invoices/InvoiceFormLayout';
 import { DateField } from '../../components/ui/DateField';
 import { FieldLabel, PageShell, Panel, TextInput } from '../../components/ui/PageShell';
@@ -166,7 +167,10 @@ export function SaleCommissionInvoicePage() {
   const [ratePerMaund, setRatePerMaund] = useState(() => restoredState?.ratePerMaund ?? '');
   const [rowBardanaQty, setRowBardanaQty] = useState(() => restoredState?.rowBardanaQty ?? '');
   const [rowBardanaRate, setRowBardanaRate] = useState(() => restoredState?.rowBardanaRate ?? '');
-  const [dammiChecked, setDammiChecked] = useState(() => restoredState?.dammiChecked ?? false);
+  const { stickyToggles, setStickyToggle, resetStickyToggles } = useStickyRowToggles(() => ({
+    dammi: restoredState?.dammiChecked ?? false,
+  }));
+  const dammiChecked = stickyToggles.dammi;
 
   const [salePartyAccountId, setSalePartyAccountId] = useState(() => restoredState?.salePartyAccountId ?? '');
   const [munshianaAmount, setMunshianaAmount] = useState(() => restoredState?.munshianaAmount ?? '');
@@ -336,7 +340,6 @@ export function SaleCommissionInvoicePage() {
     setRatePerMaund('');
     setRowBardanaQty('');
     setRowBardanaRate('');
-    setDammiChecked(false);
   }
 
   function removeRow(clientId: string) {
@@ -408,6 +411,7 @@ export function SaleCommissionInvoicePage() {
       setMiscAmount('');
       setLowerBardanaQty('');
       setLowerBardanaRate('');
+      resetStickyToggles();
       const refRow = await api.getNextSaleCommissionReference();
       setPredictedRef(refRow.reference);
     } catch (err) {
@@ -505,7 +509,7 @@ export function SaleCommissionInvoicePage() {
                     <InvoiceToggleField
                       label={`Dammi (${prefRates.daamiPercent}%)`}
                       checked={dammiChecked}
-                      onChange={setDammiChecked}
+                      onChange={(checked) => setStickyToggle('dammi', checked)}
                     />
                     <InvoiceReadOnlyField label="Amount" value={entryPreview.amount} />
                     <InvoiceReadOnlyField label="Net to party" value={entryPreview.netCreditToParty} />

@@ -3,9 +3,19 @@ import { useSearchParams } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { INVOICE_TYPE_LABELS } from '../../config/navigation';
+import { useAuth } from '../../contexts/AuthContext';
 import { ApiRequestError, api, type InvoiceDetail, type SystemPreferences } from '../../lib/api';
 import { buildInvoiceReference, type InvoiceTypeKey } from '../../lib/invoiceReference';
-import { FieldLabel, FinancialButton, PageShell, Panel, SecondaryButton, TextInput } from '../../components/ui/PageShell';
+import { Modal } from '../../components/ui/Modal';
+import {
+  DangerButton,
+  FieldLabel,
+  FinancialButton,
+  PageShell,
+  Panel,
+  SecondaryButton,
+  TextInput,
+} from '../../components/ui/PageShell';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { InvoiceBillView } from './InvoiceBillView';
 
@@ -49,6 +59,8 @@ function isInvoiceNotFoundError(err: unknown): boolean {
 }
 
 export function ViewInvoicePage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [searchParams] = useSearchParams();
   const printRef = useRef<HTMLDivElement>(null);
   const autoFetchedKey = useRef<string | null>(null);
@@ -64,14 +76,18 @@ export function ViewInvoicePage() {
   const [invoiceNumber, setInvoiceNumber] = useState(initialNumber);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [prefs, setPrefs] = useState<SystemPreferences | null>(null);
   const [notFoundRef, setNotFoundRef] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const autoPrintDone = useRef(false);
 
   const fetchInvoiceById = useCallback(async (id: number) => {
     setError('');
+    setMessage('');
     setNotFoundRef(null);
     setInvoice(null);
     setPrefs(null);
@@ -99,6 +115,7 @@ export function ViewInvoicePage() {
 
   const fetchInvoice = useCallback(async (type: InvoiceTypeKey, numberText: string) => {
     setError('');
+    setMessage('');
     setNotFoundRef(null);
     setInvoice(null);
     setPrefs(null);
@@ -188,6 +205,27 @@ export function ViewInvoicePage() {
     }
   }
 
+  async function onConfirmDelete() {
+    if (!invoice) return;
+    setDeleting(true);
+    setError('');
+    setMessage('');
+    try {
+      await api.cancelInvoice(invoice.id);
+      setConfirmDeleteOpen(false);
+      setInvoice(null);
+      setPrefs(null);
+      setMessage(`Invoice ${invoice.reference} deleted. Accounting and stock effects were reversed.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+      setConfirmDeleteOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const canDelete = isAdmin && invoice != null && invoice.status !== 'CANCELLED';
+
   return (
     <PageShell title="View Invoice" subtitle="Look up a bill by type and number (posted or pending)">
       <Panel className="mb-6 print:hidden">
@@ -218,6 +256,7 @@ export function ViewInvoicePage() {
           </FinancialButton>
         </form>
         {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+        {message ? <p className="mt-4 text-sm text-success">{message}</p> : null}
         {notFoundRef ? (
           <p className="mt-4 text-sm text-textSecondary">
             No invoice found for <strong className="text-textPrimary">{notFoundRef}</strong>.
@@ -227,10 +266,19 @@ export function ViewInvoicePage() {
 
       {invoice ? (
         <div className="space-y-4">
-          <div className="flex justify-end print:hidden">
-            <SecondaryButton type="button" disabled={downloading} onClick={onDownloadPdf}>
+          <div className="flex flex-wrap justify-end gap-2 print:hidden">
+            <SecondaryButton type="button" disabled={downloading || deleting} onClick={onDownloadPdf}>
               {downloading ? 'Generating PDF…' : 'Download PDF'}
             </SecondaryButton>
+            {canDelete ? (
+              <DangerButton
+                type="button"
+                disabled={deleting || downloading}
+                onClick={() => setConfirmDeleteOpen(true)}
+              >
+                {deleting ? 'Deleting…' : 'Delete Invoice'}
+              </DangerButton>
+            ) : null}
           </div>
           <div className="overflow-x-auto rounded-lg border border-border bg-surface2 p-4">
             <div ref={printRef} className="mx-auto w-[800px] max-w-full shadow-sm">
@@ -239,6 +287,29 @@ export function ViewInvoicePage() {
           </div>
         </div>
       ) : null}
+
+      <Modal
+        open={confirmDeleteOpen}
+        title="Delete invoice"
+        onClose={() => {
+          if (!deleting) setConfirmDeleteOpen(false);
+        }}
+        footer={
+          <>
+            <SecondaryButton type="button" disabled={deleting} onClick={() => setConfirmDeleteOpen(false)}>
+              Cancel
+            </SecondaryButton>
+            <DangerButton type="button" disabled={deleting} onClick={() => void onConfirmDelete()}>
+              {deleting ? 'Deleting…' : 'Confirm'}
+            </DangerButton>
+          </>
+        }
+      >
+        <p className="text-sm text-textPrimary">
+          Delete invoice #{invoice?.reference ?? ''}? This will reverse its accounting entries and stock
+          effects.
+        </p>
+      </Modal>
     </PageShell>
   );
 }

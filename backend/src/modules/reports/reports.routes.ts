@@ -32,10 +32,16 @@ reportsRouter.get(
           { limit: 30, max: 500 },
         )
       : null;
+    const financialYearIdParam = req.query.financialYearId as string | undefined;
+    const financialYearId =
+      financialYearIdParam && financialYearIdParam.trim() !== ''
+        ? parseInt(financialYearIdParam, 10)
+        : undefined;
     res.json(
       await dailyReport.getDailyReport(date, {
         filterKey,
         pagination,
+        financialYearId: Number.isFinite(financialYearId) ? financialYearId : undefined,
       }),
     );
   }),

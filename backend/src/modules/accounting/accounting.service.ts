@@ -1,4 +1,4 @@
-import { AccountType, FinancialYearStatus, LedgerEntryType, Prisma, RecordStatus, VoucherStatus, VoucherType } from '@prisma/client';
+import { AccountType, FinancialYearStatus, InvoiceStatus, LedgerEntryType, Prisma, RecordStatus, VoucherStatus, VoucherType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { AppError } from '../../utils/helpers';
@@ -664,6 +664,36 @@ async function recomputeLedgerRunningBalancesInTx(
   }
 
   await tx.ledger.update({ where: { id: ledgerId }, data: { balance: running } });
+}
+
+/**
+ * Rebuild every ledger's running entry balances and cached Ledger.balance
+ * for the given financial year (defaults to the active year).
+ * Use when Trial Balance drifts because stored balances no longer match entries.
+ */
+export async function repairAllLedgerBalances(financialYearId?: number) {
+  const yearId = financialYearId ?? (await getActiveFinancialYearId(prisma));
+  const ledgers = await prisma.ledger.findMany({ select: { id: true, accountId: true } });
+  let repaired = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const ledger of ledgers) {
+      const before = await tx.ledger.findUniqueOrThrow({
+        where: { id: ledger.id },
+        select: { balance: true },
+      });
+      await recomputeLedgerRunningBalancesInTx(tx, ledger.id, yearId, null);
+      const after = await tx.ledger.findUniqueOrThrow({
+        where: { id: ledger.id },
+        select: { balance: true },
+      });
+      if (Math.abs(Number(before.balance) - Number(after.balance)) >= 0.005) {
+        repaired += 1;
+      }
+    }
+  }, { timeout: 300_000 });
+
+  return { financialYearId: yearId, ledgerCount: ledgers.length, repaired };
 }
 
 /** Legacy names — no longer auto-created; cleaned up when empty/unused. */
@@ -2974,9 +3004,22 @@ export async function updatePendingVoucher(
 }
 
 export async function cancelVoucher(voucherId: number, userId: number) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    return cancelVoucherInTx(tx, voucherId, userId);
-  });
+  return prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      const invoiceLink = await tx.invoiceVoucher.findFirst({
+        where: { voucherId },
+        include: { invoice: { select: { id: true, reference: true, status: true } } },
+      });
+      if (invoiceLink && invoiceLink.invoice.status !== InvoiceStatus.CANCELLED) {
+        throw new AppError(
+          400,
+          `This voucher belongs to invoice ${invoiceLink.invoice.reference}. Delete the invoice instead.`,
+        );
+      }
+      return cancelVoucherInTx(tx, voucherId, userId);
+    },
+    { maxWait: 30_000, timeout: 120_000 },
+  );
 }
 
 export async function cancelVoucherInTx(

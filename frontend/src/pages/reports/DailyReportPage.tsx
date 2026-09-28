@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DateField } from '../../components/ui/DateField';
 import { Modal } from '../../components/ui/Modal';
@@ -10,6 +10,7 @@ import {
   Panel,
   SecondaryButton,
 } from '../../components/ui/PageShell';
+import { useReportFinancialYear } from '../../contexts/ReportFinancialYearContext';
 import { api } from '../../lib/api';
 import { formatLedgerAmount } from '../../lib/format';
 import { REPORT_PAGE_SIZE, ReportPager } from './ReportPages';
@@ -52,6 +53,11 @@ function todayInputValue() {
   return `${y}-${m}-${day}`;
 }
 
+function toIsoDate(value: string | null | undefined): string {
+  if (!value) return '';
+  return value.slice(0, 10);
+}
+
 function accountCellLabel(account: { name: string; code: string } | null | undefined) {
   if (!account) return '—';
   return account.name;
@@ -76,6 +82,7 @@ function viewHref(row: DailyRow): string | null {
 }
 
 export function DailyReportPage() {
+  const { financialYearIdNum, selectedYear } = useReportFinancialYear();
   const [date, setDate] = useState(todayInputValue);
   const [rows, setRows] = useState<DailyRow[]>([]);
   const [kindCounts, setKindCounts] = useState<Partial<Record<string, number>>>({});
@@ -88,9 +95,38 @@ export function DailyReportPage() {
   const [error, setError] = useState('');
   const [kindFilter, setKindFilter] = useState<DailyFilterKey>('all');
 
+  const yearStart = toIsoDate(selectedYear?.startDate);
+  const yearEnd = toIsoDate(selectedYear?.endDate);
+
+  useEffect(() => {
+    if (!selectedYear) return;
+    if (selectedYear.status === 'CLOSED' && selectedYear.endDate) {
+      setDate(toIsoDate(selectedYear.endDate));
+    } else if (selectedYear.status === 'ACTIVE') {
+      setDate(todayInputValue());
+    }
+    setLoaded(false);
+    setRows([]);
+    setOffset(0);
+    setKindFilter('all');
+  }, [selectedYear?.id, selectedYear?.status, selectedYear?.endDate]);
+
+  const dateOutsideYear =
+    Boolean(date) &&
+    Boolean(yearStart) &&
+    (date < yearStart || (yearEnd !== '' && date > yearEnd));
+
   async function loadReport(day: string, nextFilter: DailyFilterKey = kindFilter, nextOffset = 0) {
     if (!day) {
       setError('Select a date');
+      return;
+    }
+    if (financialYearIdNum == null) {
+      setError('Select a financial year');
+      return;
+    }
+    if (yearStart && (day < yearStart || (yearEnd !== '' && day > yearEnd))) {
+      setError('Date is outside the selected financial year');
       return;
     }
     setLoading(true);
@@ -101,6 +137,7 @@ export function DailyReportPage() {
         filterKey: nextFilter,
         limit: REPORT_PAGE_SIZE,
         offset: nextOffset,
+        financialYearId: financialYearIdNum,
       });
       setRows(result.rows);
       setKindCounts(result.kindCounts);
@@ -142,7 +179,11 @@ export function DailyReportPage() {
         onClose={() => setFiltersOpen(false)}
         footer={
           <>
-            <FinancialButton type="submit" form="daily-report-filters" disabled={loading}>
+            <FinancialButton
+              type="submit"
+              form="daily-report-filters"
+              disabled={loading || !financialYearIdNum || dateOutsideYear}
+            >
               {loading ? 'Loading…' : 'Generate Report'}
             </FinancialButton>
           </>
@@ -156,6 +197,15 @@ export function DailyReportPage() {
               onChange={setDate}
               required
             />
+            {dateOutsideYear ? (
+              <p className="mt-2 text-sm text-danger">
+                Date is outside the selected financial year
+                {yearStart
+                  ? ` (${yearStart}${yearEnd ? ` to ${yearEnd}` : ' onward'})`
+                  : ''}
+                .
+              </p>
+            ) : null}
           </div>
         </form>
         {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}

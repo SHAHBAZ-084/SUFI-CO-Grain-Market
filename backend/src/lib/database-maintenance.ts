@@ -11,8 +11,8 @@ export async function configureSqlitePragmas(db: PrismaClient): Promise<void> {
   await db.$queryRawUnsafe('PRAGMA journal_mode = WAL;');
   await db.$queryRawUnsafe('PRAGMA synchronous = NORMAL;');
   await db.$queryRawUnsafe('PRAGMA foreign_keys = ON;');
-  await db.$queryRawUnsafe('PRAGMA busy_timeout = 5000;');
-  logger.info('SQLite pragmas applied (WAL, synchronous=NORMAL, foreign_keys=ON, busy_timeout=5000)');
+  await db.$queryRawUnsafe('PRAGMA busy_timeout = 30000;');
+  logger.info('SQLite pragmas applied (WAL, synchronous=NORMAL, foreign_keys=ON, busy_timeout=30000)');
 }
 
 export async function walCheckpointTruncate(db: PrismaClient): Promise<void> {

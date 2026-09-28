@@ -120,3 +120,73 @@ export async function applyPurchaseWeightedAverageCost(
 
   return next;
 }
+
+async function purchaseValueForQuantityIn(
+  tx: Tx,
+  invoiceId: number | null,
+  productId: number,
+  quantity: number,
+): Promise<number> {
+  if (invoiceId == null) return 0;
+  const lines = await tx.generalPurchaseLine.findMany({
+    where: { invoiceId, productId },
+  });
+  if (lines.length === 0) return 0;
+  // Match posting: inventory debit = lineTotal + mazduri.
+  const totalValue = lines.reduce(
+    (sum, line) => sum + Number(line.lineTotal) + Number(line.mazduriAmount),
+    0,
+  );
+  const totalQty = lines.reduce((sum, line) => sum + Number(line.quantity), 0);
+  if (!(totalQty > 0)) return 0;
+  return roundMoney(totalValue * (quantity / totalQty));
+}
+
+/** Rebuild average cost by replaying remaining quantity movements in date order. */
+export async function rebuildAverageCostInTx(tx: Tx, productId: number) {
+  const movements = await tx.productQuantityMovement.findMany({
+    where: { productId },
+    orderBy: [{ date: 'asc' }, { id: 'asc' }],
+  });
+
+  let onHand = 0;
+  let avg: number | null = null;
+  for (const movement of movements) {
+    const qty = Number(movement.quantity);
+    if (movement.direction === StockDirection.IN) {
+      const purchaseValue = await purchaseValueForQuantityIn(
+        tx,
+        movement.invoiceId,
+        productId,
+        qty,
+      );
+      avg = computeWeightedAverageCost({
+        oldQty: onHand,
+        oldAverageCost: avg,
+        purchaseQty: qty,
+        purchaseValue,
+      });
+      onHand += qty;
+    } else {
+      onHand -= qty;
+    }
+  }
+
+  await tx.product.update({
+    where: { id: productId },
+    data: { averageCost: avg },
+  });
+}
+
+/** Remove quantity movements for an invoice and rebuild WAC for affected products. */
+export async function reverseInvoiceQuantityMovementsInTx(tx: Tx, invoiceId: number) {
+  const movements = await tx.productQuantityMovement.findMany({
+    where: { invoiceId },
+    select: { productId: true },
+  });
+  const productIds = [...new Set(movements.map((m) => m.productId))];
+  await tx.productQuantityMovement.deleteMany({ where: { invoiceId } });
+  for (const productId of productIds) {
+    await rebuildAverageCostInTx(tx, productId);
+  }
+}

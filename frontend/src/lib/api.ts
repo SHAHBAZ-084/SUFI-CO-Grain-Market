@@ -512,6 +512,13 @@ export const api = {
     return request<InvoiceDetail>(`/api/invoices/by-reference?${query.toString()}`);
   },
 
+  /** Admin soft-cancel: reverses vouchers, stock, empty bardana, and quantity effects. */
+  cancelInvoice(id: number) {
+    return request<{ id: number; reference: string; status: string }>(`/api/invoices/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   getNextKachiMaalReference() {
     return request<{ reference: string }>('/api/invoices/kachi-maal/next-reference');
   },
@@ -1195,6 +1202,7 @@ export const api = {
     bagType: 'BORI' | 'THELA';
     limit?: number;
     offset?: number;
+    financialYearId?: number;
   }) {
     const query = new URLSearchParams({
       productId: String(params.productId),
@@ -1202,6 +1210,7 @@ export const api = {
     });
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
+    if (params.financialYearId != null) query.set('financialYearId', String(params.financialYearId));
     return request<{
       product: {
         id: number;
@@ -1215,6 +1224,7 @@ export const api = {
       trackingStartedAt: string;
       historicalBackfill: false;
       carriedRemainderKg: number;
+      emptyReason?: string | null;
       rows: Array<{
         id: number;
         date: string;
@@ -1232,6 +1242,10 @@ export const api = {
       limit: number;
       offset: number;
       totals: {
+        openingBalance: number;
+        closingBalance: number;
+        openingKg?: number;
+        closingKg?: number;
         totalIn: number;
         totalOut: number;
         netBalance: number;
@@ -1248,11 +1262,13 @@ export const api = {
     filterKey?: string;
     limit?: number;
     offset?: number;
+    financialYearId?: number;
   }) {
     const query = new URLSearchParams({ date: params.date });
     if (params.filterKey && params.filterKey !== 'all') query.set('filterKey', params.filterKey);
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
+    if (params.financialYearId != null) query.set('financialYearId', String(params.financialYearId));
     return request<{
       date: string;
       rows: Array<{

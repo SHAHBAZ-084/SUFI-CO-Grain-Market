@@ -1,5 +1,7 @@
 import {
   BoriThelaMode,
+  FinancialYearStatus,
+  InvoiceStatus,
   InvoiceType,
   Prisma,
   StockBagType,
@@ -7,6 +9,8 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/helpers';
+import { getActiveFinancialYearId } from '../accounting/accounting.service';
+import { endOfDay, startOfDay } from '../accounting/ledger-utils';
 import { USER_VISIBLE_PRODUCT_STATUS } from '../approvals/record-status';
 import { isMaalKhataCategoryName } from '../products/maal-khata';
 import {
@@ -169,6 +173,56 @@ export async function postPurchaseMaalStockIn(
   }
 }
 
+/** Remove bag/kg stock movements posted for an invoice (cancel path). */
+export async function reverseInvoiceStockMovementsInTx(tx: Tx, invoiceId: number) {
+  await tx.stockMovement.deleteMany({ where: { invoiceId } });
+}
+
+/**
+ * Rebuild carried remainder for a product by replaying remaining posted
+ * Purchase-to-Maal lines (optionally excluding an invoice being cancelled).
+ */
+export async function rebuildPurchaseMaalRemaindersInTx(
+  tx: Tx,
+  productId: number,
+  excludeInvoiceId?: number,
+) {
+  const invoices = await tx.invoice.findMany({
+    where: {
+      productId,
+      type: InvoiceType.PURCHASE_MAAL,
+      status: InvoiceStatus.POSTED,
+      ...(excludeInvoiceId != null ? { id: { not: excludeInvoiceId } } : {}),
+    },
+    include: { purchaseMaalLines: { orderBy: { sortOrder: 'asc' } } },
+    orderBy: [{ invoiceDate: 'asc' }, { id: 'asc' }],
+  });
+
+  const remainders = new Map<StockBagType, number>([
+    [StockBagType.BORI, 0],
+    [StockBagType.THELA, 0],
+  ]);
+
+  for (const invoice of invoices) {
+    for (const line of invoice.purchaseMaalLines) {
+      const bagType = toStockBagType(bagTypeFromMode(line.boriOrThelaMode));
+      const carried = remainders.get(bagType) ?? 0;
+      const result = computeStockInFromRow({
+        wholeBags: Number(line.bagCount),
+        dharanCount: Number(line.dharanCount),
+        looseKg: Number(line.looseKg),
+        bhartii: Number(line.bhartii),
+        carriedRemainderKg: carried,
+      });
+      remainders.set(bagType, result.newRemainderKg);
+    }
+  }
+
+  for (const bagType of [StockBagType.BORI, StockBagType.THELA] as const) {
+    await setCarriedRemainderKg(tx, productId, bagType, remainders.get(bagType) ?? 0);
+  }
+}
+
 export type SalePaunchStockLine = {
   maalKhataAccountId: number;
   boriOrThelaMode: BoriThelaMode;
@@ -221,10 +275,54 @@ export async function postSalePaunchStockOut(
   }
 }
 
+type ResolvedStockYear = {
+  id: number;
+  status: FinancialYearStatus;
+  yearStart: Date;
+  yearEnd: Date | null;
+  /** Year ended before stock tracking existed — report should be empty, not zeros. */
+  trackingUnavailable: boolean;
+};
+
+async function resolveStockReportYear(financialYearId?: number): Promise<ResolvedStockYear> {
+  const yearId =
+    financialYearId != null ? financialYearId : await getActiveFinancialYearId(prisma);
+  const year = await prisma.financialYear.findFirst({ where: { id: yearId } });
+  if (!year) throw new AppError(404, 'Financial year not found');
+
+  const yearStart = startOfDay(year.startDate);
+  const yearEnd = year.endDate ? endOfDay(year.endDate) : null;
+  const trackingStart = startOfDay(STOCK_TRACKING_STARTED_AT);
+  const trackingUnavailable = yearEnd != null && yearEnd < trackingStart;
+
+  return {
+    id: year.id,
+    status: year.status,
+    yearStart,
+    yearEnd,
+    trackingUnavailable,
+  };
+}
+
+function movementInYear(date: Date, yearStart: Date, yearEnd: Date | null): boolean {
+  if (date < yearStart) return false;
+  if (yearEnd != null && date > yearEnd) return false;
+  return true;
+}
+
+function formatTrackingStartedLabel(): string {
+  const d = STOCK_TRACKING_STARTED_AT;
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year = d.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 export async function getStockReport(params: {
   productId: number;
   bagType: 'BORI' | 'THELA';
   pagination?: { limit: number; offset: number } | null;
+  financialYearId?: number;
 }) {
   const product = await prisma.product.findFirst({
     where: { id: params.productId, isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
@@ -236,28 +334,119 @@ export async function getStockReport(params: {
     return getQuantityStockReport({
       productId: params.productId,
       pagination: params.pagination,
+      financialYearId: params.financialYearId,
     });
   }
 
+  const year = await resolveStockReportYear(params.financialYearId);
   const bagType = toStockBagType(params.bagType);
+  const isActiveYear = year.status === FinancialYearStatus.ACTIVE;
+
+  if (year.trackingUnavailable) {
+    return {
+      product: {
+        id: product.id,
+        name: product.name,
+        code: product.code,
+        stockMode: 'GRAIN_BAGS' as const,
+        unit: product.unit,
+      },
+      bagType: params.bagType,
+      stockMode: 'GRAIN_BAGS' as const,
+      trackingStartedAt: STOCK_TRACKING_STARTED_AT.toISOString(),
+      historicalBackfill: false as const,
+      carriedRemainderKg: 0,
+      emptyReason: `Stock tracking began on ${formatTrackingStartedLabel()}`,
+      rows: [] as Array<{
+        id: number;
+        date: string;
+        description: string;
+        invoiceReference: string;
+        invoiceType: InvoiceType | null;
+        status: 'IN' | 'OUT';
+        bags: number;
+        kg: number;
+        quantity: number;
+        runningBalance: number;
+        runningKg: number;
+      }>,
+      total: 0,
+      limit: params.pagination?.limit ?? 0,
+      offset: params.pagination?.offset ?? 0,
+      totals: {
+        openingBalance: 0,
+        closingBalance: 0,
+        openingKg: 0,
+        closingKg: 0,
+        totalIn: 0,
+        totalOut: 0,
+        netBalance: 0,
+        totalKgIn: 0,
+        totalKgOut: 0,
+        netKg: 0,
+        productKgBalance: 0,
+      },
+    };
+  }
+
   const movements = await prisma.stockMovement.findMany({
     where: { productId: params.productId, bagType },
     orderBy: [{ date: 'asc' }, { id: 'asc' }],
   });
 
-  const remainder = await prisma.stockRemainder.findUnique({
-    where: { productId_bagType: { productId: params.productId, bagType } },
-  });
+  const remainder =
+    isActiveYear
+      ? await prisma.stockRemainder.findUnique({
+          where: { productId_bagType: { productId: params.productId, bagType } },
+        })
+      : null;
 
+  let openingBalance = 0;
+  let openingKg = 0;
   let running = 0;
   let runningKg = 0;
   let totalIn = 0;
   let totalOut = 0;
   let totalKgIn = 0;
   let totalKgOut = 0;
-  const allRows = movements.map((m) => {
+  const yearRows: Array<{
+    id: number;
+    date: string;
+    description: string;
+    invoiceReference: string;
+    invoiceType: InvoiceType | null;
+    status: 'IN' | 'OUT';
+    bags: number;
+    kg: number;
+    quantity: number;
+    runningBalance: number;
+    runningKg: number;
+  }> = [];
+
+  for (const m of movements) {
     const bags = Number(m.bags);
     const kg = Number(m.kg ?? 0);
+    const signedBags = m.direction === StockDirection.IN ? bags : -bags;
+    const signedKg = m.direction === StockDirection.IN ? kg : -kg;
+
+    if (m.date < year.yearStart) {
+      openingBalance += signedBags;
+      openingKg += signedKg;
+      running = openingBalance;
+      runningKg = openingKg;
+      continue;
+    }
+
+    if (!movementInYear(m.date, year.yearStart, year.yearEnd)) {
+      continue;
+    }
+
+    // Seed running from opening on first in-year row (also covers opening-only years).
+    if (yearRows.length === 0) {
+      running = openingBalance;
+      runningKg = openingKg;
+    }
+
     if (m.direction === StockDirection.IN) {
       running += bags;
       runningKg += kg;
@@ -269,7 +458,8 @@ export async function getStockReport(params: {
       totalOut += bags;
       totalKgOut += kg;
     }
-    return {
+
+    yearRows.push({
       id: m.id,
       date: m.date.toISOString(),
       description: m.description ?? m.invoiceReference,
@@ -281,12 +471,23 @@ export async function getStockReport(params: {
       quantity: bags,
       runningBalance: running,
       runningKg,
-    };
-  });
+    });
+  }
 
-  /** Product-wide kg (both Bori and Thela) — genuine total KG in stock. */
+  if (yearRows.length === 0) {
+    running = openingBalance;
+    runningKg = openingKg;
+  }
+
+  const closingBalance = openingBalance + totalIn - totalOut;
+  const closingKg = openingKg + totalKgIn - totalKgOut;
+
+  /** Product-wide kg as of year end (both bag types). */
   const allProductMovements = await prisma.stockMovement.findMany({
-    where: { productId: params.productId },
+    where: {
+      productId: params.productId,
+      ...(year.yearEnd != null ? { date: { lte: year.yearEnd } } : {}),
+    },
     select: { direction: true, kg: true },
   });
   let productKgBalance = 0;
@@ -295,14 +496,14 @@ export async function getStockReport(params: {
     productKgBalance += m.direction === StockDirection.IN ? kg : -kg;
   }
 
-  const total = allRows.length;
-  let rows = allRows;
+  const total = yearRows.length;
+  let rows = yearRows;
   let limit = total;
   let offset = 0;
   if (params.pagination) {
     limit = params.pagination.limit;
     offset = params.pagination.offset;
-    rows = allRows.slice(offset, offset + limit);
+    rows = yearRows.slice(offset, offset + limit);
   }
 
   return {
@@ -319,18 +520,23 @@ export async function getStockReport(params: {
     /** Historical invoices before stock feature ship are not backfilled (bags or kg). */
     historicalBackfill: false as const,
     carriedRemainderKg: remainder ? Number(remainder.remainderKg) : 0,
+    emptyReason: null as string | null,
     rows,
     total,
     limit: params.pagination ? limit : total,
     offset: params.pagination ? offset : 0,
     totals: {
+      openingBalance,
+      closingBalance,
+      openingKg,
+      closingKg,
       totalIn,
       totalOut,
-      netBalance: running,
+      netBalance: closingBalance,
       totalKgIn,
       totalKgOut,
-      netKg: runningKg,
-      /** Net physical kg across Bori + Thela for this product. */
+      netKg: closingKg,
+      /** Net physical kg across Bori + Thela for this product, as of year end. */
       productKgBalance,
     },
   };
@@ -340,6 +546,7 @@ export async function getStockReport(params: {
 export async function getQuantityStockReport(params: {
   productId: number;
   pagination?: { limit: number; offset: number } | null;
+  financialYearId?: number;
 }) {
   const product = await prisma.product.findFirst({
     where: { id: params.productId, isActive: true, status: USER_VISIBLE_PRODUCT_STATUS },
@@ -350,16 +557,96 @@ export async function getQuantityStockReport(params: {
     throw new AppError(400, 'Product does not use quantity stock');
   }
 
+  const year = await resolveStockReportYear(params.financialYearId);
+
+  if (year.trackingUnavailable) {
+    return {
+      product: {
+        id: product.id,
+        name: product.name,
+        code: product.code,
+        stockMode: 'QUANTITY' as const,
+        unit: product.unit,
+      },
+      bagType: null,
+      stockMode: 'QUANTITY' as const,
+      trackingStartedAt: STOCK_TRACKING_STARTED_AT.toISOString(),
+      historicalBackfill: false as const,
+      carriedRemainderKg: 0,
+      emptyReason: `Stock tracking began on ${formatTrackingStartedLabel()}`,
+      rows: [] as Array<{
+        id: number;
+        date: string;
+        description: string;
+        invoiceReference: string;
+        invoiceType: InvoiceType | null;
+        status: 'IN' | 'OUT';
+        bags: number;
+        kg: number;
+        quantity: number;
+        runningBalance: number;
+        runningKg: number;
+      }>,
+      total: 0,
+      limit: params.pagination?.limit ?? 0,
+      offset: params.pagination?.offset ?? 0,
+      totals: {
+        openingBalance: 0,
+        closingBalance: 0,
+        openingKg: 0,
+        closingKg: 0,
+        totalIn: 0,
+        totalOut: 0,
+        netBalance: 0,
+        totalKgIn: 0,
+        totalKgOut: 0,
+        netKg: 0,
+        productKgBalance: 0,
+      },
+    };
+  }
+
   const movements = await prisma.productQuantityMovement.findMany({
     where: { productId: params.productId },
     orderBy: [{ date: 'asc' }, { id: 'asc' }],
   });
 
+  let openingBalance = 0;
   let running = 0;
   let totalIn = 0;
   let totalOut = 0;
-  const allRows = movements.map((m) => {
+  const yearRows: Array<{
+    id: number;
+    date: string;
+    description: string;
+    invoiceReference: string;
+    invoiceType: InvoiceType | null;
+    status: 'IN' | 'OUT';
+    bags: number;
+    kg: number;
+    quantity: number;
+    runningBalance: number;
+    runningKg: number;
+  }> = [];
+
+  for (const m of movements) {
     const quantity = Number(m.quantity);
+    const signed = m.direction === StockDirection.IN ? quantity : -quantity;
+
+    if (m.date < year.yearStart) {
+      openingBalance += signed;
+      running = openingBalance;
+      continue;
+    }
+
+    if (!movementInYear(m.date, year.yearStart, year.yearEnd)) {
+      continue;
+    }
+
+    if (yearRows.length === 0) {
+      running = openingBalance;
+    }
+
     if (m.direction === StockDirection.IN) {
       running += quantity;
       totalIn += quantity;
@@ -367,7 +654,8 @@ export async function getQuantityStockReport(params: {
       running -= quantity;
       totalOut += quantity;
     }
-    return {
+
+    yearRows.push({
       id: m.id,
       date: m.date.toISOString(),
       description: m.description ?? m.invoiceReference,
@@ -379,17 +667,23 @@ export async function getQuantityStockReport(params: {
       quantity,
       runningBalance: running,
       runningKg: 0,
-    };
-  });
+    });
+  }
 
-  const total = allRows.length;
-  let rows = allRows;
+  if (yearRows.length === 0) {
+    running = openingBalance;
+  }
+
+  const closingBalance = openingBalance + totalIn - totalOut;
+
+  const total = yearRows.length;
+  let rows = yearRows;
   let limit = total;
   let offset = 0;
   if (params.pagination) {
     limit = params.pagination.limit;
     offset = params.pagination.offset;
-    rows = allRows.slice(offset, offset + limit);
+    rows = yearRows.slice(offset, offset + limit);
   }
 
   return {
@@ -405,14 +699,19 @@ export async function getQuantityStockReport(params: {
     trackingStartedAt: STOCK_TRACKING_STARTED_AT.toISOString(),
     historicalBackfill: false as const,
     carriedRemainderKg: 0,
+    emptyReason: null as string | null,
     rows,
     total,
     limit: params.pagination ? limit : total,
     offset: params.pagination ? offset : 0,
     totals: {
+      openingBalance,
+      closingBalance,
+      openingKg: 0,
+      closingKg: 0,
       totalIn,
       totalOut,
-      netBalance: running,
+      netBalance: closingBalance,
       totalKgIn: 0,
       totalKgOut: 0,
       netKg: 0,

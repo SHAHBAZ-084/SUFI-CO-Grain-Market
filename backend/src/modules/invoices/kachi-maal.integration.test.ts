@@ -2,7 +2,6 @@ import { AccountType, BoriThelaMode, RecordStatus } from '@prisma/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import {
-  cancelVoucher,
   createVoucher,
   ensureKachiMaalAccounts,
   getLedgerEntries,
@@ -16,6 +15,7 @@ import {
   computeKachiMaalInvoiceTotals,
   computeKachiMaalRow,
 } from './kachi-maal.calculations';
+import { cancelInvoice } from './cancel-invoice.service';
 import { createKachiMaalInvoice } from './kachi-maal.service';
 
 async function ensureAccountInCategory(categoryName: string, accountName: string, type: AccountType, code: string) {
@@ -636,7 +636,7 @@ describe('Kachi Maal voucher numbering and cancel', () => {
     const tbAfterPost = await getTrialBalance();
     expect(tbAfterPost.isBalanced).toBe(true);
 
-    await cancelVoucher(voucherId, userId);
+    await cancelInvoice(invoice.id, userId);
 
     const after = await snapshotBalances(trackedAccounts);
     for (const accountId of trackedAccounts) {
