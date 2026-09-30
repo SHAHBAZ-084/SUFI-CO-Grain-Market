@@ -223,7 +223,7 @@ function buildLedgerLegs(
 
   if (totals.totalPaleDari > 0) {
     legs.push({
-      accountId: systemAccounts.mazduri.id,
+      accountId: systemAccounts.paleDari.id,
       type: LedgerEntryType.CREDIT,
       amount: totals.totalPaleDari,
       description: blendedLegDescription(allLines, header),

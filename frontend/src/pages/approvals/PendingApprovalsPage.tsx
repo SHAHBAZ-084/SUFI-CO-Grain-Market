@@ -702,13 +702,13 @@ export function PendingApprovalsPage() {
                     <td className="whitespace-nowrap">
                       {row.recordDate ? formatDate(row.recordDate) : formatDate(row.createdAt)}
                     </td>
-                    <td className="whitespace-nowrap font-medium text-ledgerDebit">
+                    <td className="max-w-[16rem] whitespace-normal break-words font-medium text-ledgerDebit">
                       {accountCellLabel(row.debitAccount)}
                     </td>
                     <td className="whitespace-nowrap text-right tabular-nums text-ledgerDebit">
                       {amountCell(row.debitAmount)}
                     </td>
-                    <td className="whitespace-nowrap font-medium text-ledgerCredit">
+                    <td className="max-w-[16rem] whitespace-normal break-words font-medium text-ledgerCredit">
                       {accountCellLabel(row.creditAccount)}
                     </td>
                     <td className="whitespace-nowrap text-right tabular-nums text-ledgerCredit">
@@ -717,7 +717,7 @@ export function PendingApprovalsPage() {
                     <td className="whitespace-nowrap">
                       {row.createdBy?.displayName ?? row.createdBy?.username ?? '—'}
                     </td>
-                    <td className="max-w-[14rem] truncate" title={row.description ?? undefined}>
+                    <td className="max-w-[22rem] whitespace-normal break-words line-clamp-2" title={row.description ?? undefined}>
                       {row.description?.trim() ? row.description : '—'}
                     </td>
                     <td className="whitespace-nowrap">

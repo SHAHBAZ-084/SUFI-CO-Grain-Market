@@ -1608,7 +1608,9 @@ export type KachiMaalSystemAccounts = {
   bori: { id: number; name: string };
   thela: { id: number; name: string };
   commission: { id: number; name: string };
-  /** Sale Fee ledger — display name "PaleDari" (live PaleDari / labour postings). */
+  /** Sale Fee — Kachi PaleDari % postings (legacy opening balance lives here). */
+  paleDari: { id: number; name: string };
+  /** Sale Fee — Purchase Maal Mazduri % and Sale Commission labour (prefs: Labour / Mazduri). */
   mazduri: { id: number; name: string };
   broker: { id: number; name: string };
   marketFee: { id: number; name: string };
@@ -1635,9 +1637,9 @@ export async function ensureKachiMaalAccounts(
   const bori = await ensureDefaultAccountInTx(tx, bardana.id, 'Bori', AccountType.ASSET, 'BD-BORI');
   const thela = await ensureDefaultAccountInTx(tx, bardana.id, 'Thela', AccountType.ASSET, 'BD-THELA');
   const commission = await ensureDefaultAccountInTx(tx, revenue.id, 'Commission', AccountType.REVENUE, 'REV-COMM');
-  // Live Kachi PaleDari (and Purchase Maal / Commission labour) post here — name matches old books.
-  await renameAccountIfNeededInTx(tx, 'Mazduri', 'PaleDari');
-  const mazduri = await ensureDefaultAccountInTx(tx, saleFee.id, 'PaleDari', AccountType.EXPENSE, 'SF-MAZ');
+  // PaleDari = Kachi pale-dari fee (legacy opening balance). Mazduri = Purchase Maal / Commission labour.
+  const paleDari = await ensureDefaultAccountInTx(tx, saleFee.id, 'PaleDari', AccountType.EXPENSE, 'SF-MAZ');
+  const mazduri = await ensureDefaultAccountInTx(tx, saleFee.id, 'Mazduri', AccountType.EXPENSE, 'SF-LAB');
   const broker = await ensureDefaultAccountInTx(tx, saleFee.id, 'Broker', AccountType.EXPENSE, 'SF-BRK');
   const marketFee = await ensureDefaultAccountInTx(tx, saleFee.id, 'Market Fee', AccountType.EXPENSE, 'SF-MKT');
   const misc = await ensureDefaultAccountInTx(tx, saleFee.id, 'Misc', AccountType.EXPENSE, 'SF-MISC');
@@ -1646,6 +1648,7 @@ export async function ensureKachiMaalAccounts(
     bori: { id: bori.id, name: bori.name },
     thela: { id: thela.id, name: thela.name },
     commission: { id: commission.id, name: commission.name },
+    paleDari: { id: paleDari.id, name: paleDari.name },
     mazduri: { id: mazduri.id, name: mazduri.name },
     broker: { id: broker.id, name: broker.name },
     marketFee: { id: marketFee.id, name: marketFee.name },
@@ -1774,6 +1777,21 @@ export async function ensureGeneralGoodsAccounts(
     generalTradeRevenue: { id: generalTradeRevenue.id, name: generalTradeRevenue.name },
     inventoryCategoryId: inventory.id,
   };
+}
+
+/** Idempotent: every ledger invoice types post to (Sale Fee, Bardana, Paunch, General Goods). */
+export async function ensureInvoiceSystemAccounts(tx?: Prisma.TransactionClient) {
+  const run = async (client: Prisma.TransactionClient) => {
+    await ensureKachiMaalAccounts(client);
+    await ensureSaleCommissionAccounts(client);
+    await ensureSalePaunchAccounts(client);
+    await ensureGeneralGoodsAccounts(client);
+  };
+  if (tx) {
+    await run(tx);
+    return;
+  }
+  await prisma.$transaction(run);
 }
 
 async function syncCustomerSupplierAccountsInTx(tx: Prisma.TransactionClient) {

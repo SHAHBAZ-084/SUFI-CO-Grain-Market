@@ -97,7 +97,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
   let userId: number;
   let partyAId: number;
   let traderXId: number;
-  let mazduriId: number;
+  let paleDariId: number;
   let brokerId: number;
   let commissionId: number;
   let invoiceDate: string;
@@ -119,7 +119,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
 
     await prisma.$transaction(async (tx) => {
       const system = await ensureKachiMaalAccounts(tx);
-      mazduriId = system.mazduri.id;
+      paleDariId = system.paleDari.id;
       brokerId = system.broker.id;
       commissionId = system.commission.id;
     });
@@ -219,7 +219,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
       expect.arrayContaining([
         { accountId: traderXId, type: 'DEBIT', amount: 50_800 },
         { accountId: partyAId, type: 'CREDIT', amount: 49_500 },
-        { accountId: mazduriId, type: 'CREDIT', amount: 425 },
+        { accountId: paleDariId, type: 'CREDIT', amount: 425 },
         { accountId: brokerId, type: 'CREDIT', amount: 75 },
         { accountId: commissionId, type: 'CREDIT', amount: 800 },
       ]),
@@ -228,7 +228,7 @@ describe('Kachi Maal Test 1 — minimal case', () => {
     const perAccount = entriesPerAccount(legs);
     expect(perAccount.get(traderXId)).toBe(1);
     expect(perAccount.get(partyAId)).toBe(1);
-    expect(perAccount.get(mazduriId)).toBe(1);
+    expect(perAccount.get(paleDariId)).toBe(1);
     expect(perAccount.get(brokerId)).toBe(1);
     expect(perAccount.get(commissionId)).toBe(1);
 
@@ -257,7 +257,7 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
   let traderXId: number;
   let boriId: number;
   let thelaId: number;
-  let mazduriId: number;
+  let paleDariId: number;
   let brokerId: number;
   let marketFeeId: number;
   let miscId: number;
@@ -283,7 +283,7 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
       const system = await ensureKachiMaalAccounts(tx);
       boriId = system.bori.id;
       thelaId = system.thela.id;
-      mazduriId = system.mazduri.id;
+      paleDariId = system.paleDari.id;
       brokerId = system.broker.id;
       marketFeeId = system.marketFee.id;
       miscId = system.misc.id;
@@ -427,7 +427,7 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
         { accountId: partyAId, type: 'CREDIT', amount: 100 },
         { accountId: partyBId, type: 'CREDIT', amount: 24_750 },
         { accountId: boriId, type: 'DEBIT', amount: 100 },
-        { accountId: mazduriId, type: 'CREDIT', amount: 637.5 },
+        { accountId: paleDariId, type: 'CREDIT', amount: 637.5 },
         { accountId: brokerId, type: 'CREDIT', amount: 112.5 },
         { accountId: marketFeeId, type: 'CREDIT', amount: 30.42 },
         { accountId: miscId, type: 'CREDIT', amount: 200 },
@@ -442,7 +442,7 @@ describe('Kachi Maal Test 2 — full case (two parties, bardana, market fee, mis
     expect(perAccount.get(partyBId)).toBe(1);
     expect(perAccount.get(boriId)).toBe(1);
     expect(perAccount.get(thelaId)).toBe(1);
-    expect(perAccount.get(mazduriId)).toBe(1);
+    expect(perAccount.get(paleDariId)).toBe(1);
     expect(perAccount.get(brokerId)).toBe(1);
     expect(perAccount.get(marketFeeId)).toBe(1);
     expect(perAccount.get(miscId)).toBe(1);
@@ -479,7 +479,7 @@ describe('Kachi Maal voucher numbering and cancel', () => {
   let bankId: number;
   let boriId: number;
   let thelaId: number;
-  let mazduriId: number;
+  let paleDariId: number;
   let brokerId: number;
   let marketFeeId: number;
   let miscId: number;
@@ -503,7 +503,7 @@ describe('Kachi Maal voucher numbering and cancel', () => {
       const system = await ensureKachiMaalAccounts(tx);
       boriId = system.bori.id;
       thelaId = system.thela.id;
-      mazduriId = system.mazduri.id;
+      paleDariId = system.paleDari.id;
       brokerId = system.broker.id;
       marketFeeId = system.marketFee.id;
       miscId = system.misc.id;
@@ -598,7 +598,7 @@ describe('Kachi Maal voucher numbering and cancel', () => {
       traderXId,
       boriId,
       thelaId,
-      mazduriId,
+      paleDariId,
       brokerId,
       marketFeeId,
       miscId,

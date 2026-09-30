@@ -9,8 +9,11 @@
  *   imported anywhere — this app generates its own codes.
  * - Reuses existing categories/system accounts wherever this app already
  *   has an equivalent (Sale Party, Int./Ext. Purchase Party, Bank, Cash in
- *   Hand, Bardana Bori/Thela, Sale Fee PaleDari/Broker/Market Fee/etc.,
+ *   Hand, Bardana Bori/Thela, Sale Fee PaleDari/Mazduri/Broker/Market Fee/Misc/etc.,
  *   Revenue, Capital, Rental Expense) instead of creating duplicates.
+ * - Before posting balances, calls ensureInvoiceSystemAccounts so every invoice
+ *   Sale Fee (and related) system sub-account already exists at zero — first
+ *   Kachi / Commission / General Goods invoice never has to lazily create them.
  * - Creates new categories only where nothing already exists and there is a
  *   non-zero opening balance to import (Account Receivable, Accounts Payable,
  *   Miscellaneous Expenses, Staff Member, etc.). Zero-balance-only categories
@@ -30,9 +33,8 @@
  *   skipped, not duplicated.
  *
  * DECISIONS FLAGGED FOR REVIEW (search "REVIEW:" below for each):
- * 1. Grain Sale Fee system account is named "PaleDari" (renamed from Mazduri) —
- *    live Kachi PaleDari postings already used that ledger; historical PaleDari
- *    opening balance is applied to it. Do not create a separate PaleDari row.
+ * 1. Grain Sale Fee keeps both "PaleDari" (Kachi pale-dari fee + legacy opening
+ *    balance) and "Mazduri" (Purchase Maal / Sale Commission labour). Do not merge them.
  * 2. "Qari Zia Ullah" kept only under Ext. Purchase Party (A/R duplicate dropped).
  *    "Home Expances" kept only under Miscellaneous Expenses (Capital duplicate dropped).
  * 3. "Maal Khata [Stock]" is skipped entirely — every value in it is 0.00 and there is
@@ -51,8 +53,7 @@ import {
   createAccountCategory,
   postOpeningBalanceForLedger,
   CASH_IN_HAND_ACCOUNT_NAME,
-  ensureSaleCommissionAccounts,
-  ensureSalePaunchAccounts,
+  ensureInvoiceSystemAccounts,
 } from '../modules/accounting/accounting.service';
 import { approvePendingRecord } from '../modules/approvals/approvals.service';
 import { createProduct } from '../modules/products/products.service';
@@ -209,17 +210,21 @@ export async function runLegacyAccountImport() {
   const createdById = await getAdminId();
 
   console.log('\n== Ensuring system accounts exist ==');
-  await prisma.$transaction(async (tx) => {
-    await ensureSaleCommissionAccounts(tx);
-    await ensureSalePaunchAccounts(tx);
-  });
+  // Creates every Sale Fee (and related) sub-account invoice types may post to,
+  // at zero balance with their canonical codes (SF-*, GG-*, BD-*, REV-*, RE-*).
+  //   Kachi Maal Sale Fee: PaleDari, Mazduri, Broker, Market Fee, Misc
+  //   Sale on Commission adds: Dalali, Sutli, Munshiana
+  //   General Goods Sale Fee: General Goods Mazduri
+  //   Sale on Paunch (non–Sale Fee, but same lazy-create path): Tax Deduction,
+  //     Bilty Kiraya, Paunch Revenue
+  await ensureInvoiceSystemAccounts();
 
   // ── 1. Existing system accounts — set opening balance only, don't create ──
   console.log('\n== Existing system accounts ==');
   await setExistingAccountOpeningBalance(CASH_IN_HAND_ACCOUNT_NAME, 822405.47, 'DR'); // "Net Cash"
   await setExistingAccountOpeningBalance('Bori', 250910.39, 'DR'); // "Bardana [Bori]"
   await setExistingAccountOpeningBalance('Thela', 1053976.7, 'DR'); // "Bardana [Thela]"
-  await setExistingAccountOpeningBalance('PaleDari', 20933, 'DR'); // was "Mazduri" system account
+  await setExistingAccountOpeningBalance('PaleDari', 20933, 'DR'); // Kachi pale-dari fee ledger
   await setExistingAccountOpeningBalance('Broker', 10128, 'DR'); // "Brokery" in the old report
   await setExistingAccountOpeningBalance('Market Fee', 27381, 'DR'); // "Markeet Fee" in the old report
   await setExistingAccountOpeningBalance('Munshiana', 2800, 'CR'); // "Munciana" in the old report
@@ -228,8 +233,10 @@ export async function runLegacyAccountImport() {
   await setExistingAccountOpeningBalance('Commission', 25950, 'CR');
   await setExistingAccountOpeningBalance('Paunch Revenue', 1476639, 'DR'); // "Pahunch Revenue"
   await setExistingAccountOpeningBalance('Tax Deduction', 11513, 'DR');
+  // Mazduri (SF-LAB), Misc (SF-MISC) and General Goods Mazduri (GG-MAZ) stay at zero —
+  // ensured above; no opening balance in the old report.
 
-  // ── 2. New Sale Fee accounts with no existing match ──
+  // ── 2. New Sale Fee accounts with no existing match (legacy-only; not from ensure*) ──
   console.log('\n== Sale Fee (new sub-accounts) ==');
   {
     const saleFeeId = await ensureCategoryId('Sale Fee', AccountType.EXPENSE);

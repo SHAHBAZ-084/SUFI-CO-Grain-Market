@@ -135,8 +135,11 @@ async function ensureBootstrapData(db: PrismaClient): Promise<void> {
 
   // Chart of accounts — lazy import to avoid circular deps at module load
   try {
-    const { bootstrapChartOfAccounts } = await import('../modules/accounting/accounting.service');
+    const { bootstrapChartOfAccounts, ensureInvoiceSystemAccounts } = await import(
+      '../modules/accounting/accounting.service'
+    );
     await bootstrapChartOfAccounts();
+    await ensureInvoiceSystemAccounts(db);
   } catch (err) {
     logger.warn('Chart of accounts bootstrap skipped/failed', { err: String(err) });
   }
