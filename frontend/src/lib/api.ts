@@ -307,6 +307,8 @@ export type PendingApprovalItem = {
   debitAmount?: number | null;
   creditAmount?: number | null;
   reference?: string | null;
+  /** Payment/Receipt/Journal number, or invoice reference (e.g. KM-…). */
+  voucherNumber?: string | null;
   recordType?: string | null;
   recordDate?: string | null;
   typeLabel?: string | null;

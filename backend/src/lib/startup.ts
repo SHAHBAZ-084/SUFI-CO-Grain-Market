@@ -149,11 +149,19 @@ async function ensureBootstrapData(db: PrismaClient): Promise<void> {
     const {
       shouldRunLegacyAccountImport,
       runLegacyAccountImport,
+      ensureMissingIntPurchasePartyAccounts,
     } = await import('./legacy-account-import');
     if (await shouldRunLegacyAccountImport()) {
       logger.info('Running first-run legacy account import…');
       const summary = await runLegacyAccountImport();
       logger.info('Legacy account import complete', summary);
+    } else {
+      // Existing production DB: add any missing Int. Purchase Party names at balance 0 only.
+      // Never updates balances or modifies accounts that already exist by name.
+      const backfill = await ensureMissingIntPurchasePartyAccounts();
+      if (backfill.created > 0) {
+        logger.info('Int. Purchase Party missing accounts created at zero', backfill);
+      }
     }
   } catch (err) {
     logger.warn('Legacy account import skipped/failed', { err: String(err) });

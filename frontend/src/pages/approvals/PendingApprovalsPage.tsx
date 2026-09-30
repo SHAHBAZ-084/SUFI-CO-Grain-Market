@@ -677,7 +677,7 @@ export function PendingApprovalsPage() {
               <tr>
                 <th>Kind</th>
                 <th>Type</th>
-                <th>Reference</th>
+                <th>Voucher #</th>
                 <th>Date</th>
                 <th>Debit Account</th>
                 <th className="text-right">Debit Amount</th>
@@ -698,7 +698,9 @@ export function PendingApprovalsPage() {
                   <tr key={key}>
                     <td className="whitespace-nowrap">{KIND_LABELS[row.kind]}</td>
                     <td className="whitespace-nowrap">{row.typeLabel ?? row.recordType ?? '—'}</td>
-                    <td className="whitespace-nowrap">{row.reference ?? row.label ?? '—'}</td>
+                    <td className="whitespace-nowrap font-mono text-xs font-semibold text-financial">
+                      {row.voucherNumber?.trim() ? row.voucherNumber : '—'}
+                    </td>
                     <td className="whitespace-nowrap">
                       {row.recordDate ? formatDate(row.recordDate) : formatDate(row.createdAt)}
                     </td>
