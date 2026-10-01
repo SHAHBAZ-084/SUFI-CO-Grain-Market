@@ -21,7 +21,9 @@ import {
 } from '../../lib/api';
 import { formatDate, formatLedgerAmount } from '../../lib/format';
 import { notifyApprovalsChanged } from '../../lib/approvals';
+import { ReportPager } from '../reports/ReportPages';
 
+const APPROVALS_PAGE_SIZE = 40;
 const KIND_LABELS: Record<ApprovalKind, string> = {
   account: 'Account',
   product: 'Product',
@@ -487,6 +489,7 @@ export function PendingApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | ApprovalKind>('all');
+  const [offset, setOffset] = useState(0);
   const [actingKey, setActingKey] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<{ kind: ApprovalKind; id: number } | null>(null);
   const [editDetail, setEditDetail] = useState<PendingApprovalDetail | null>(null);
@@ -551,6 +554,26 @@ export function PendingApprovalsPage() {
   const filteredItems = useMemo(
     () => (kindFilter === 'all' ? items : items.filter((row) => row.kind === kindFilter)),
     [items, kindFilter],
+  );
+
+  useEffect(() => {
+    setOffset(0);
+  }, [kindFilter]);
+
+  useEffect(() => {
+    if (filteredItems.length === 0) {
+      if (offset !== 0) setOffset(0);
+      return;
+    }
+    if (offset >= filteredItems.length) {
+      const lastPageStart = Math.floor((filteredItems.length - 1) / APPROVALS_PAGE_SIZE) * APPROVALS_PAGE_SIZE;
+      setOffset(lastPageStart);
+    }
+  }, [filteredItems.length, offset]);
+
+  const pageItems = useMemo(
+    () => filteredItems.slice(offset, offset + APPROVALS_PAGE_SIZE),
+    [filteredItems, offset],
   );
 
   function canEditRow(row: PendingApprovalItem) {
@@ -672,109 +695,125 @@ export function PendingApprovalsPage() {
         ) : filteredItems.length === 0 ? (
           <p className="p-4 text-sm text-textMuted">No pending approvals.</p>
         ) : (
-          <LegacyTable className="approvals-table border-0">
-            <thead>
-              <tr>
-                <th>Kind</th>
-                <th>Type</th>
-                <th>Voucher #</th>
-                <th>Date</th>
-                <th>Debit Account</th>
-                <th className="text-right">Debit Amount</th>
-                <th>Credit Account</th>
-                <th className="text-right">Credit Amount</th>
-                <th>Creator</th>
-                <th>Description</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((row) => {
-                const key = rowKey(row);
-                const busy = actingKey === key;
-                const editable = canEditRow(row);
-                const hasActions = isAdmin || editable;
-                return (
-                  <tr key={key}>
-                    <td className="whitespace-nowrap">{KIND_LABELS[row.kind]}</td>
-                    <td className="whitespace-nowrap">{row.typeLabel ?? row.recordType ?? '—'}</td>
-                    <td className="whitespace-nowrap font-mono text-xs font-semibold text-financial">
-                      {row.voucherNumber?.trim() ? row.voucherNumber : '—'}
-                    </td>
-                    <td className="whitespace-nowrap">
-                      {row.recordDate ? formatDate(row.recordDate) : formatDate(row.createdAt)}
-                    </td>
-                    <td className="max-w-[16rem] whitespace-normal break-words font-medium text-ledgerDebit">
-                      {accountCellLabel(row.debitAccount)}
-                    </td>
-                    <td className="whitespace-nowrap text-right tabular-nums text-ledgerDebit">
-                      {amountCell(row.debitAmount)}
-                    </td>
-                    <td className="max-w-[16rem] whitespace-normal break-words font-medium text-ledgerCredit">
-                      {accountCellLabel(row.creditAccount)}
-                    </td>
-                    <td className="whitespace-nowrap text-right tabular-nums text-ledgerCredit">
-                      {amountCell(row.creditAmount)}
-                    </td>
-                    <td className="whitespace-nowrap">
-                      {row.createdBy?.displayName ?? row.createdBy?.username ?? '—'}
-                    </td>
-                    <td className="max-w-[22rem] whitespace-normal break-words line-clamp-2" title={row.description ?? undefined}>
-                      {row.description?.trim() ? row.description : '—'}
-                    </td>
-                    <td className="whitespace-nowrap">
-                      {row.kind === 'invoice' || hasActions ? (
-                        <div className="flex items-center gap-2">
-                          {isAdmin ? (
-                            <PrimaryButton
-                              type="button"
-                              className="!px-2.5 !py-1 text-xs"
-                              disabled={busy}
-                              onClick={() => void onApprove(row)}
-                            >
-                              {busy ? '…' : 'Approve'}
-                            </PrimaryButton>
-                          ) : null}
-                          {row.kind === 'invoice' ? (
-                            <button
-                              type="button"
-                              className="text-xs font-medium text-textPrimary hover:underline disabled:opacity-60"
-                              disabled={busy}
-                              onClick={() => onViewInvoice(row)}
-                            >
-                              View
-                            </button>
-                          ) : null}
-                          {editable ? (
-                            <button
-                              type="button"
-                              className="text-xs font-medium text-textPrimary hover:underline disabled:opacity-60"
-                              disabled={busy || editLoading}
-                              onClick={() => onEdit(row)}
-                            >
-                              Edit
-                            </button>
-                          ) : null}
-                          {isAdmin ? (
-                            <button
-                              type="button"
-                              className="text-xs font-medium text-danger hover:underline disabled:opacity-60"
-                              disabled={busy}
-                              onClick={() => void onReject(row)}
-                            >
-                              Cancel
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </LegacyTable>
+          <div className="space-y-3 p-3">
+            <ReportPager
+              offset={offset}
+              limit={APPROVALS_PAGE_SIZE}
+              total={filteredItems.length}
+              loading={loading}
+              onChange={setOffset}
+            />
+            <LegacyTable className="approvals-table border-0">
+              <thead>
+                <tr>
+                  <th>Kind</th>
+                  <th>Type</th>
+                  <th>Voucher #</th>
+                  <th>Date</th>
+                  <th>Debit Account</th>
+                  <th className="text-right">Debit Amount</th>
+                  <th>Credit Account</th>
+                  <th className="text-right">Credit Amount</th>
+                  <th>Creator</th>
+                  <th>Description</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageItems.map((row) => {
+                  const key = rowKey(row);
+                  const busy = actingKey === key;
+                  const editable = canEditRow(row);
+                  const hasActions = isAdmin || editable;
+                  return (
+                    <tr key={key}>
+                      <td className="whitespace-nowrap">{KIND_LABELS[row.kind]}</td>
+                      <td className="whitespace-nowrap">{row.typeLabel ?? row.recordType ?? '—'}</td>
+                      <td className="whitespace-nowrap font-mono text-xs font-semibold text-financial">
+                        {row.voucherNumber?.trim() ? row.voucherNumber : '—'}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        {row.recordDate ? formatDate(row.recordDate) : formatDate(row.createdAt)}
+                      </td>
+                      <td className="max-w-[16rem] whitespace-normal break-words font-medium text-ledgerDebit">
+                        {accountCellLabel(row.debitAccount)}
+                      </td>
+                      <td className="whitespace-nowrap text-right tabular-nums text-ledgerDebit">
+                        {amountCell(row.debitAmount)}
+                      </td>
+                      <td className="max-w-[16rem] whitespace-normal break-words font-medium text-ledgerCredit">
+                        {accountCellLabel(row.creditAccount)}
+                      </td>
+                      <td className="whitespace-nowrap text-right tabular-nums text-ledgerCredit">
+                        {amountCell(row.creditAmount)}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        {row.createdBy?.displayName ?? row.createdBy?.username ?? '—'}
+                      </td>
+                      <td className="max-w-[22rem] whitespace-normal break-words line-clamp-2" title={row.description ?? undefined}>
+                        {row.description?.trim() ? row.description : '—'}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        {row.kind === 'invoice' || hasActions ? (
+                          <div className="flex items-center gap-2">
+                            {isAdmin ? (
+                              <PrimaryButton
+                                type="button"
+                                className="!px-2.5 !py-1 text-xs"
+                                disabled={busy}
+                                onClick={() => void onApprove(row)}
+                              >
+                                {busy ? '…' : 'Approve'}
+                              </PrimaryButton>
+                            ) : null}
+                            {row.kind === 'invoice' ? (
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-textPrimary hover:underline disabled:opacity-60"
+                                disabled={busy}
+                                onClick={() => onViewInvoice(row)}
+                              >
+                                View
+                              </button>
+                            ) : null}
+                            {editable ? (
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-textPrimary hover:underline disabled:opacity-60"
+                                disabled={busy || editLoading}
+                                onClick={() => onEdit(row)}
+                              >
+                                Edit
+                              </button>
+                            ) : null}
+                            {isAdmin ? (
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-danger hover:underline disabled:opacity-60"
+                                disabled={busy}
+                                onClick={() => void onReject(row)}
+                              >
+                                Cancel
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </LegacyTable>
+            <ReportPager
+              offset={offset}
+              limit={APPROVALS_PAGE_SIZE}
+              total={filteredItems.length}
+              loading={loading}
+              onChange={setOffset}
+            />
+          </div>
         )}
       </Panel>
 
